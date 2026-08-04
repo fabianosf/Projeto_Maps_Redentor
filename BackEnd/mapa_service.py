@@ -237,6 +237,69 @@ def listar_mapas(dal) -> list[dict[str, Any]]:
     return df.to_dict(orient="records")
 
 
+def obter_indicadores(
+    dal, id_linha: int | None = None
+) -> dict[str, Any] | MapaError:
+    """
+    Qtc/M — média de passageiros (ida+volta) da linha no dia atual (tb_map.data).
+    Requer id_linha de tb_linha.
+    """
+    if id_linha is None:
+        return {
+            "qtc_m": None,
+            "id_linha": None,
+            "codigo_linha": None,
+        }
+
+    try:
+        id_linha_int = int(id_linha)
+    except (TypeError, ValueError):
+        return MapaError("Linha inválida.", "validacao")
+
+    linha_df = dal.read(
+        """
+        SELECT id_linha, codigo_linha
+        FROM tb_linha
+        WHERE id_linha = ? AND ativo = 1
+        """,
+        (id_linha_int,),
+    )
+    if linha_df.empty:
+        return MapaError("Linha não encontrada.", "nao_encontrado")
+
+    codigo_linha = linha_df.iloc[0]["codigo_linha"]
+    try:
+        codigo_exibicao = int(codigo_linha)
+    except (TypeError, ValueError):
+        codigo_exibicao = codigo_linha
+
+    df = dal.read(
+        """
+        SELECT AVG(
+                   COALESCE(v.qtd_pas_ida, 0) + COALESCE(v.qtd_pas_volta, 0)
+               ) AS qtc_m
+        FROM tb_map m
+        INNER JOIN tb_item_map i ON i.idmap = m.id_registro
+        INNER JOIN tb_viagem v ON v.id_item_registro = i.id_item
+        WHERE m.id_linha = ?
+          AND m.data = CURDATE()
+        """,
+        (id_linha_int,),
+    )
+    qtc_m: float | None = None
+    if not df.empty and df.iloc[0]["qtc_m"] is not None:
+        try:
+            qtc_m = round(float(df.iloc[0]["qtc_m"]), 1)
+        except (TypeError, ValueError):
+            qtc_m = None
+
+    return {
+        "qtc_m": qtc_m,
+        "id_linha": id_linha_int,
+        "codigo_linha": codigo_exibicao,
+    }
+
+
 def obter_mapa_completo(dal, id_registro: int) -> dict[str, Any] | MapaError:
     cab = dal.read(
         """

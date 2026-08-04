@@ -23,6 +23,7 @@ from .mapa_service import (
     excluir_viagem,
     listar_cadastros_mestres,
     listar_mapas,
+    obter_indicadores,
     obter_mapa_completo,
 )
 
@@ -37,6 +38,23 @@ def _dal():
 @require_mapa_access
 def cadastros_mestres():
     return jsonify({"ok": True, "cadastros": listar_cadastros_mestres(_dal())}), 200
+
+
+@mapa_bp.get("/indicadores")
+@require_mapa_access
+def indicadores():
+    id_linha_raw = request.args.get("id_linha")
+    id_linha = None
+    if id_linha_raw not in (None, ""):
+        try:
+            id_linha = int(id_linha_raw)
+        except (TypeError, ValueError):
+            return json_error("Linha inválida.", 400, "validacao")
+    resultado = obter_indicadores(_dal(), id_linha)
+    if isinstance(resultado, MapaError):
+        status = 404 if resultado.codigo == "nao_encontrado" else 400
+        return json_error(resultado.mensagem, status, resultado.codigo)
+    return jsonify({"ok": True, "indicadores": resultado}), 200
 
 
 @mapa_bp.get("")

@@ -30,6 +30,24 @@ export async function getCadastros() {
   );
 }
 
+export async function getIndicadores(idLinha?: number | null) {
+  const qs =
+    idLinha != null && Number.isFinite(idLinha)
+      ? `?id_linha=${encodeURIComponent(String(idLinha))}`
+      : '';
+  return apiFetch<
+    | {
+        ok: true;
+        indicadores: {
+          qtc_m: number | null;
+          id_linha: number | null;
+          codigo_linha: number | string | null;
+        };
+      }
+    | ApiErrorBody
+  >(`/mapa/indicadores${qs}`, { method: 'GET' });
+}
+
 export async function createMapa(payload: MapaHeaderPayload) {
   return apiFetch<{ ok: true; mapa: MapaCompleto } | ApiErrorBody>('/mapa', {
     method: 'POST',

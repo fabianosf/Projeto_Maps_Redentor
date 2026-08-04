@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Plus, Settings } from 'lucide-react';
-import { toast } from 'sonner';
+import { Plus } from 'lucide-react';
 import { listMapas } from '@/api/mapa';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -63,7 +62,7 @@ export function ListaMapaScreen() {
     <div className="page h-dvh max-h-dvh overflow-hidden bg-[#B9C8D4] text-slate-900">
       <PageHeader
         title="CADASTRO DE MAPAS"
-        onBack={() => navigate(-1)}
+        onBack={() => navigate('/principal')}
         rightSlot={
           <Button
             type="button"
@@ -79,7 +78,6 @@ export function ListaMapaScreen() {
       />
 
       <div className="flex min-h-0 flex-1 flex-col bg-[#B9C8D4]">
-        {/* Área rolável (touch) — Configuração fica fora, fixa embaixo */}
         <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]">
           {loading ? (
             <p className="p-6 text-center text-sm font-medium text-slate-700">Carregando…</p>
@@ -134,23 +132,6 @@ export function ListaMapaScreen() {
               </table>
             </div>
           )}
-        </div>
-
-        <div className="shrink-0 bg-[#B9C8D4]">
-          <div className="mx-5 border-t border-slate-400/40" />
-          <div className="flex justify-end px-5 pb-5 pt-5">
-            <Button
-              type="button"
-              className="min-w-[168px] gap-2"
-              onClick={() => {
-                toast.message('Abrindo configuração…');
-                navigate('/cadastro-usuario');
-              }}
-            >
-              <Settings className="h-5 w-5" strokeWidth={2.25} />
-              Configuração
-            </Button>
-          </div>
         </div>
       </div>
     </div>

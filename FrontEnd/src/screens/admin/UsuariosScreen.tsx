@@ -366,14 +366,14 @@ export function UsuariosScreen() {
   if (!allowed) {
     return (
       <div className="page">
-        <PageHeader title="Cadastro de Usuário" onBack={() => navigate('/lista-mapa')} />
+        <PageHeader title="Cadastro de Usuário" onBack={() => navigate('/configuracao')} />
         <AppDialog
           open={infoMsg !== null}
           message={infoMsg ?? ''}
           confirmLabel="OK"
           onConfirm={() => {
             setInfoMsg(null);
-            navigate('/lista-mapa');
+            navigate('/configuracao');
           }}
         />
       </div>
@@ -384,7 +384,7 @@ export function UsuariosScreen() {
     <div className="page">
       <PageHeader
         title="Cadastro de Usuário"
-        onBack={() => navigate('/lista-mapa')}
+        onBack={() => navigate('/configuracao')}
       />
 
       <div className="page-body">

@@ -98,7 +98,7 @@ export function LoginScreen() {
         return;
       }
 
-      navigate('/lista-mapa', { replace: true });
+      navigate('/principal', { replace: true });
     } catch {
       showError(
         'Não foi possível conectar à API. Verifique se o Backend está rodando.',
