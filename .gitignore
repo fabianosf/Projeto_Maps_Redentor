@@ -1,0 +1,37 @@
+# Segredos e configurações criptografadas (padrão PROJ_PAD)
+DAL/arquivos_crip/chave/chave.key
+DAL/arquivos_crip/arq/*.dat
+
+# React Native / Expo (FrontEnd)
+FrontEnd/node_modules/
+FrontEnd/.expo/
+FrontEnd/dist/
+FrontEnd/.env
+
+# Copia de desenvolvimento local (C:\RedMapaDev) — nao versionar
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+
+# Ambiente
+.env
+.env.local
+
+# IDE / SO
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+.~lock.*
+*.odt.bak
+*.bak
+
+# Logs
+log/
+*.log
+
+# Oracle drivers (removidos)
+drivers/

@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* RedMapa — background branco + primary #004587 */
+    --background: 0 0% 100%;
+    --foreground: 222 22% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 22% 12%;
+    --primary: 209 100% 26%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 20% 96%;
+    --secondary-foreground: 209 100% 26%;
+    --muted: 210 16% 96%;
+    --muted-foreground: 215 12% 42%;
+    --accent: 210 20% 96%;
+    --accent-foreground: 209 100% 26%;
+    --destructive: 348 72% 42%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 14% 84%;
+    --input: 214 14% 84%;
+    --ring: 209 100% 26%;
+    --radius: 0.5rem;
+    --zebra: 210 20% 97%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    @apply m-0 min-h-full w-full bg-background text-foreground font-sans antialiased;
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+  }
+}
+
+@layer components {
+  .app-shell {
+    @apply mx-auto flex min-h-dvh w-full max-w-phone flex-col bg-background;
+  }
+
+  .page {
+    @apply relative flex min-h-0 flex-1 flex-col bg-background;
+  }
+
+  .page-body {
+    @apply flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 pb-14 pt-5;
+  }
+
+  .page-body-center {
+    @apply flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-6 pb-14 pt-8;
+  }
+
+  .form-stack {
+    @apply flex w-full max-w-[340px] flex-col gap-5;
+  }
+
+  .field-stack {
+    @apply flex w-full flex-col gap-4;
+  }
+
+  .req {
+    @apply text-destructive;
+  }
+
+  .screen-label {
+    @apply pointer-events-none absolute bottom-3 left-4 z-10 text-[11px] text-muted-foreground/50;
+  }
+}
