@@ -91,22 +91,28 @@ def _garantir_locais_padrao(dal) -> tuple[int, int] | MapaError:
     return ids[0], ids[1]
 
 
+def _id_pk_informado(valor: Any) -> bool:
+    """True se o cliente enviou PK (inclui 0 — seeds usam id a partir de zero)."""
+    return valor is not None and valor != ""
+
+
 def _resolver_id_turno(dal, payload: dict[str, Any]) -> int | MapaError:
     id_turno = payload.get("id_turno")
-    if id_turno not in (None, "", 0, "0"):
+    if _id_pk_informado(id_turno):
         turno = dal.read(
             "SELECT id_turno FROM tb_turno WHERE id_turno = ? AND ativo = 1",
             (int(id_turno),),
         )
         if not turno.empty:
             return int(turno.iloc[0]["id_turno"])
-        # tenta por codigo_turno igual ao valor enviado
-        turno = dal.read(
-            "SELECT id_turno FROM tb_turno WHERE codigo_turno = ? AND ativo = 1",
-            (int(id_turno),),
-        )
-        if not turno.empty:
-            return int(turno.iloc[0]["id_turno"])
+        # tenta por codigo_turno igual ao valor enviado (exceto 0, que é PK válida)
+        if int(id_turno) != 0:
+            turno = dal.read(
+                "SELECT id_turno FROM tb_turno WHERE codigo_turno = ? AND ativo = 1",
+                (int(id_turno),),
+            )
+            if not turno.empty:
+                return int(turno.iloc[0]["id_turno"])
 
     codigo = payload.get("codigo_turno")
     if codigo not in (None, ""):
@@ -132,7 +138,7 @@ def _resolver_id_turno(dal, payload: dict[str, Any]) -> int | MapaError:
 def _resolver_id_linha(dal, payload: dict[str, Any]) -> int | MapaError:
     """Resolve id_linha por PK, codigo_linha ou cria a linha sob demanda."""
     id_linha = payload.get("id_linha")
-    if id_linha not in (None, "", 0, "0"):
+    if _id_pk_informado(id_linha):
         linha = dal.read(
             "SELECT id_linha FROM tb_linha WHERE id_linha = ? AND ativo = 1",
             (int(id_linha),),
@@ -152,12 +158,12 @@ def _resolver_id_linha(dal, payload: dict[str, Any]) -> int | MapaError:
 
     id_empresa = payload.get("id_empresa")
     id_empresa_ok: int | None = None
-    if id_empresa not in (None, "", 0, "0"):
+    if _id_pk_informado(id_empresa):
         empresa = dal.read(
             "SELECT id_empresa FROM tb_empresa WHERE id_empresa = ? AND ativo = 1",
             (int(id_empresa),),
         )
-        if empresa.empty:
+        if empresa.empty and int(id_empresa) != 0:
             empresa = dal.read(
                 "SELECT id_empresa FROM tb_empresa WHERE codigo_empresa = ? AND ativo = 1",
                 (int(id_empresa),),

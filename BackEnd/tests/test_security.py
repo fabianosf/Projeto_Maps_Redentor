@@ -50,7 +50,8 @@ def test_cookie_secure_segue_env(monkeypatch):
 
 
 def test_security_headers_presentes(client):
-    resp = client.get("/api/v1/auth/me")  # 401 sem sessão, mas headers aplicam
+    resp = client.get("/api/v1/auth/me")  # sem sessão: 200 autenticado=false; headers aplicam
+    assert resp.status_code == 200
     assert resp.headers.get("X-Content-Type-Options") == "nosniff"
     assert resp.headers.get("X-Frame-Options") == "DENY"
     csp = resp.headers.get("Content-Security-Policy", "")

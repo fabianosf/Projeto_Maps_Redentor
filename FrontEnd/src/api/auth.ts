@@ -52,7 +52,9 @@ export async function cancelLogin(): Promise<{ ok: boolean }> {
 }
 
 export async function me(): Promise<MeResponse> {
+  // Boot / refresh: sem sessão a API responde 200 (autenticado=false), não 401.
   return apiFetch<MeResponse>('/auth/me', {
     method: 'GET',
+    skipSessionExpired: true,
   });
 }

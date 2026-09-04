@@ -1,6 +1,5 @@
 # Segredos e configurações criptografadas (padrão PROJ_PAD)
-DAL/arquivos_crip/chave/chave.key
-DAL/arquivos_crip/arq/*.dat
+DAL/arquivos_crip/
 
 # React Native / Expo (FrontEnd)
 FrontEnd/node_modules/

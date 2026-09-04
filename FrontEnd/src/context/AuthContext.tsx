@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { logout as apiLogout, me } from '@/api/auth';
-import { ApiRequestError, onSessionExpired, SessionExpiredError } from '@/api/client';
+import { onSessionExpired } from '@/api/client';
 import type { AuthSession, Permissao } from '@/types/auth';
 import type { CodigoPerfil, UsuarioPublico } from '@/types/usuario';
 
@@ -65,13 +65,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       const data = await me();
-      setUser(toAuthSession(data.usuario));
-    } catch (err) {
-      if (err instanceof SessionExpiredError || err instanceof ApiRequestError) {
-        setUser(null);
+      if (data.autenticado && data.usuario) {
+        setUser(toAuthSession(data.usuario));
       } else {
         setUser(null);
       }
+    } catch {
+      setUser(null);
     } finally {
       setLoading(false);
     }

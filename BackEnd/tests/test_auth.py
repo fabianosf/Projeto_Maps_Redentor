@@ -65,7 +65,27 @@ def test_logout(client):
     assert out.get_json()["ok"] is True
 
     me2 = client.get("/api/v1/auth/me")
-    assert me2.status_code == 401
+    assert me2.status_code == 200
+    assert me2.get_json()["autenticado"] is False
+    assert me2.get_json()["usuario"] is None
+
+
+def test_me_sem_sessao_retorna_200(client):
+    me = client.get("/api/v1/auth/me")
+    assert me.status_code == 200
+    data = me.get_json()
+    assert data["ok"] is True
+    assert data["autenticado"] is False
+    assert data["usuario"] is None
+
+
+def test_me_com_sessao(client):
+    auth_client(client, "1")
+    me = client.get("/api/v1/auth/me")
+    assert me.status_code == 200
+    data = me.get_json()
+    assert data["autenticado"] is True
+    assert data["usuario"]["matricula"] == "1"
 
 
 def test_primeiro_acesso_troca_senha(client):

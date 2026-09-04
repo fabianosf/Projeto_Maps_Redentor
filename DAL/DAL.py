@@ -403,6 +403,9 @@ class DAL:
             password=password,
             database=database,
             charset="utf8mb4",
+            # Evita snapshot REPEATABLE READ preso no pool (SELECT sem commit
+            # fazia GET /mapas/:id retornar 404 logo após o INSERT).
+            autocommit=True,
         )
 
     def _create_connection_oracle(self, params: Dict[str, Any]):
@@ -541,6 +544,12 @@ class DAL:
             if fetch:
                 cols = [c[0] for c in cursor.description]
                 rows = cursor.fetchall()
+                # Encerra transação de leitura (pool + isolation REPEATABLE READ).
+                if not getattr(conn, "get_autocommit", lambda: False)():
+                    try:
+                        conn.commit()
+                    except Exception:
+                        pass
                 _log_evento(
                     f"Consulta concluída | linhas={len(rows)} | colunas={len(cols)} | "
                     f"nomes_colunas={', '.join(str(c) for c in cols)}"

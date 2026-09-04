@@ -22,7 +22,7 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+>(({ className, children, onPointerDownOutside, onInteractOutside, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
@@ -31,6 +31,21 @@ const DialogContent = React.forwardRef<
         'fixed inset-0 z-50 m-auto h-fit w-[calc(100%-32px)] max-w-sm rounded-xl border bg-card p-6 shadow-lg focus:outline-none',
         className,
       )}
+      onPointerDownOutside={(event) => {
+        // Select/Popover portalam para o body — não tratar como clique fora do Dialog.
+        const t = event.target as HTMLElement | null;
+        if (t?.closest('[data-radix-select-content], [data-radix-popper-content-wrapper]')) {
+          event.preventDefault();
+        }
+        onPointerDownOutside?.(event);
+      }}
+      onInteractOutside={(event) => {
+        const t = event.target as HTMLElement | null;
+        if (t?.closest('[data-radix-select-content], [data-radix-popper-content-wrapper]')) {
+          event.preventDefault();
+        }
+        onInteractOutside?.(event);
+      }}
       {...props}
     >
       {children}

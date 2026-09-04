@@ -48,6 +48,16 @@ import { onlyDigits } from '@/utils/validation';
 
 const BG = '#B9C8D4';
 const MSG_CADASTRO_OK = 'Guia cadastrada com sucesso!';
+/** Sentinel: Radix trata value="" como “sem value” (uncontrolled). */
+const SELECT_EMPTY = '__empty__';
+
+function toSelectValue(v: string): string {
+  return v === '' ? SELECT_EMPTY : v;
+}
+
+function fromSelectValue(v: string): string {
+  return v === SELECT_EMPTY ? '' : v;
+}
 const MSG_CADASTRO_ERRO = 'Não foi possível cadastrar a guia!';
 const MSG_EXCLUSAO_OK = 'Guia excluída com sucesso!';
 const OBS_MAX = 150;
@@ -224,20 +234,20 @@ export function GuiaScreen() {
   const pesquisarHabilitado = !busy;
 
   const aplicarFormulario = useCallback((values: FormState) => {
-    setNrGuia(values.nrGuia);
-    setDataGuia(values.dataGuia);
-    setIdEmpresa(values.idEmpresa);
-    setIdLinha(values.idLinha);
-    setIdTurno(values.idTurno);
-    setCarro(values.carro);
-    setMotorista(values.motorista);
-    setHorarioPegada(values.horarioPegada);
-    setHorarioLargada(values.horarioLargada);
-    setRoletaInicial(values.roletaInicial);
-    setRoletaFinal(values.roletaFinal);
-    setRoleta2Inicial(values.roleta2Inicial);
-    setRoleta2Final(values.roleta2Final);
-    setObservacao(values.observacao);
+    setNrGuia(values.nrGuia ?? '');
+    setDataGuia(values.dataGuia ?? '');
+    setIdEmpresa(values.idEmpresa ?? '');
+    setIdLinha(values.idLinha ?? '');
+    setIdTurno(values.idTurno ?? '');
+    setCarro(values.carro ?? '');
+    setMotorista(values.motorista ?? '');
+    setHorarioPegada(values.horarioPegada ?? '');
+    setHorarioLargada(values.horarioLargada ?? '');
+    setRoletaInicial(values.roletaInicial ?? '');
+    setRoletaFinal(values.roletaFinal ?? '');
+    setRoleta2Inicial(values.roleta2Inicial ?? '');
+    setRoleta2Final(values.roleta2Final ?? '');
+    setObservacao(values.observacao ?? '');
   }, []);
 
   const aplicarGuia = useCallback(
@@ -443,9 +453,9 @@ export function GuiaScreen() {
             <div className="flex w-full flex-col gap-1.5">
               <Label className={labelClass}>Empresa</Label>
               <Select
-                value={idEmpresa || undefined}
+                value={toSelectValue(idEmpresa)}
                 onValueChange={(v) => {
-                  setIdEmpresa(v);
+                  setIdEmpresa(fromSelectValue(v));
                   setIdLinha('');
                 }}
                 disabled={!camposHabilitados}
@@ -454,6 +464,9 @@ export function GuiaScreen() {
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={SELECT_EMPTY} disabled className="hidden">
+                    Selecione
+                  </SelectItem>
                   {(cadastros?.empresas ?? []).map((e) => (
                     <SelectItem key={e.id_empresa} value={String(e.id_empresa)}>
                       {e.descricao}
@@ -467,14 +480,17 @@ export function GuiaScreen() {
               <div className="flex w-full flex-col gap-1.5">
                 <Label className={labelClass}>Linha</Label>
                 <Select
-                  value={idLinha || undefined}
-                  onValueChange={setIdLinha}
+                  value={toSelectValue(idLinha)}
+                  onValueChange={(v) => setIdLinha(fromSelectValue(v))}
                   disabled={!camposHabilitados}
                 >
                   <SelectTrigger className={selectTriggerClass}>
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value={SELECT_EMPTY} disabled className="hidden">
+                      Selecione
+                    </SelectItem>
                     {linhasFiltradas.map((l) => (
                       <SelectItem key={l.id_linha} value={String(l.id_linha)}>
                         {formatLinhaLabel(l)}
@@ -486,14 +502,17 @@ export function GuiaScreen() {
               <div className="flex w-full flex-col gap-1.5">
                 <Label className={labelClass}>Turno</Label>
                 <Select
-                  value={idTurno || undefined}
-                  onValueChange={setIdTurno}
+                  value={toSelectValue(idTurno)}
+                  onValueChange={(v) => setIdTurno(fromSelectValue(v))}
                   disabled={!camposHabilitados}
                 >
                   <SelectTrigger className={selectTriggerClass}>
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value={SELECT_EMPTY} disabled className="hidden">
+                      Selecione
+                    </SelectItem>
                     {(cadastros?.turnos ?? []).map((t) => (
                       <SelectItem key={t.id_turno} value={String(t.id_turno)}>
                         {t.descricao}

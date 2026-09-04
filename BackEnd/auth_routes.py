@@ -24,6 +24,7 @@ from .auth_service import (
     DB_UNAVAILABLE_MESSAGE,
     LoginSuccess,
     autenticar_login,
+    buscar_usuario_por_id,
     cancelar_troca_senha,
     trocar_senha,
     usuario_publico,
@@ -137,13 +138,26 @@ def logout():
 
 
 @auth_bp.get("/me")
-@require_session
 def me():
-    session: SessionRecord = g.auth_session
-    usuario = g.auth_usuario
+    """
+    Verifica sessão atual.
+    Sem cookie/sessão válida: 200 + autenticado=false (evita 401 no boot do frontend).
+    Com sessão: 200 + usuario/sessao.
+    """
+    session = get_current_session(request.cookies)
+    if session is None:
+        return jsonify({"ok": True, "autenticado": False, "usuario": None}), 200
+
+    usuario = buscar_usuario_por_id(g.dal, session.id_usuario)
+    if usuario is None or not usuario.ativo:
+        destroy_session(request.cookies)
+        response = jsonify({"ok": True, "autenticado": False, "usuario": None})
+        return _apply_cookie(response, build_session_clear_cookie()), 200
+
     return jsonify(
         {
             "ok": True,
+            "autenticado": True,
             "usuario": usuario_publico(usuario),
             "sessao": {
                 "matricula": session.matricula,

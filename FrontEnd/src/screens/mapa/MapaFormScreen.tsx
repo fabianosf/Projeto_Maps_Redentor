@@ -221,17 +221,18 @@ export function MapaFormScreen() {
 
     const idEmpresaNum = resolveEmpresaId(empresa);
     const idTurnoNum = resolveTurnoId(turnoSelecionado);
-    if (!idEmpresaNum) {
+    // Seeds usam PK a partir de 0 — não tratar 0 como "ausente".
+    if (idEmpresaNum == null || !Number.isFinite(idEmpresaNum)) {
       toast.error('Selecione a empresa.');
       return;
     }
-    if (!idTurnoNum) {
+    if (idTurnoNum == null || !Number.isFinite(idTurnoNum)) {
       toast.error('O campo Turno é obrigatório.');
       return;
     }
 
     let linhaId = idLinha;
-    if (!linhaId) {
+    if (linhaId === '') {
       const codigoNum = Number(codigoLinhaTrim);
       const byCode = todasLinhas.find((l) => {
         const c = Number(l.codigo_linha);
@@ -260,7 +261,7 @@ export function MapaFormScreen() {
         : null,
       observacao: null,
     };
-    if (linhaId) {
+    if (linhaId !== '' && Number.isFinite(Number(linhaId))) {
       payload.id_linha = Number(linhaId);
     }
 

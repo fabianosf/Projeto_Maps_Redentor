@@ -481,33 +481,53 @@ export function MapaDetalheScreen() {
             <form className="field-stack" onSubmit={(e) => void onSalvarItem(e)}>
               <div className="flex w-full flex-col gap-1.5">
                 <Label className="text-[15px] font-semibold">Veículo *</Label>
-                <Select value={idVeiculo || undefined} onValueChange={setIdVeiculo}>
+                <Select
+                  modal={false}
+                  value={idVeiculo}
+                  onValueChange={setIdVeiculo}
+                >
                   <SelectTrigger className="h-12 bg-white text-base">
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
-                  <SelectContent>
-                    {(cadastros?.veiculos ?? []).map((v) => (
-                      <SelectItem key={v.id_veiculo} value={String(v.id_veiculo)}>
-                        {v.numero_frota}
-                        {v.placa ? ` · ${v.placa}` : ''}
+                  <SelectContent position="popper" className="z-[400]">
+                    {(cadastros?.veiculos ?? []).length === 0 ? (
+                      <SelectItem value="__empty_veiculo" disabled>
+                        Nenhum veículo cadastrado
                       </SelectItem>
-                    ))}
+                    ) : (
+                      (cadastros?.veiculos ?? []).map((v) => (
+                        <SelectItem key={v.id_veiculo} value={String(v.id_veiculo)}>
+                          {v.numero_frota}
+                          {v.placa ? ` · ${v.placa}` : ''}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="flex w-full flex-col gap-1.5">
                 <Label className="text-[15px] font-semibold">Motorista *</Label>
-                <Select value={idMotorista || undefined} onValueChange={setIdMotorista}>
+                <Select
+                  modal={false}
+                  value={idMotorista}
+                  onValueChange={setIdMotorista}
+                >
                   <SelectTrigger className="h-12 bg-white text-base">
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
-                  <SelectContent>
-                    {(cadastros?.motoristas ?? []).map((m) => (
-                      <SelectItem key={m.id_motorista} value={String(m.id_motorista)}>
-                        {m.matricula} — {m.nome}
+                  <SelectContent position="popper" className="z-[400]">
+                    {(cadastros?.motoristas ?? []).length === 0 ? (
+                      <SelectItem value="__empty_motorista" disabled>
+                        Nenhum motorista cadastrado
                       </SelectItem>
-                    ))}
+                    ) : (
+                      (cadastros?.motoristas ?? []).map((m) => (
+                        <SelectItem key={m.id_motorista} value={String(m.id_motorista)}>
+                          {m.matricula} — {m.nome}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>

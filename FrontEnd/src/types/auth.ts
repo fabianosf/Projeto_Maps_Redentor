@@ -35,8 +35,9 @@ export type ChangePasswordResponse = ApiSuccess<{
 }>;
 
 export type MeResponse = ApiSuccess<{
-  usuario: UsuarioPublico;
-  sessao: {
+  autenticado: boolean;
+  usuario: UsuarioPublico | null;
+  sessao?: {
     matricula: string;
     codigo_perfil: CodigoPerfil;
   };
