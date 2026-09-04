@@ -97,7 +97,7 @@ GLOSSARIO: list[tuple[str, str, str]] = [
     ("17", "tb_map", "Tabela do cabeçalho do MAPA (data, jornada, empresa, linha, turno, despachante)."),
     ("18", "tb_item_map", "Tabela dos carros/itens vinculados a um MAPA."),
     ("19", "tb_viagem", "Tabela das viagens associadas a cada carro (item) do MAPA."),
-    ("20", "pymysql", "Driver Python para conexão da API ao MariaDB/MySQL."),
+    ("20", "DAL", "Camada de acesso a dados (MariaDB/MySQL) usada pela API e scripts."),
     ("21", "JSON", "Formato de troca de dados entre browser e API (Content-Type: application/json)."),
     ("22", "Sessão server-side", "Estado autenticado mantido em memória no Flask; cookie opaco no cliente."),
     ("23", "change_token", "Token temporário (15 min) emitido no primeiro acesso para troca de senha sem sessão plena."),

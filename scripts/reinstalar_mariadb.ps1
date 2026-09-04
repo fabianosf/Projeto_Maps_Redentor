@@ -61,7 +61,7 @@ Write-Log "Aplicando schema.sql"
 Get-Content $SchemaFile -Raw | & $mysql -u root "-p$RootPassword"
 if ($LASTEXITCODE -ne 0) { throw "schema.sql falhou" }
 
-Write-Log "Regenerando map_MariaDB.dat"
+Write-Log "Regenerando map.dat"
 Set-Location $ProjectRoot
 python scripts\gerar_configs_map.py
 

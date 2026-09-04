@@ -38,48 +38,54 @@ CREATE TABLE IF NOT EXISTS tb_usuario (
     nome            VARCHAR(150) NOT NULL,
     senha           VARCHAR(255) NOT NULL COMMENT 'Hash bcrypt (provisória ou definitiva)',
     id_perfil       INT          NOT NULL COMMENT 'FK tb_perfil.id_perfil',
+    id_empresa      INT          NULL COMMENT 'FK tb_empresa — Despachante',
+    id_turno        INT          NULL COMMENT 'FK tb_turno — Despachante',
+    id_local        INT          NULL COMMENT 'FK tb_local — Despachante',
     ativo           TINYINT(1)   NOT NULL DEFAULT 1,
     trocar_senha    TINYINT(1)   NOT NULL DEFAULT 1 COMMENT '1 = primeiro acesso / troca obrigatória',
     PRIMARY KEY (id_usuario),
     UNIQUE KEY uk_tb_usuario_matricula (matricula),
     KEY idx_tb_usuario_id_perfil (id_perfil),
+    KEY idx_tb_usuario_id_empresa (id_empresa),
+    KEY idx_tb_usuario_id_turno (id_turno),
+    KEY idx_tb_usuario_id_local (id_local),
     KEY idx_tb_usuario_trocar_senha (trocar_senha),
     CONSTRAINT fk_tb_usuario_perfil
-        FOREIGN KEY (id_perfil) REFERENCES tb_perfil (id_perfil)
+        FOREIGN KEY (id_perfil) REFERENCES tb_perfil (id_perfil),
+    CONSTRAINT fk_tb_usuario_empresa
+        FOREIGN KEY (id_empresa) REFERENCES tb_empresa (id_empresa),
+    CONSTRAINT fk_tb_usuario_turno
+        FOREIGN KEY (id_turno) REFERENCES tb_turno (id_turno),
+    CONSTRAINT fk_tb_usuario_local
+        FOREIGN KEY (id_local) REFERENCES tb_local (id_local)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO tb_perfil (codigo_perfil, descricao) VALUES
     (1, 'Administrador'),
-    (2, 'Despachante')
+    (2, 'Despachante'),
+    (3, 'Inspetor')
 ON DUPLICATE KEY UPDATE descricao = VALUES(descricao);
 
--- Seeds de desenvolvimento: senha em texto claro = 12345 (hash bcrypt abaixo)
-INSERT INTO tb_usuario (matricula, nome, senha, id_perfil, trocar_senha)
+-- Administrador padrão — senha: Admin (bcrypt cost 12)
+INSERT INTO tb_usuario (
+    matricula, nome, senha, id_perfil,
+    id_empresa, id_turno, id_local, ativo, trocar_senha
+)
 SELECT
-    '1001',
-    'Usuário Administrador',
-    '$2b$12$EwK./Ga3s71.6obLv.Pm0u1j5C1mrfKAAv.ai2rtNkbPXarqB7Wqm',
+    '59492',
+    'Administrador',
+    '$2b$12$iL5/TnNloKB9HEpqZ/lP9u2IU9rsp0q.jaaE7NmlztVtQ3sCOHaWO',
     p.id_perfil,
-    0
+    NULL, NULL, NULL, 1, 0
 FROM tb_perfil p
 WHERE p.codigo_perfil = 1
+LIMIT 1
 ON DUPLICATE KEY UPDATE
     nome = VALUES(nome),
     senha = VALUES(senha),
     id_perfil = VALUES(id_perfil),
-    trocar_senha = VALUES(trocar_senha);
-
-INSERT INTO tb_usuario (matricula, nome, senha, id_perfil, trocar_senha)
-SELECT
-    '1002',
-    'Usuário Despachante',
-    '$2b$12$EwK./Ga3s71.6obLv.Pm0u1j5C1mrfKAAv.ai2rtNkbPXarqB7Wqm',
-    p.id_perfil,
-    0
-FROM tb_perfil p
-WHERE p.codigo_perfil = 2
-ON DUPLICATE KEY UPDATE
-    nome = VALUES(nome),
-    senha = VALUES(senha),
-    id_perfil = VALUES(id_perfil),
+    id_empresa = VALUES(id_empresa),
+    id_turno = VALUES(id_turno),
+    id_local = VALUES(id_local),
+    ativo = VALUES(ativo),
     trocar_senha = VALUES(trocar_senha);

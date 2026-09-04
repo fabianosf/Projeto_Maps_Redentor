@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=360, initial-scale=1" />
+  <title>Tela 02 - Cadastro de Senha</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 360px; height: 800px; overflow: hidden;
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      background: #b9c8d4; color: #0f172a;
+      display: flex; flex-direction: column;
+    }
+    header {
+      height: 56px; background: #1e3a5f; color: #fff;
+      display: flex; align-items: center; padding: 0 8px; gap: 4px; flex-shrink: 0;
+    }
+    header button {
+      width: 44px; height: 44px; border: 1px solid rgba(255,255,255,.25);
+      border-radius: 6px; background: transparent; color: #fff; font-size: 22px;
+    }
+    header h1 {
+      flex: 1; text-align: center; font-size: 16px; font-weight: 700;
+      letter-spacing: .04em; text-transform: uppercase; margin-right: 44px;
+    }
+    main {
+      flex: 1; padding: 20px 20px 56px; background: #b9c8d4; position: relative;
+    }
+    form {
+      margin: 0 auto; width: 100%; max-width: 340px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label {
+      font-size: 15px; font-weight: 600; text-transform: uppercase; color: #0f172a;
+    }
+    .input {
+      width: 100%; height: 48px; padding: 0 40px 0 12px;
+      border: 1px solid #94a3b8; border-radius: 8px;
+      background: #fff; font-size: 16px; color: #0f172a;
+    }
+    .input::placeholder { color: #94a3b8; }
+    .input-wrap { position: relative; }
+    .eye {
+      position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+      width: 28px; height: 28px; color: #64748b;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .eye svg { width: 18px; height: 18px; }
+    .actions {
+      margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    }
+    .btn-3d {
+      height: 48px; border-radius: 8px;
+      border: 1px solid rgba(154, 171, 196, 0.7);
+      background: linear-gradient(180deg, #C8D6E8 0%, #B0C4DE 55%, #8FA8C9 100%);
+      box-shadow:
+        0 6px 14px rgba(15, 23, 42, 0.22),
+        inset 0 2px 4px rgba(255, 255, 255, 0.45),
+        inset 0 -4px 7px rgba(70, 90, 120, 0.25);
+      color: #0f172a; font-size: 16px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.02em;
+      cursor: default; font-family: inherit;
+    }
+    .screen-label {
+      position: absolute; left: 16px; bottom: 12px;
+      font-size: 11px; color: rgba(100, 116, 139, 0.5);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <button type="button" aria-label="Voltar">‹</button>
+    <h1>CADASTRO DE SENHA</h1>
+  </header>
+  <main>
+    <form>
+      <div class="field">
+        <label for="matricula">Matrícula</label>
+        <input class="input" id="matricula" value="59432" readonly />
+      </div>
+      <div class="field">
+        <label for="nova">Digite a nova senha</label>
+        <div class="input-wrap">
+          <input class="input" id="nova" placeholder="Mínimo 8 caracteres" readonly />
+          <span class="eye" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </span>
+        </div>
+      </div>
+      <div class="field">
+        <label for="conf">Confirme a nova senha</label>
+        <div class="input-wrap">
+          <input class="input" id="conf" placeholder="Repita a senha" readonly />
+          <span class="eye" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </span>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn-3d" type="button">Confirmar</button>
+        <button class="btn-3d" type="button">Cancelar</button>
+      </div>
+    </form>
+    <span class="screen-label">Tela 02 — Cadastro de senha</span>
+  </main>
+</body>
+</html>

@@ -1,27 +1,52 @@
-/** RF-RN-007 — política de senha definitiva. */
+/** RF-02 / RF-20 — matrícula numérica, máximo 5 dígitos. */
+export const MATRICULA_MAX_LENGTH = 5;
+
+/** RF-20 — nome alfanumérico, máximo 50 caracteres. */
+export const NOME_MAX_LENGTH = 50;
+
+/** RF-03 / RF-14 / RF-RN-007 — senha definitiva (8+, maiúscula, dígito, especial). */
 const PASSWORD_POLICY =
-  /^(?=.*[A-Za-z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;/`~]).{8,}$/;
+  /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;/`~]).{8,}$/;
+
+/** RF-03 — mesma política da Tela 02, validada no Confirmar do login. */
+export function isValidPasswordFormat(value: string): boolean {
+  return PASSWORD_POLICY.test(value.trim());
+}
 
 /** Nome: letras, números e espaços (inclui acentos). */
 const NOME_ALFANUM = /^[A-Za-zÀ-ÿ0-9\s]+$/;
 
-export function onlyDigits(value: string): string {
-  return value.replace(/\D/g, '');
+export function onlyDigits(value: string, maxLength?: number): string {
+  const digits = value.replace(/\D/g, '');
+  if (maxLength != null) {
+    return digits.slice(0, maxLength);
+  }
+  return digits;
 }
 
+export function onlyMatriculaDigits(value: string): string {
+  return onlyDigits(value, MATRICULA_MAX_LENGTH);
+}
+
+export function isValidMatricula(value: string): boolean {
+  const t = value.trim();
+  return /^\d{1,5}$/.test(t);
+}
+
+/** @deprecated Use isValidMatricula — mantém nome usado em telas legadas. */
 export function isNumericMatricula(value: string): boolean {
-  return /^\d+$/.test(value);
+  return isValidMatricula(value);
 }
 
 export function isAlphanumericName(value: string): boolean {
   const t = value.trim();
-  return t.length > 0 && NOME_ALFANUM.test(t);
+  return t.length > 0 && t.length <= NOME_MAX_LENGTH && NOME_ALFANUM.test(t);
 }
 
 export function validatePassword(nova: string, confirmacao: string): string | null {
   if (nova !== confirmacao) return 'Senhas digitadas diferentes!';
   if (!PASSWORD_POLICY.test(nova)) {
-    return 'Senha inválida! Use alfanumérica, mínimo 8 caracteres e ao menos 1 caractere especial.';
+    return 'Senha inválida!';
   }
   return null;
 }

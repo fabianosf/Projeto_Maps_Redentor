@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=360, initial-scale=1" />
+  <title>Tela 01 - Login</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 360px; height: 800px; overflow: hidden;
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      background: #b9c8d4; color: #0f172a;
+      display: flex; flex-direction: column;
+    }
+    header {
+      height: 56px; background: #1e3a5f; color: #fff;
+      display: flex; align-items: center; padding: 0 8px; gap: 4px; flex-shrink: 0;
+    }
+    header .spacer { width: 44px; }
+    header h1 {
+      flex: 1; text-align: center; font-size: 17px; font-weight: 700;
+      letter-spacing: .04em; text-transform: uppercase;
+    }
+    .page {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      padding: 16px 20px 24px; background: #b9c8d4;
+    }
+    .form-stack {
+      width: 100%; max-width: 320px; display: flex; flex-direction: column; align-items: center;
+    }
+    .logo {
+      width: 160px; height: 160px; object-fit: contain; margin-bottom: 24px;
+    }
+    .field-stack { width: 100%; display: flex; flex-direction: column; gap: 16px; }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label {
+      font-size: 15px; font-weight: 600; text-transform: uppercase; color: #0f172a;
+    }
+    .input-wrap { position: relative; }
+    .input-icon {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      width: 28px; height: 28px; border-radius: 999px;
+      background: #e2e8f0; color: #64748b;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .input-icon svg { width: 16px; height: 16px; }
+    .input {
+      width: 100%; height: 48px; padding: 0 44px 0 48px;
+      border: 1px solid #94a3b8; border-radius: 8px;
+      background: #fff; font-size: 16px; color: #0f172a;
+    }
+    .input::placeholder { color: #94a3b8; }
+    .eye-btn {
+      position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+      width: 36px; height: 36px; border: 0; border-radius: 8px;
+      background: transparent; color: #64748b; display: flex; align-items: center; justify-content: center;
+    }
+    .eye-btn svg { width: 18px; height: 18px; }
+    .actions {
+      margin-top: 12px; display: flex; flex-direction: column; gap: 12px; width: 100%;
+    }
+    .field-note {
+      font-size: 11px; font-weight: 500; color: #475569; line-height: 1.35;
+      margin-top: 2px;
+    }
+      width: 100%; height: 48px; border-radius: 8px;
+      border: 1px solid rgba(154, 171, 196, 0.7);
+      background: linear-gradient(180deg, #C8D6E8 0%, #B0C4DE 55%, #8FA8C9 100%);
+      box-shadow:
+        0 6px 14px rgba(15, 23, 42, 0.22),
+        inset 0 2px 4px rgba(255, 255, 255, 0.45),
+        inset 0 -4px 7px rgba(70, 90, 120, 0.25);
+      color: #0f172a; font-size: 16px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.04em;
+      cursor: default; font-family: inherit;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <span class="spacer" aria-hidden="true"></span>
+    <h1>LOGIN</h1>
+    <span class="spacer" aria-hidden="true"></span>
+  </header>
+  <div class="page">
+    <div class="form-stack">
+      <img
+        class="logo"
+        src="../../FrontEnd/src/assets/logo-mapa-3d.png"
+        alt="RedMapa - Mapa"
+      />
+
+      <div class="field-stack">
+        <div class="field">
+          <label for="matricula">Matrícula</label>
+          <div class="input-wrap">
+            <span class="input-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="8" r="4"/>
+                <path d="M6 20c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <input class="input" id="matricula" value="59432" placeholder="Matrícula" readonly />
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="senha">Senha</label>
+          <p class="field-note">RF-03: mín. 8 caracteres, 1 maiúscula, 1 número e 1 especial (validado ao Confirmar).</p>
+          <div class="input-wrap">
+            <span class="input-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="5" y="11" width="14" height="10" rx="2"/>
+                <path d="M8 11V8a4 4 0 1 1 8 0v3" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <input class="input" id="senha" type="password" value="••••••••" readonly />
+            <button class="eye-btn" type="button" aria-label="Mostrar senha">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn-3d" type="button">Confirmar</button>
+          <button class="btn-3d" type="button">Cancelar</button>
+          <p class="field-note">RF-05: encerra a sessão. Desktop: fecha a aba (se aberta por script) ou history.back(). Mobile: prioriza history.back(); se permanecer na tela, fechar manualmente ou botão voltar do sistema.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

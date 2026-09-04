@@ -2,32 +2,21 @@
 
 from __future__ import annotations
 
-import pymysql
+import os
+import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from dal_util import ScriptDal, column_exists, create_dal
 
 def main() -> None:
-    conn = pymysql.connect(
-        host="10.1.1.29",
-        port=3306,
-        user="alberto",
-        password="at5001",
-        database="map",
-        connect_timeout=8,
-        autocommit=True,
-        charset="utf8mb4",
-    )
-    cur = conn.cursor()
-    cur.execute(
-        """
-        SELECT COUNT(*) FROM information_schema.COLUMNS
-        WHERE TABLE_SCHEMA = 'map' AND TABLE_NAME = 'tb_viagem' AND COLUMN_NAME = 'placa'
-        """
-    )
-    exists = int(cur.fetchone()[0]) > 0
-    if exists:
+    dal = create_dal()
+    cur = ScriptDal(dal)
+
+    if column_exists(dal, "tb_viagem", "placa"):
         print("COLUNA placa JA EXISTE")
     else:
-        cur.execute(
+        dal.update(
             """
             ALTER TABLE tb_viagem
             ADD COLUMN placa VARCHAR(5) NULL
@@ -36,9 +25,9 @@ def main() -> None:
             """
         )
         print("COLUNA placa ADICIONADA")
+
     cur.execute("DESCRIBE tb_viagem")
     print(cur.fetchall())
-    conn.close()
 
 
 if __name__ == "__main__":

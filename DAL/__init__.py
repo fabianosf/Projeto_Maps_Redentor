@@ -4,14 +4,14 @@ Pacote DAL — camada de acesso a dados (padrão PROJ_PAD).
 Estrutura:
     DAL/
     ├── DAL.py
-    ├── CONFIGURACAO.py
+    ├── CONF.py
     ├── arquivos_crip/
     │   ├── chave/chave.key
     │   └── arq/*.dat
     └── PROJ_GAC/
 """
 
-from .CONFIGURACAO import (
+from .CONF import (
     ArquivoConfiguracaoNaoEncontradoError,
     ArquivoConfiguracaoVazioError,
     ChaveConfiguracaoNaoEncontradaError,

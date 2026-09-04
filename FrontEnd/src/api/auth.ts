@@ -41,6 +41,12 @@ export async function logout() {
   });
 }
 
+export async function cancelLogin() {
+  return apiFetch<{ ok: boolean }>('/auth/cancel-login', {
+    method: 'POST',
+  });
+}
+
 export async function me() {
   return apiFetch<MeResponse | ApiErrorBody>('/auth/me', {
     method: 'GET',

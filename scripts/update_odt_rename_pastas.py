@@ -26,7 +26,7 @@ REPLACEMENTS = [
     ("python/session_store.py", "BackEnd/session_store.py"),
     ("python/auth_session.py", "BackEnd/auth_session.py"),
     ("python/DAL.py", "BackEnd/DAL.py"),
-    ("python/CONFIGURACAO.py", "BackEnd/CONFIGURACAO.py"),
+    ("python/CONF.py", "BackEnd/CONF.py"),
     ("python -m python.app", "python -m BackEnd.app"),
 ]
 

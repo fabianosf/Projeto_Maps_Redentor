@@ -2,22 +2,20 @@
 
 from __future__ import annotations
 
-import pymysql
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from dal_util import ScriptDal, create_dal
 
 EMPRESAS = [(1, "Futuro"), (2, "Redentor"), (3, "Barra")]
 
 
 def main() -> None:
-    conn = pymysql.connect(
-        host="10.1.1.29",
-        port=3306,
-        user="alberto",
-        password="at5001",
-        database="map",
-        connect_timeout=8,
-        autocommit=True,
-    )
-    cur = conn.cursor()
+    dal = create_dal()
+    cur = ScriptDal(dal)
+
     cur.execute(
         "SELECT id_empresa, codigo_empresa, descricao, ativo FROM tb_empresa "
         "ORDER BY codigo_empresa, id_empresa"
@@ -46,7 +44,6 @@ def main() -> None:
         "ORDER BY codigo_empresa, id_empresa"
     )
     print("depois:", cur.fetchall())
-    conn.close()
 
 
 if __name__ == "__main__":

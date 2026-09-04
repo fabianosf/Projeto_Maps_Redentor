@@ -13,16 +13,13 @@ New-Item -ItemType Directory -Force -Path $devRoot | Out-Null
 Write-Host "Copiando projeto FrontEnd para $devFront ..."
 if (Test-Path $devFront) {
     # Preserva node_modules se existir; atualiza o restante
-    robocopy $projFront $devFront /E /XD node_modules .expo dist /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
+    robocopy $projFront $devFront /E /XD node_modules .expo dist .npm-cache /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
 } else {
-    robocopy $projFront $devFront /E /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
+    robocopy $projFront $devFront /E /XD .npm-cache /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null
 }
 if ($LASTEXITCODE -ge 8) { throw "Falha ao copiar (robocopy $LASTEXITCODE)" }
 
-# Cache npm na rede (nao ocupa C:/E:)
-npm config set cache "G:\RedMapaDeps\npm-cache" --location=user
-npm config set fund false --location=user
-npm config set audit false --location=user
+# Cache npm: FrontEnd/.npmrc (cache=.npm-cache relativo ao projeto; portavel entre servidores)
 
 Set-Location $devFront
 Write-Host "npm install em $devFront ..."

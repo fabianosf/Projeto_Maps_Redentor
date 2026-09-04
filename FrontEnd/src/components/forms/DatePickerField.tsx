@@ -10,7 +10,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { parseDateBR, toDateBR } from '@/utils/mapaFormat';
+import { parseDateBR, toDateBR } from '@/utils/appFormat';
 
 type Props = {
   label?: string;
@@ -18,6 +18,10 @@ type Props = {
   onChange: (brDate: string) => void;
   name?: string;
   className?: string;
+  inputClassName?: string;
+  disabled?: boolean;
+  /** Ícone do calendário ao lado do label (2,5 cm à direita), em vez de dentro do input. */
+  iconBesideLabel?: boolean;
 };
 
 const WEEKDAYS = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
@@ -36,6 +40,9 @@ export function DatePickerField({
   onChange,
   name = 'data',
   className,
+  inputClassName,
+  iconBesideLabel = false,
+  disabled = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const selected = parseToDate(value);
@@ -65,6 +72,7 @@ export function DatePickerField({
   });
 
   const openPicker = () => {
+    if (disabled) return;
     const base = selected ?? new Date();
     setViewYear(base.getFullYear());
     setViewMonth(base.getMonth());
@@ -92,12 +100,32 @@ export function DatePickerField({
 
   return (
     <div className={cn('flex w-full flex-col gap-1.5', className)}>
-      <Label
-        htmlFor={name}
-        className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900"
-      >
-        {label}
-      </Label>
+      {iconBesideLabel ? (
+        <div className="flex h-5 items-center">
+          <Label
+            htmlFor={name}
+            className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900"
+          >
+            {label}
+          </Label>
+          <button
+            type="button"
+            aria-label="Abrir calendário"
+            onClick={openPicker}
+            disabled={disabled}
+            className="ml-[2.5cm] flex h-5 w-5 shrink-0 items-center justify-center text-primary disabled:opacity-40"
+          >
+            <CalendarIcon className="h-4 w-4" strokeWidth={2.25} />
+          </button>
+        </div>
+      ) : (
+        <Label
+          htmlFor={name}
+          className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900"
+        >
+          {label}
+        </Label>
+      )}
 
       <div className="relative flex items-center">
         <Input
@@ -107,16 +135,23 @@ export function DatePickerField({
           placeholder="dd/mm/aaaa"
           value={value}
           onChange={(e) => onTextChange(e.target.value)}
-          className="h-12 rounded-lg border-slate-400 bg-white pr-11 text-base text-slate-900"
+          disabled={disabled}
+          className={cn(
+            'h-12 rounded-lg border-slate-400 bg-white text-base text-slate-900',
+            iconBesideLabel ? 'pr-3' : 'pr-11',
+            inputClassName,
+          )}
         />
-        <button
-          type="button"
-          aria-label="Abrir calendário"
-          onClick={openPicker}
-          className="absolute right-2 z-[1] flex h-9 w-9 items-center justify-center rounded-md text-primary"
-        >
-          <CalendarIcon className="h-5 w-5" strokeWidth={2.25} />
-        </button>
+        {!iconBesideLabel ? (
+          <button
+            type="button"
+            aria-label="Abrir calendário"
+            onClick={openPicker}
+            className="absolute right-2 z-[1] flex h-9 w-9 items-center justify-center rounded-md text-primary"
+          >
+            <CalendarIcon className="h-5 w-5" strokeWidth={2.25} />
+          </button>
+        ) : null}
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>

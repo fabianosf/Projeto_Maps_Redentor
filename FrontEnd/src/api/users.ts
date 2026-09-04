@@ -1,10 +1,17 @@
 import { apiFetch } from './client';
 import type {
   ApiErrorBody,
+  ErpFuncionarioResponse,
   PerfisListResponse,
   UserMutationResponse,
   UsersListResponse,
 } from '../types';
+
+export type UsuarioVinculos = {
+  id_empresa?: number | null;
+  id_turno?: number | null;
+  id_local?: number | null;
+};
 
 export async function listUsers() {
   return apiFetch<UsersListResponse | ApiErrorBody>('/users', {
@@ -25,10 +32,18 @@ export async function getUserByMatricula(matricula: string) {
   );
 }
 
+export async function getErpFuncionario(matricula: string) {
+  return apiFetch<ErpFuncionarioResponse | ApiErrorBody>(
+    `/users/erp-funcionario/${encodeURIComponent(matricula)}`,
+    { method: 'GET' },
+  );
+}
+
 export async function createUser(
   matricula: string,
   nome: string,
   codigoPerfil: number,
+  vinculos?: UsuarioVinculos,
 ) {
   return apiFetch<UserMutationResponse | ApiErrorBody>('/users', {
     method: 'POST',
@@ -36,6 +51,9 @@ export async function createUser(
       matricula,
       nome,
       codigo_perfil: codigoPerfil,
+      id_empresa: vinculos?.id_empresa ?? null,
+      id_turno: vinculos?.id_turno ?? null,
+      id_local: vinculos?.id_local ?? null,
     }),
   });
 }
@@ -44,12 +62,16 @@ export async function updateUserProfile(
   idUsuario: number,
   codigoPerfil: number,
   nome?: string,
+  vinculos?: UsuarioVinculos,
 ) {
   return apiFetch<UserMutationResponse | ApiErrorBody>(`/users/${idUsuario}`, {
     method: 'PUT',
     body: JSON.stringify({
       codigo_perfil: codigoPerfil,
       ...(nome !== undefined ? { nome } : {}),
+      id_empresa: vinculos?.id_empresa ?? null,
+      id_turno: vinculos?.id_turno ?? null,
+      id_local: vinculos?.id_local ?? null,
     }),
   });
 }

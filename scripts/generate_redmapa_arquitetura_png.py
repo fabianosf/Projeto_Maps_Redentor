@@ -127,7 +127,7 @@ def main() -> None:
 
     # --- Arrows ---
     arrow_h(d, cx2 + 5, 300, bx1 - 5, BLUE, "HTTPS / JSON REST", f_body, f_small)
-    arrow_h(d, bx2 + 5, 300, mx1 - 5, BLUE, "SQL • pymysql", f_body, f_small)
+    arrow_h(d, bx2 + 5, 300, mx1 - 5, BLUE, "SQL • DAL", f_body, f_small)
 
     # --- Footer dev ---
     rounded_rect(d, (40, 580, 1360, 730), (243, 244, 246), GRAY, 2)

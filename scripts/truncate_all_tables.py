@@ -6,41 +6,28 @@ from __future__ import annotations
 import os
 import sys
 
-BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, BASE)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from BackEnd.DAL import DAL  # noqa: E402
+from dal_util import create_dal, database_name, list_tables
 
 
 def main() -> int:
-    pasta = os.path.join(BASE, "DAL", "arquivos_crip")
-    dal = DAL(config_arquivo="map_MariaDB", pasta_conf=pasta, sgbd="mariadb")
+    dal = create_dal()
     if not dal.test_connection():
-        print("Falha na conexão com o banco map.")
+        print(f"Falha na conexão com o banco {database_name(dal)}.")
         return 1
 
-    tabelas_df = dal.read(
-        """
-        SELECT TABLE_NAME
-        FROM information_schema.TABLES
-        WHERE TABLE_SCHEMA = 'map'
-          AND TABLE_TYPE = 'BASE TABLE'
-        ORDER BY TABLE_NAME
-        """
-    )
-    if tabelas_df.empty:
-        print("Nenhuma tabela encontrada no banco map.")
+    tabelas = list_tables(dal)
+    if not tabelas:
+        print(f"Nenhuma tabela encontrada no banco {database_name(dal)}.")
         return 0
 
-    tabelas = [str(r) for r in tabelas_df["TABLE_NAME"].tolist()]
     print("Tabelas:", ", ".join(tabelas))
 
-    # Desabilita FKs, trunca tudo, reabilita
     if not dal.update("SET FOREIGN_KEY_CHECKS = 0"):
         print("Aviso: não foi possível desabilitar FOREIGN_KEY_CHECKS.")
 
     for tabela in tabelas:
-        # Contagem antes
         antes = dal.read(f"SELECT COUNT(*) AS qtd FROM `{tabela}`")
         qtd = int(antes.iloc[0]["qtd"]) if not antes.empty else 0
         ok = dal.update(f"TRUNCATE TABLE `{tabela}`")

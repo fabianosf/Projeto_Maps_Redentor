@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-import pymysql
+import os
+import sys
 
-# numero_frota 30128 + outros; codigo_veiculo = número da frota
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from dal_util import ScriptDal, create_dal
+
 VEICULOS = [
     (30128, "30128", "RST1A28"),
     (30129, "30129", "RST1B29"),
@@ -23,17 +27,8 @@ MOTORISTAS = [
 
 
 def main() -> None:
-    conn = pymysql.connect(
-        host="10.1.1.29",
-        port=3306,
-        user="alberto",
-        password="at5001",
-        database="map",
-        connect_timeout=8,
-        autocommit=True,
-        charset="utf8mb4",
-    )
-    cur = conn.cursor()
+    dal = create_dal()
+    cur = ScriptDal(dal)
 
     cur.execute(
         """
@@ -51,8 +46,7 @@ def main() -> None:
 
     if existente:
         print("STATUS: carro 30128 JA existia.")
-        # API lista apenas ativo=1; reativa se estiver inativo (necessario para teste)
-        ativo = int(existente[0][4] or 0)
+        ativo = int(existente[0]["ativo"] or 0)
         if ativo != 1:
             cur.execute(
                 "UPDATE tb_veiculo SET ativo=1 WHERE numero_frota=%s",
@@ -60,7 +54,6 @@ def main() -> None:
             )
             reativado_30128 = True
             print("REATIVADO_30128: ativo 0 -> 1")
-        # Completa frota de teste sem sobrescrever o 30128
         for codigo, frota, placa in VEICULOS:
             if frota == "30128":
                 continue
@@ -100,7 +93,6 @@ def main() -> None:
             veiculos_inseridos.append((codigo, frota, placa))
             print(f"INSERT_VEICULO: {frota} / {placa}")
 
-    # Garante matrículas de teste (sem alterar existentes)
     motoristas_inseridos = []
     for matricula, nome in MOTORISTAS:
         cur.execute("SELECT id_motorista FROM tb_motorista WHERE matricula=%s", (matricula,))
@@ -129,6 +121,7 @@ def main() -> None:
     print("REATIVADO_30128:", reativado_30128)
     print("VEICULOS_INSERIDOS:", veiculos_inseridos)
     print("MOTORISTAS_INSERIDOS:", motoristas_inseridos)
+
     cur.execute(
         "SELECT id_veiculo, codigo_veiculo, numero_frota, placa, ativo FROM tb_veiculo WHERE ativo=1 ORDER BY numero_frota"
     )
@@ -137,7 +130,6 @@ def main() -> None:
         "SELECT id_motorista, matricula, nome, ativo FROM tb_motorista WHERE ativo=1 ORDER BY matricula"
     )
     print("MOTORISTAS_ATIVOS:", cur.fetchall())
-    conn.close()
 
 
 if __name__ == "__main__":

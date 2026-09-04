@@ -12,9 +12,9 @@ import unicodedata
 from typing import Any, Dict, Optional, Sequence, Union
 
 try:
-    from CONFIGURACAO import ConfiguracaoError, clmain
+    from CONF import ConfiguracaoError, clmain
 except ImportError:
-    from .CONFIGURACAO import ConfiguracaoError, clmain
+    from .CONF import ConfiguracaoError, clmain
 
 try:
     from LOG import CLLOG
@@ -28,7 +28,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SGBD_PAD = "mariadb"
 
 # Arquivo de parâmetros em arquivos_crip/arq/ (sem extensão .dat)
-CONFIG_ARQ_PAD = "map_MariaDB"
+CONFIG_ARQ_PAD = "map"
 
 _MODULO = "DAL"
 _log = CLLOG()
@@ -276,7 +276,7 @@ class DAL:
             leitor = clmain(self.pasta_conf)
             parametros = leitor._obter_Parametros_Configuracao(self.config_arquivo)
             _log_evento(
-                f"Configuração carregada via CONFIGURACAO | arquivo={self.config_arquivo} | "
+                f"Configuração carregada via CONF | arquivo={self.config_arquivo} | "
                 f"total_parametros={len(parametros)}"
             )
             return parametros

@@ -1,0 +1,4 @@
+# PROJ_ONIX — dependências DAL (MariaDB / crip)
+cryptography>=42.0.0
+pandas>=2.0.0
+pymysql>=1.1.0

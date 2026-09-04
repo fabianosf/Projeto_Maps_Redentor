@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-import pymysql
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from dal_util import ScriptDal, create_dal
 
 MOTORISTAS = [
     ("10001", "Motorista Teste 10001"),
@@ -15,18 +20,10 @@ MOTORISTAS = [
 
 
 def main() -> None:
-    conn = pymysql.connect(
-        host="10.1.1.29",
-        port=3306,
-        user="alberto",
-        password="at5001",
-        database="map",
-        connect_timeout=8,
-        autocommit=True,
-        charset="utf8mb4",
-    )
-    cur = conn.cursor()
+    dal = create_dal()
+    cur = ScriptDal(dal)
     inseridos = []
+
     for matricula, nome in MOTORISTAS:
         cur.execute(
             "SELECT id_motorista FROM tb_motorista WHERE matricula=%s",
@@ -53,7 +50,6 @@ def main() -> None:
         tuple(m[0] for m in MOTORISTAS),
     )
     print("CONFIRMADOS:", cur.fetchall())
-    conn.close()
 
 
 if __name__ == "__main__":

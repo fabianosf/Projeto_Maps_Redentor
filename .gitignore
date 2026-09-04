@@ -8,6 +8,9 @@ FrontEnd/.expo/
 FrontEnd/dist/
 FrontEnd/.env
 
+# node_modules na raiz (ex.: playwright)
+node_modules/
+
 # Copia de desenvolvimento local (C:\RedMapaDev) — nao versionar
 # Python
 .venv/
@@ -28,10 +31,20 @@ Desktop.ini
 .~lock.*
 *.odt.bak
 *.bak
+Doc/*.tmp
+
+# npm cache local (por projeto; não versionar)
+FrontEnd/.npm-cache/
+.npm-cache/
 
 # Logs
 log/
+LOG/log/
 *.log
+
+# Dumps locais de banco (não versionar)
+BackEnd/dump-*.sql
+*.sql.bak
 
 # Oracle drivers (removidos)
 drivers/

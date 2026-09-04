@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=360, initial-scale=1" />
+  <title>Tela 08 - Indicadores</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 360px; height: 800px; overflow: hidden;
+      font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      font-weight: 400;
+      background: #B9C8D4; color: #0f172a;
+      -webkit-font-smoothing: antialiased;
+    }
+    header {
+      height: 56px; background: #1e3a5f; color: #fff;
+      display: flex; align-items: center; padding: 0 8px; gap: 4px;
+    }
+    header button.icon {
+      width: 44px; height: 44px; border: 1px solid rgba(255,255,255,.25);
+      border-radius: 6px; background: transparent; color: #fff; font-size: 22px;
+      font-weight: 400;
+    }
+    header h1 {
+      flex: 1; text-align: center; font-size: 16px; font-weight: 400;
+      letter-spacing: .06em; text-transform: uppercase; margin-right: 44px;
+    }
+    main {
+      display: flex; flex-direction: column;
+      height: calc(800px - 56px);
+      padding: 12px 16px 16px;
+    }
+    .field-top {
+      width: 50%; display: flex; flex-direction: column; gap: 5px;
+    }
+    .field-top label {
+      font-size: 12px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .03em; color: #334155;
+    }
+    .select-box {
+      height: 40px; border: 1px solid #94a3b8; border-radius: 8px;
+      background: #fff; padding: 0 28px 0 12px; font-size: 15px; font-weight: 400;
+      color: #0f172a;
+      display: flex; align-items: center; position: relative;
+    }
+    .select-box::after {
+      content: '▾'; position: absolute; right: 10px; top: 50%;
+      transform: translateY(-50%); color: #64748b; font-size: 15px; font-weight: 400;
+    }
+    .line-half {
+      margin-top: 12px; width: 50%; border-top: 2px solid rgba(100,116,139,.5);
+    }
+    .table-wrap {
+      margin-top: 12px; flex: 1; min-height: 0; overflow: hidden;
+      border: 1px solid rgba(100,116,139,.5); border-radius: 8px;
+      background: rgba(255,255,255,.7);
+    }
+    table {
+      width: 100%; border-collapse: collapse;
+      font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      font-weight: 400;
+    }
+    thead th {
+      background: #A8B9C9; padding: 8px 6px;
+      font-weight: 700; text-transform: uppercase; text-align: left;
+      letter-spacing: .02em; color: #1e293b;
+      border-bottom: 2px solid rgba(100,116,139,.4);
+    }
+    thead th.col-check { width: 36px; text-align: center; padding-left: 4px; padding-right: 4px; }
+    thead th.col-ind {
+      width: 28%; font-size: 13px; text-align: left; padding-left: 4px;
+    }
+    thead th.col-desc { font-size: 13px; }
+    tbody td {
+      padding: 8px 6px; border-bottom: 1px solid rgba(148,163,184,.35);
+      vertical-align: middle; font-weight: 400;
+    }
+    tbody td.col-check { text-align: center; }
+    tbody td.col-ind {
+      font-size: 13px; font-weight: 700; white-space: nowrap; padding-left: 4px; color: #0f172a;
+    }
+    tbody td.col-desc {
+      font-size: 13px; line-height: 1.35; color: #334155;
+    }
+    tbody tr:nth-child(odd) { background: #fff; }
+    tbody tr:nth-child(even) { background: #E8EEF4; }
+    input[type=checkbox] { width: 16px; height: 16px; accent-color: #1e3a5f; }
+    .footer { margin-top: auto; padding-top: 16px; }
+    .sep { height: 1px; background: #000; }
+    .actions {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding-top: 12px;
+    }
+    .btn-3d {
+      height: 48px; border-radius: 8px;
+      border: 1px solid rgba(154, 171, 196, 0.7);
+      background: linear-gradient(180deg, #C8D6E8 0%, #B0C4DE 55%, #8FA8C9 100%);
+      box-shadow:
+        0 6px 14px rgba(15, 23, 42, 0.22),
+        inset 0 2px 4px rgba(255, 255, 255, 0.45),
+        inset 0 -4px 7px rgba(70, 90, 120, 0.25);
+      color: #0f172a; font-size: 16px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.02em;
+      cursor: default; font-family: inherit;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <button class="icon" type="button" aria-label="Voltar">‹</button>
+    <h1>INDICADORES</h1>
+  </header>
+  <main>
+    <div class="field-top">
+      <label for="perfil">Perfil:</label>
+      <div class="select-box" id="perfil">Inspetor</div>
+    </div>
+    <div class="line-half"></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="col-check"></th>
+            <th class="col-ind">Indicador</th>
+            <th class="col-desc">Descrição</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="col-check"><input type="checkbox" checked readonly /></td>
+            <td class="col-ind">QTD(M)/ P</td>
+            <td class="col-desc">Quantidade média de passageiros</td>
+          </tr>
+          <tr>
+            <td class="col-check"><input type="checkbox" checked readonly /></td>
+            <td class="col-ind">OCUP</td>
+            <td class="col-desc">Taxa de ocupação do veículo</td>
+          </tr>
+          <tr>
+            <td class="col-check"><input type="checkbox" readonly /></td>
+            <td class="col-ind">ATR/M</td>
+            <td class="col-desc">Atraso médio no ponto</td>
+          </tr>
+          <tr>
+            <td class="col-check"><input type="checkbox" readonly /></td>
+            <td class="col-ind">INT/V</td>
+            <td class="col-desc">Intervalo médio entre viagens</td>
+          </tr>
+          <tr>
+            <td class="col-check"><input type="checkbox" readonly /></td>
+            <td class="col-ind">KMT/D</td>
+            <td class="col-desc">Quilometragem diária percorrida</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="footer">
+      <div class="sep"></div>
+      <div class="actions">
+        <button class="btn-3d" type="button">Confirmar</button>
+        <button class="btn-3d" type="button">Cancelar</button>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

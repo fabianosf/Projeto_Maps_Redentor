@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Gera arquivos de configuração criptografados map_MariaDB.dat e map_PostGree.dat
+Gera arquivos de configuração criptografados map.dat e map_PostGree.dat
 em DAL/arquivos_crip/arq/ (Fernet + DAL/arquivos_crip/chave/chave.key).
 
 Padrão PROJ_PAD: chave em arquivos_crip/chave/, .dat em arquivos_crip/arq/.
@@ -22,7 +22,7 @@ KEY_PATH = os.path.join(CHAVE_DIR, "chave.key")
 
 CONFIGS = {
     # Parametros.png — servidor MariaDB da rede (RedMapa / banco map)
-    "map_MariaDB.dat": {
+    "map.dat": {
         "sgbd": "mariadb",
         "servidor": "10.1.1.29",
         "porta": "3306",
@@ -38,6 +38,16 @@ CONFIGS = {
         "usuario": "postgres",
         "senha": "postgres",
         "bd": "map",
+    },
+
+    # PROJ_ONIX — banco crip (MariaDB rede)
+    "crip.dat": {
+        "sgbd": "mariadb",
+        "servidor": "10.1.1.29",
+        "porta": "3306",
+        "usuario": "alberto",
+        "senha": "at5001",
+        "bd": "crip",
     },
 }
 

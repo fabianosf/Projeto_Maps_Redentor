@@ -16,9 +16,18 @@ from typing import Any, Optional
 
 import bcrypt
 
+from .matricula_validation import matricula_valida
 from .session_store import password_change_token_store
+from .login_attempt_store import registrar_tentativa_falha, resetar_tentativas
+from .CONFIGURACAO import clmain
 
 LOGIN_INVALID_MESSAGE = "Login inválido!"
+MATRICULA_INVALIDA_MESSAGE = "Matrícula inválida!"
+USUARIO_INVALIDO_MESSAGE = "Usuário inválido!"
+LIMITE_TENTATIVAS_MESSAGE = "Limite máximo de tentativas!"
+QTD_MAX_TENTATIVAS_CHAVE = "QTD_MAX_TENTATIVAS"
+BLOQUEIO_TENTATIVAS_CHAVE = "BLOQUEIO_TENTATIVAS_LOGIN"
+QTD_MAX_TENTATIVAS_PADRAO = 3
 DB_UNAVAILABLE_MESSAGE = "Banco de dados indisponível. Verifique se o MariaDB está em execução."
 PASSWORD_MISMATCH_MESSAGE = "Senhas digitadas diferentes!"
 PASSWORD_INVALID_MESSAGE = "Senha inválida!"
@@ -27,7 +36,7 @@ GENERIC_ERROR_MESSAGE = "Operação não autorizada."
 
 BCRYPT_ROUNDS = 12
 _PASSWORD_POLICY = re.compile(
-    r'^(?=.*[A-Za-z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;/`~]).{8,}$'
+    r'^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;/`~]).{8,}$'
 )
 
 
@@ -144,6 +153,34 @@ def hash_senha(senha_plana: str) -> str:
     return hashed.decode("utf-8")
 
 
+def obter_qtd_max_tentativas(dal) -> int:
+    """Lê QTD_MAX_TENTATIVAS em tb_configuracao via CONFIGURACAO.py."""
+    cfg = clmain(dal)
+    if not cfg._pesquisar_Chave_Configuracao(QTD_MAX_TENTATIVAS_CHAVE):
+        return QTD_MAX_TENTATIVAS_PADRAO
+    valor = cfg._obter_Valor_Configuracao(QTD_MAX_TENTATIVAS_CHAVE)
+    if not valor or not str(valor).strip().isdigit():
+        return QTD_MAX_TENTATIVAS_PADRAO
+    qtd = int(str(valor).strip())
+    return qtd if qtd > 0 else QTD_MAX_TENTATIVAS_PADRAO
+
+
+def bloqueio_tentativas_ativo(dal) -> bool:
+    cfg = clmain(dal)
+    if not cfg._pesquisar_Chave_Configuracao(BLOQUEIO_TENTATIVAS_CHAVE):
+        return True
+    return cfg._obter_Valor_Configuracao(BLOQUEIO_TENTATIVAS_CHAVE) == "1"
+
+
+def _inativar_usuario(dal, id_usuario: int) -> bool:
+    return bool(
+        dal.update(
+            "UPDATE tb_usuario SET ativo = 0 WHERE id_usuario = ?",
+            (id_usuario,),
+        )
+    )
+
+
 def validar_nova_senha(nova_senha: str, confirmacao: str) -> Optional[str]:
     if nova_senha != confirmacao:
         return PASSWORD_MISMATCH_MESSAGE
@@ -153,19 +190,35 @@ def validar_nova_senha(nova_senha: str, confirmacao: str) -> Optional[str]:
 
 
 def autenticar_login(dal, matricula: str, senha: str) -> LoginSuccess | AuthError:
-    if not matricula or not matricula.strip():
-        return AuthError(mensagem=LOGIN_INVALID_MESSAGE, codigo="login_invalido")
-
-    hash_senha_db = buscar_hash_senha(dal, matricula)
-    if hash_senha_db is None:
-        return AuthError(mensagem=LOGIN_INVALID_MESSAGE, codigo="login_invalido")
+    if not matricula_valida(matricula):
+        return AuthError(mensagem=MATRICULA_INVALIDA_MESSAGE, codigo="matricula_invalida")
+    if not senha:
+        return AuthError(mensagem=PASSWORD_INVALID_MESSAGE, codigo="senha_invalida")
+    if not _PASSWORD_POLICY.match(senha):
+        return AuthError(mensagem=PASSWORD_INVALID_MESSAGE, codigo="senha_invalida")
 
     usuario = buscar_usuario_por_matricula(dal, matricula)
     if usuario is None or not usuario.ativo:
-        return AuthError(mensagem=LOGIN_INVALID_MESSAGE, codigo="login_invalido")
+        return AuthError(mensagem=USUARIO_INVALIDO_MESSAGE, codigo="usuario_invalido")
+
+    hash_senha_db = buscar_hash_senha(dal, matricula)
+    if hash_senha_db is None:
+        return AuthError(mensagem=USUARIO_INVALIDO_MESSAGE, codigo="usuario_invalido")
 
     if not verificar_senha(senha, hash_senha_db):
-        return AuthError(mensagem=LOGIN_INVALID_MESSAGE, codigo="login_invalido")
+        if bloqueio_tentativas_ativo(dal):
+            max_tentativas = obter_qtd_max_tentativas(dal)
+            tentativas = registrar_tentativa_falha(usuario.matricula)
+            if tentativas >= max_tentativas:
+                _inativar_usuario(dal, usuario.id_usuario)
+                resetar_tentativas(usuario.matricula)
+                return AuthError(
+                    mensagem=LIMITE_TENTATIVAS_MESSAGE,
+                    codigo="limite_tentativas",
+                )
+        return AuthError(mensagem=PASSWORD_INVALID_MESSAGE, codigo="senha_invalida")
+
+    resetar_tentativas(usuario.matricula)
 
     change_token = None
     if usuario.trocar_senha:

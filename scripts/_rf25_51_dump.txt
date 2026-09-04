@@ -1,0 +1,39 @@
+=== TABLE 16 RF=['RF-25', 'RF-26', 'RF-27', 'RF-28', 'RF-29', 'RF-30', 'RF-31', 'RF-32', 'RF-33', 'RF-34', 'RF-35', 'RF-36', 'RF-37', 'RF-38', 'RF-39', 'RF-40', 'RF-41'] ===
+Item | Código | Descrição
+01 | RF-25 | Na tela principal, todos os botões deverão estar habilitados ;Nota: Cado o usuário tenha o perfil de “Despachante” , o botão “Configuração” não estará visivel na tela;
+02 | RF-26 | Na tela principal, caso o usuário pressione o botão “Configuração” , a tela “Tela 09 – Configuracao” deverá ser exibida;
+03 | RF-27 | Na tela principal, caso o usuário pressione o botão “Guia” , a tela “Tela 08 – Guia” deverá ser exibida;
+04 | RF-28 | Na tela principal, caso o usuário pressione o botão “CHEGADA|SAÍDA” , a tela “Tela 05 – Chegada|Saída” deverá ser exibida;
+05 | RF-29 | Na “tela 08 – Guia” , quando a tela for exibida, somente os botões “Novo” e “Pesquisar” deverão estar habilitados e as caixas de texto deverão inicialmente estar desabilitadas também
+06 | RF-30 | Na “tela 08 – Guia”, quando o botão “Novo” for pressionado, todas as caixas de texto deverão ser habilitadas;
+07 | RF-31 | Na “tela 08 – Guia”, quando o botão “Novo” for pressionado, todas as caixas de texto da tela, deverão ser limpas.
+08 | RF-32 | Na “tela 08 – Guia”, quando o botão “Novo” for pressionado, A caixa de texto , correspondente ao número da guia (NR(GUIA)” deverá receber o foco.
+09 | RF-33 | Na “tela 08 – Guia”, quando o botão “Novo” for pressionado, o campo de Data , deverá exibir a data atual .Nota: No formato brasileiro
+10 | RF-34 | Na “tela 08 – Guia”, caso o ícone acima do campo de data seja pressionado , deverá ser exibido um calendário, que permita a seleção de uma data qualquer do calendário.Nota: A data que for selecionada, no calendário deverá ser exibida no campo de data no formato brasileiro.
+11 | RF-35 | Na “tela 08 – Guia”, o preenchimento dos valores dos campos deve ser validado
+12 | RF-36 | Na “tela 08 – Guia”, o preenchimento dos valores do campo de carro deve aceitar somente números e deve ser limitado a 5(cinco) dígitos;
+13 | RF-37 | Na “tela 08 – Guia”, o preenchimento dos valores do campo de motorista deve aceitar somente números e deve ser limitado a 5(cinco) dígitos;
+14 | RF-38 | Na “tela 08 – Guia”, o preenchimento dos valores do campo de horário(Pegada) deve aceitar somente horários , no formato: “HH:MM”;
+15 | RF-39 | Na “tela 09 – Guia”, o preenchimento dos valores do campo de horário(Largada) deve aceitar somente horários , no formato: “HH:MM”;
+16 | RF-40 | Na “tela 09 – Guia”, o preenchimento dos valores do campo de roleta(Inicial) deve aceitar somente números.
+17 | RF-41 | Na “tela 09 – Guia”, o preenchimento dos valores do campo de roleta(Final) deve aceitar somente números.
+
+=== TABLE 17 RF=['RF-42', 'RF-43', 'RF-44', 'RF-45', 'RF-46', 'RF-47', 'RF-48', 'RF-49', 'RF-50', 'RF-51'] ===
+Item | Código | Descrição
+18 | RF-42 | Na “tela 08 – Guia” , a caixa de texto “Observação” deverá multiline.
+19 | RF-43 | Na “tela 08 – Guia” , quando o botão “Novo” for pressionado o botão “Salvar” deverá ser habilitado.
+20 | RF-44 | Na “tela 08 – Guia” , quando o botão “Novo” for pressionado o botão “Deletar” deverá ser habilitados.
+21 | RF-45 | Na “tela 08 – Guia” , quando o botão “Salvar” for pressionado, a aplicação deverá salvar os dados referentes a guia na tabela : “tb_guia” na base de dados da aplicação;
+22 | RF-46 | Na “tela 08 – Guia” , caso o cadastro de uma nova guia seja bem sucedida deverá ser exibida a seguinte mensagem para o usuário: “Guia cadastrada com sucesso!”
+23 | RF-47 | Na “tela 08 – Guia” , caso o cadastro de uma nova guia não seja bem sucedida deverá ser exibida a seguinte mensagem para o usuário: “Não foi possível cadastrar a guia!”
+24 | RF-48 | Na “tela 08 – Guia” , caso o cadastro de uma nova guia seja bem sucedida , o botão “Novo” deverá ser desabilitado”;
+25 | RF-49 | Na “tela 08 – Guia” , caso o cadastro de uma nova guia seja bem sucedida , o botão “Novo” deverá ser desabilitado”;
+26 | RF-50 | Na “tela 08 – Guia” , caso o botão “Pesquisar” seja pressionado:a.) Deve ser exibida uma tela, com um conjunto de label e caixa de texto, solicitando que o usuário informe o número da guia.b.) Depois que o usuário, preencher o número da guia e pressionar o botão “OK”, a aplicação deverá fechar a tela, pesquisar os dados da guia, na tabela: “tb_guia” e exibir os dados na tela “Tela 08-Guia”.
+27 | RF-51 | Na “tela 08 – Guia” , quando o usuário pressionar o botão “Deletar”:a.) A aplicação deverá deletar os dados da guia atual na tabela : “tb_guia”;b.) Exibir mensagem , informando: “Usuário deletado com sucesso!”;c.) Fechar a telad.) Limpar as caixas de texto da tela;e.) Desabilitar todas as caixas de texto;f.) Desabilitar os botões : “Deletar” e “Salvar”;
+28 | RF-52 | 
+ |  | 
+ |  | 
+ |  | 
+ |  | 
+ |  | 
+ |  | 

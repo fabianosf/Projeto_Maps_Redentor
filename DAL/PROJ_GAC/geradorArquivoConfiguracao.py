@@ -19,7 +19,7 @@ class ClGAC:
     """
     Gerenciador de arquivos de configuração criptografados (Fernet + arquivos_crip/chave/chave.key).
 
-    Os arquivos .dat ficam em arquivos_crip/arq/. Compatível com DAL.py e CONFIGURACAO.py.
+    Os arquivos .dat ficam em arquivos_crip/arq/. Compatível com DAL.py e CONF.py.
     """
 
     def __init__(self, nome_arquivo: str = "config.dat", pasta_conf: Optional[str] = None):

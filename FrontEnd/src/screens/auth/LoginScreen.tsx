@@ -1,6 +1,5 @@
 import {
   useCallback,
-  useEffect,
   useRef,
   useState,
   type FormEvent,
@@ -8,19 +7,26 @@ import {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, User } from 'lucide-react';
-import { login } from '@/api/auth';
+import { login, cancelLogin } from '@/api/auth';
 import { FormField } from '@/components/forms/FormField';
 import { AppDialog } from '@/components/shared/AppDialog';
 import { Logo } from '@/components/shared/Logo';
+import { PageHeader } from '@/components/shared/PageHeader';
 import { PasswordToggle } from '@/components/shared/PasswordToggle';
-import { ScreenLabel } from '@/components/shared/ScreenLabel';
 import { Button } from '@/components/ui/button';
+import { actionBtn3dMd } from '@/lib/actionBtn3d';
 import { useFocusInput } from '@/hooks/useFocusInput';
-import { onlyDigits } from '@/utils/validation';
+import { useScreenBg } from '@/hooks/useScreenBg';
+import { isValidMatricula, isValidPasswordFormat, MATRICULA_MAX_LENGTH, onlyMatriculaDigits } from '@/utils/validation';
+import { closeBrowserTabOrReturn } from '@/utils/webNavigation';
 
 const LOGIN_BG = '#b9c8d4';
 
 const LOGIN_INVALID = 'Login inválido!';
+const MATRICULA_INVALIDA = 'Matrícula inválida!';
+const SENHA_INVALIDA = 'Senha inválida!';
+const USUARIO_INVALIDO = 'Usuário inválido!';
+const LIMITE_TENTATIVAS = 'Limite máximo de tentativas!';
 
 export function LoginScreen() {
   const navigate = useNavigate();
@@ -34,19 +40,29 @@ export function LoginScreen() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMessage, setModalMessage] = useState(LOGIN_INVALID);
   const [clearOnConfirm, setClearOnConfirm] = useState(true);
+  const [focusAfterModal, setFocusAfterModal] = useState<'matricula' | 'senha'>('matricula');
 
-  const clearAndFocusMatricula = useCallback(() => {
+  const clearMatriculaOnlyAndFocus = useCallback(() => {
     setMatricula('');
-    setSenha('');
-    setShowSenha(false);
     window.setTimeout(() => matriculaRef.current?.focus(), 0);
   }, [matriculaRef]);
 
-  const showError = useCallback((message: string, shouldClear: boolean) => {
-    setModalMessage(message);
-    setClearOnConfirm(shouldClear);
-    setModalOpen(true);
+  const clearMatriculaAndFocusSenha = useCallback(() => {
+    setMatricula('');
+    setSenha('');
+    setShowSenha(false);
+    window.setTimeout(() => senhaRef.current?.focus(), 0);
   }, []);
+
+  const showError = useCallback(
+    (message: string, shouldClear: boolean, focus: 'matricula' | 'senha') => {
+      setModalMessage(message);
+      setClearOnConfirm(shouldClear);
+      setFocusAfterModal(focus);
+      setModalOpen(true);
+    },
+    [],
+  );
 
   const handleMatriculaKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -68,8 +84,12 @@ export function LoginScreen() {
   const submitLogin = async () => {
     if (submitting) return;
     const mat = matricula.trim();
-    if (!mat || !senha) {
-      showError(LOGIN_INVALID, true);
+    if (!isValidMatricula(mat)) {
+      showError(MATRICULA_INVALIDA, true, 'matricula');
+      return;
+    }
+    if (!senha || !isValidPasswordFormat(senha)) {
+      showError(SENHA_INVALIDA, true, 'senha');
       return;
     }
 
@@ -82,8 +102,35 @@ export function LoginScreen() {
           data && 'mensagem' in data && typeof data.mensagem === 'string' && data.mensagem
             ? data.mensagem
             : LOGIN_INVALID;
+        const codigo =
+          data && 'codigo' in data && typeof data.codigo === 'string' ? data.codigo : '';
         const isDbDown = response.status === 503 || apiMsg.toLowerCase().includes('banco');
-        showError(isDbDown ? apiMsg : LOGIN_INVALID, !isDbDown);
+        const isLimite = codigo === 'limite_tentativas' || apiMsg === LIMITE_TENTATIVAS;
+        const displayMsg = isLimite
+          ? LIMITE_TENTATIVAS
+          : isDbDown
+            ? apiMsg
+            : apiMsg ||
+              (codigo === 'matricula_invalida'
+                ? MATRICULA_INVALIDA
+                : codigo === 'usuario_invalido'
+                  ? USUARIO_INVALIDO
+                  : codigo === 'senha_invalida'
+                    ? SENHA_INVALIDA
+                    : LOGIN_INVALID);
+        const focusSenha =
+          codigo === 'senha_invalida' ||
+          displayMsg === SENHA_INVALIDA ||
+          (!isLimite &&
+            !isDbDown &&
+            codigo !== 'matricula_invalida' &&
+            codigo !== 'usuario_invalido' &&
+            apiMsg === SENHA_INVALIDA);
+        showError(
+          displayMsg,
+          !isDbDown && !isLimite,
+          isLimite ? 'matricula' : focusSenha ? 'senha' : 'matricula',
+        );
         return;
       }
 
@@ -103,6 +150,7 @@ export function LoginScreen() {
       showError(
         'Não foi possível conectar à API. Verifique se o Backend está rodando.',
         false,
+        'matricula',
       );
     } finally {
       setSubmitting(false);
@@ -114,27 +162,18 @@ export function LoginScreen() {
     void submitLogin();
   };
 
-  // Fundo uniforme na Login (html/body/shell) — preenche áreas ao redor do logo transparente
-  useEffect(() => {
-    const html = document.documentElement;
-    const body = document.body;
-    const shell = document.querySelector('.app-shell') as HTMLElement | null;
-    const prevHtml = html.style.backgroundColor;
-    const prevBody = body.style.backgroundColor;
-    const prevShell = shell?.style.backgroundColor ?? '';
-    html.style.backgroundColor = LOGIN_BG;
-    body.style.backgroundColor = LOGIN_BG;
-    if (shell) shell.style.backgroundColor = LOGIN_BG;
-    return () => {
-      html.style.backgroundColor = prevHtml;
-      body.style.backgroundColor = prevBody;
-      if (shell) shell.style.backgroundColor = prevShell;
-    };
-  }, []);
+  const handleCancelar = () => {
+    void cancelLogin().catch(() => undefined);
+    closeBrowserTabOrReturn();
+  };
+
+  useScreenBg(LOGIN_BG);
 
   return (
-    <div className="page min-h-dvh bg-[#b9c8d4]">
-      <div className="page-body-center bg-[#b9c8d4]">
+    <div className="page flex min-h-dvh flex-col bg-[#b9c8d4]">
+      <PageHeader title="LOGIN" />
+
+      <div className="page-body-center flex-1 bg-[#b9c8d4]">
         <div className="form-stack bg-transparent">
           <Logo />
 
@@ -146,10 +185,11 @@ export function LoginScreen() {
               type="tel"
               inputMode="numeric"
               pattern="[0-9]*"
+              maxLength={MATRICULA_MAX_LENGTH}
               placeholder="Matrícula"
               autoComplete="username"
               value={matricula}
-              onChange={(e) => setMatricula(onlyDigits(e.target.value))}
+              onChange={(e) => setMatricula(onlyMatriculaDigits(e.target.value))}
               onKeyDown={handleMatriculaKeyDown}
               leftIcon={<User className="h-4 w-4" />}
               enterKeyHint="next"
@@ -181,14 +221,13 @@ export function LoginScreen() {
             />
 
             <div className="mt-3 flex flex-col gap-3">
-              <Button type="submit" className="w-full" disabled={submitting}>
+              <Button type="submit" className={actionBtn3dMd}>
                 Confirmar
               </Button>
               <Button
                 type="button"
-                className="w-full"
-                onClick={clearAndFocusMatricula}
-                disabled={submitting}
+                className={actionBtn3dMd}
+                onClick={handleCancelar}
               >
                 Cancelar
               </Button>
@@ -197,15 +236,20 @@ export function LoginScreen() {
         </div>
       </div>
 
-      <ScreenLabel text="Tela 01 — Login" />
-
       <AppDialog
         open={modalOpen}
         message={modalMessage}
         onConfirm={() => {
           setModalOpen(false);
-          if (clearOnConfirm) clearAndFocusMatricula();
-          else window.setTimeout(() => matriculaRef.current?.focus(), 0);
+          if (clearOnConfirm) {
+            if (focusAfterModal === 'senha') clearMatriculaAndFocusSenha();
+            else clearMatriculaOnlyAndFocus();
+          } else {
+            window.setTimeout(() => {
+              if (focusAfterModal === 'senha') senhaRef.current?.focus();
+              else matriculaRef.current?.focus();
+            }, 0);
+          }
         }}
       />
     </div>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Trechos a adicionar em PROJ_ONIX.vbproj após instalar DAL -->
+<!--
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="ClDAL.vb" />
+  </ItemGroup>
+-->

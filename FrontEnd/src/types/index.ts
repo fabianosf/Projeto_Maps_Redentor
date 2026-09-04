@@ -1,4 +1,4 @@
-export type CodigoPerfil = 1 | 2;
+export type CodigoPerfil = 1 | 2 | 3;
 
 export interface UsuarioPublico {
   id_usuario: number;
@@ -45,6 +45,24 @@ export interface UsuarioLista {
   id_perfil?: number;
   codigo_perfil: CodigoPerfil | number;
   perfil_descricao?: string;
+  id_empresa?: number | null;
+  id_turno?: number | null;
+  id_local?: number | null;
+  foto_base64?: string | null;
+  foto_mime?: string | null;
+}
+
+/** Funcionário retornado pelo ERP Oracle (GET /users/erp-funcionario) */
+export interface ErpFuncionario {
+  cod_func: string;
+  nome: string;
+  foto_base64?: string | null;
+  foto_mime?: string | null;
+}
+
+export interface ErpFuncionarioResponse {
+  ok: true;
+  funcionario: ErpFuncionario;
 }
 
 export interface UsersListResponse {

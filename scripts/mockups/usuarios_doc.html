@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=360, initial-scale=1" />
+  <title>Tela 03 - Cadastro de Usuario</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 360px; height: 800px; overflow: hidden;
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      background: #b9c8d4; color: #0f172a;
+    }
+    header {
+      height: 56px; background: #1e3a5f; color: #fff;
+      display: flex; align-items: center; padding: 0 8px; gap: 4px;
+    }
+    header button {
+      width: 44px; height: 44px; border: 1px solid rgba(255,255,255,.25);
+      border-radius: 6px; background: transparent; color: #fff; font-size: 22px;
+    }
+    header h1 {
+      flex: 1; text-align: center; font-size: 16px; font-weight: 700;
+      letter-spacing: .04em; text-transform: uppercase; margin-right: 44px;
+    }
+    main {
+      padding: 20px 20px 16px; height: calc(800px - 56px);
+      background: #b9c8d4; overflow: hidden;
+    }
+    .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+    .field label {
+      font-size: 15px; font-weight: 600; text-transform: uppercase;
+    }
+    .field label .req { color: #dc2626; }
+    .input, .select {
+      width: 100%; height: 48px; padding: 0 12px;
+      border: 1px solid #94a3b8; border-radius: 8px;
+      background: #fff; font-size: 16px; color: #0f172a;
+      display: flex; align-items: center;
+    }
+    .input.focus { border-color: #1e3a5f; box-shadow: 0 0 0 1px #1e3a5f; }
+    .input::placeholder { color: #94a3b8; }
+    .select { justify-content: space-between; }
+    .select svg { width: 16px; height: 16px; color: #64748b; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+    .matricula-foto-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+      align-items: flex-start;
+    }
+    .matricula-foto-row .field.matricula-col {
+      width: calc(50% - 6px);
+      flex-shrink: 0;
+      margin-bottom: 0;
+    }
+    .foto-block {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-left: auto;
+      margin-top: -1mm;
+      align-items: flex-start;
+    }
+    .foto-block label {
+      font-size: 15px;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-top: 1mm;
+    }
+    .foto-box {
+      /* Formato 3x4 (padrão documentos BR): 3 cm × 4 cm */
+      width: 111px;
+      height: 148px;
+      border: 1px solid #94a3b8;
+      border-radius: 4px;
+      background: #fff;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .foto-box img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center center;
+    }
+    .doc-footer {
+      margin-top: -2mm;
+    }
+    .sep { border: 0; border-top: 1px solid #000; margin: calc(8px + 3mm) 0 12px; }
+    .doc-buttons {
+      margin-top: -2mm;
+    }
+    .toolbar {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    }
+    .tb-btn {
+      height: 78px; border-radius: 12px; border: 1px solid #1e3a5f;
+      background: #1e3a5f; color: #fff;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase;
+    }
+    .tb-btn.disabled { background: #94a3b8; border-color: #94a3b8; }
+    .tb-btn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .reset-row {
+      margin-top: 10px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    }
+    .reset-row .tb-btn { grid-column: 4; }
+  </style>
+</head>
+<body>
+  <header>
+    <button type="button" aria-label="Voltar">‹</button>
+    <h1>Cadastro de Usuário</h1>
+  </header>
+  <main>
+    <div class="matricula-foto-row">
+      <div class="field matricula-col">
+        <label>Matrícula <span class="req">*</span></label>
+        <input class="input focus" value="59432" readonly />
+      </div>
+      <div class="foto-block">
+        <label for="foto-funcionario">FOTO:</label>
+        <div class="foto-box" id="foto-funcionario" aria-label="Foto do funcionário">
+          <img src="assets/foto_funcionario_doc.jpg" alt="Foto do funcionário Pedro Silva De Almeida" />
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <label>Nome <span class="req">*</span></label>
+      <input class="input" value="Pedro Silva De Almeida" readonly />
+    </div>
+    <div class="field">
+      <label>Perfil <span class="req">*</span></label>
+      <div class="select">Despachante <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></div>
+    </div>
+    <div class="grid2">
+      <div class="field" style="margin-bottom:0">
+        <label>Empresa</label>
+        <div class="select">Futuro <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></div>
+      </div>
+      <div class="field" style="margin-bottom:0">
+        <label>Turno</label>
+        <div class="select">Turno 01 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></div>
+      </div>
+    </div>
+    <div class="field">
+      <label>Local</label>
+      <div class="select">10 - Cidade De Deus <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></div>
+    </div>
+
+    <div class="doc-footer">
+    <hr class="sep" />
+
+    <div class="doc-buttons">
+    <div class="toolbar">
+      <button class="tb-btn" type="button">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+        Novo
+      </button>
+      <button class="tb-btn disabled" type="button">
+        <svg viewBox="0 0 24 24"><path d="M5 5h14v14H5z"/><path d="M8 12h8" stroke-linecap="round"/></svg>
+        Salvar
+      </button>
+      <button class="tb-btn disabled" type="button">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V5h6v2M8 7l1 12h6l1-12"/></svg>
+        Deletar
+      </button>
+      <button class="tb-btn" type="button">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-3-3" stroke-linecap="round"/></svg>
+        Pesquisar
+      </button>
+    </div>
+    <div class="reset-row">
+      <button class="tb-btn" type="button">
+        <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.3-6"/><path d="M20 12a8 8 0 0 1-13.3 6"/><path d="M16 4h4v4M4 20v-4h4" stroke-linecap="round"/></svg>
+        Reset
+      </button>
+    </div>
+    </div>
+    </div>
+  </main>
+</body>
+</html>

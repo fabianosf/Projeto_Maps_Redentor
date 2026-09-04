@@ -74,65 +74,127 @@ CREATE TABLE IF NOT EXISTS tb_veiculo (
     UNIQUE KEY uk_tb_veiculo_placa (placa)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Cabeçalho da jornada (MAP): empresa via linha (JOIN); motorista/veículo só no item
-CREATE TABLE IF NOT EXISTS tb_map (
-    id_registro       INT          NOT NULL AUTO_INCREMENT,
-    cod_map           INT          NOT NULL COMMENT 'Código de negócio',
-    id_usuario        INT          NOT NULL COMMENT 'FK tb_usuario.id_usuario (quem lançou)',
-    id_linha          INT          NOT NULL COMMENT 'FK tb_linha.id_linha',
-    id_turno          INT          NOT NULL COMMENT 'FK tb_turno.id_turno',
-    data              DATE         NOT NULL COMMENT 'Data do registro (somente data; exibir DD/MM/AAAA na tela)',
-    inicio_jornada_des DATETIME     NOT NULL COMMENT 'Início da jornada (desejado/planejado)',
-    fim_jornada_des    DATETIME     NULL COMMENT 'Fim da jornada (desejado/planejado) — opcional',
-    observacao        VARCHAR(500) NULL     COMMENT 'Comentários opcionais',
-    PRIMARY KEY (id_registro),
-    UNIQUE KEY uk_tb_map_cod_map (cod_map),
-    KEY idx_tb_map_usuario (id_usuario),
-    KEY idx_tb_map_linha (id_linha),
-    KEY idx_tb_map_turno (id_turno),
-    KEY idx_tb_map_data (data),
-    KEY idx_tb_map_inicio (inicio_jornada_des),
-    CONSTRAINT fk_tb_map_usuario
-        FOREIGN KEY (id_usuario) REFERENCES tb_usuario (id_usuario),
-    CONSTRAINT fk_tb_map_linha
-        FOREIGN KEY (id_linha) REFERENCES tb_linha (id_linha),
-    CONSTRAINT fk_tb_map_turno
-        FOREIGN KEY (id_turno) REFERENCES tb_turno (id_turno)
+-- Indicadores de operação e vínculo com perfis de usuário
+CREATE TABLE IF NOT EXISTS tb_indicador (
+    id_ind     INT         NOT NULL AUTO_INCREMENT COMMENT 'Chave primária',
+    cod_ind    INT         NOT NULL COMMENT 'Código do indicador',
+    descricao  VARCHAR(20) NOT NULL COMMENT 'Sigla / nome curto do indicador',
+    detalhe    VARCHAR(120) NULL COMMENT 'Descrição detalhada do indicador',
+    PRIMARY KEY (id_ind),
+    UNIQUE KEY uk_tb_indicador_cod_ind (cod_ind)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Detalhe do MAP: veículo, motorista e horários por item
-CREATE TABLE IF NOT EXISTS tb_item_map (
-    id_item        INT      NOT NULL AUTO_INCREMENT,
-    idmap          INT      NOT NULL COMMENT 'FK tb_map.id_registro',
-    id_veiculo     INT      NOT NULL COMMENT 'FK tb_veiculo.id_veiculo',
-    id_motorista   INT      NOT NULL COMMENT 'FK tb_motorista.id_motorista',
-    hor_ini_jor    DATETIME NULL COMMENT 'Início da jornada no item',
-    hor_fim_jor    DATETIME NULL COMMENT 'Fim da jornada no item',
-    chegada_ponto  DATETIME NULL COMMENT 'Chegada no ponto',
-    PRIMARY KEY (id_item),
-    KEY idx_tb_item_map_idmap (idmap),
-    KEY idx_tb_item_map_veiculo (id_veiculo),
-    KEY idx_tb_item_map_motorista (id_motorista),
-    CONSTRAINT fk_tb_item_map_map
-        FOREIGN KEY (idmap) REFERENCES tb_map (id_registro),
-    CONSTRAINT fk_tb_item_map_veiculo
+CREATE TABLE IF NOT EXISTS tb_ind_perf (
+    id_indperf INT NOT NULL AUTO_INCREMENT COMMENT 'Chave primária',
+    id_ind     INT NOT NULL COMMENT 'FK tb_indicador.id_ind',
+    id_perfil  INT NOT NULL COMMENT 'FK tb_perfil.id_perfil',
+    PRIMARY KEY (id_indperf),
+    UNIQUE KEY uk_tb_ind_perf_ind_perfil (id_ind, id_perfil),
+    KEY idx_tb_ind_perf_id_ind (id_ind),
+    KEY idx_tb_ind_perf_id_perfil (id_perfil),
+    CONSTRAINT fk_tb_ind_perf_indicador
+        FOREIGN KEY (id_ind) REFERENCES tb_indicador (id_ind),
+    CONSTRAINT fk_tb_ind_perf_perfil
+        FOREIGN KEY (id_perfil) REFERENCES tb_perfil (id_perfil)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Parâmetros de configuração da aplicação (chave/valor)
+CREATE TABLE IF NOT EXISTS tb_configuracao (
+    idconf INT         NOT NULL AUTO_INCREMENT COMMENT 'Chave primária',
+    chave  VARCHAR(15) NOT NULL COMMENT 'Código da chave',
+    valor  VARCHAR(30) NOT NULL COMMENT 'Valor da chave',
+    PRIMARY KEY (idconf)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO tb_configuracao (chave, valor)
+SELECT 'QTD_MAX_TENTATIVAS', '3' FROM DUAL
+WHERE NOT EXISTS (
+    SELECT 1 FROM tb_configuracao WHERE chave = 'QTD_MAX_TENTATIVAS'
+);
+
+-- Cadastro de guias de viagem (Tela 05 — Guia)
+CREATE TABLE IF NOT EXISTS tb_guia (
+    id_guia       INT          NOT NULL AUTO_INCREMENT COMMENT 'Chave primária (idgui)',
+    numero        VARCHAR(15)  NULL     COMMENT 'Número da guia (código de barras ou manual)',
+    id_empresa    INT          NULL     COMMENT 'FK tb_empresa.id_empresa',
+    id_linha      INT          NULL     COMMENT 'FK tb_linha.id_linha',
+    id_turno      INT          NULL     COMMENT 'FK tb_turno.id_turno',
+    id_veiculo    INT          NULL     COMMENT 'FK tb_veiculo.id_veiculo',
+    id_motorista  INT          NULL     COMMENT 'FK tb_motorista.id_motorista',
+    hor_ini       DATETIME     NULL     COMMENT 'Horário inicial (formato HH:MM na tela)',
+    hor_fim       DATETIME     NULL     COMMENT 'Horário final (formato HH:MM na tela)',
+    roleta01_ini  INT          NULL     COMMENT 'Roleta 01 inicial',
+    roleta01_fim  INT          NULL     COMMENT 'Roleta 01 final',
+    roleta2_ini   INT          NULL     COMMENT 'Roleta 02 inicial',
+    roleta2_fim   INT          NULL     COMMENT 'Roleta 02 final',
+    observacao    VARCHAR(150) NULL     COMMENT 'Observações',
+    data          DATETIME     NULL     COMMENT 'Data e hora do cadastro da guia',
+    PRIMARY KEY (id_guia),
+    KEY idx_tb_guia_numero (numero),
+    KEY idx_tb_guia_empresa (id_empresa),
+    KEY idx_tb_guia_linha (id_linha),
+    KEY idx_tb_guia_turno (id_turno),
+    KEY idx_tb_guia_veiculo (id_veiculo),
+    KEY idx_tb_guia_motorista (id_motorista),
+    CONSTRAINT fk_tb_guia_empresa
+        FOREIGN KEY (id_empresa) REFERENCES tb_empresa (id_empresa),
+    CONSTRAINT fk_tb_guia_linha
+        FOREIGN KEY (id_linha) REFERENCES tb_linha (id_linha),
+    CONSTRAINT fk_tb_guia_turno
+        FOREIGN KEY (id_turno) REFERENCES tb_turno (id_turno),
+    CONSTRAINT fk_tb_guia_veiculo
         FOREIGN KEY (id_veiculo) REFERENCES tb_veiculo (id_veiculo),
-    CONSTRAINT fk_tb_item_map_motorista
+    CONSTRAINT fk_tb_guia_motorista
         FOREIGN KEY (id_motorista) REFERENCES tb_motorista (id_motorista)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Viagens vinculadas a um item do MAP
-CREATE TABLE IF NOT EXISTS tb_viagem (
-    id_viagem         INT      NOT NULL AUTO_INCREMENT,
-    id_item_registro  INT      NOT NULL COMMENT 'FK tb_item_map.id_item',
-    horario_chegada   DATETIME NOT NULL COMMENT 'Horário de chegada da viagem',
-    horario_saida     DATETIME NOT NULL COMMENT 'Horário de saída da viagem',
-    placa             VARCHAR(5) NULL COMMENT 'Horário auxiliar HH:MM (campo Placa da UI)',
-    intervalo         INT      NULL     COMMENT 'Intervalo (minutos ou unidade de negócio)',
-    qtd_pas_ida       INT      NULL     COMMENT 'Quantidade de passageiros na ida',
-    qtd_pas_volta     INT      NULL     COMMENT 'Quantidade de passageiros na volta',
-    PRIMARY KEY (id_viagem),
-    KEY idx_tb_viagem_id_item_registro (id_item_registro),
-    CONSTRAINT fk_tb_viagem_item_map
-        FOREIGN KEY (id_item_registro) REFERENCES tb_item_map (id_item)
+-- Chegada e saída vinculadas à guia (Tela Chegada | Saída)
+CREATE TABLE IF NOT EXISTS tb_chegada_saida (
+    id_cs          INT         NOT NULL AUTO_INCREMENT COMMENT 'Chave primária (idcs)',
+    id_gui         INT         NULL     COMMENT 'FK tb_guia.id_guia',
+    id_linha       INT         NULL     COMMENT 'FK tb_linha.id_linha',
+    carro          INT         NULL     COMMENT 'FK tb_veiculo.id_veiculo',
+    evento         VARCHAR(1)  NULL     COMMENT 'C = chegada, S = saída',
+    roleta_01      INT         NULL     COMMENT 'Roleta 01',
+    roleta_02      INT         NULL     COMMENT 'Roleta 02',
+    temperatura    INT         NULL     COMMENT 'Temperatura',
+    linha_destino  INT         NULL     COMMENT 'Linha destino',
+    destino        INT         NULL     COMMENT 'Destino',
+    PRIMARY KEY (id_cs),
+    KEY idx_tb_chegada_saida_gui (id_gui),
+    KEY idx_tb_chegada_saida_linha (id_linha),
+    KEY idx_tb_chegada_saida_carro (carro),
+    KEY idx_tb_chegada_saida_evento (evento),
+    CONSTRAINT fk_tb_chegada_saida_guia
+        FOREIGN KEY (id_gui) REFERENCES tb_guia (id_guia),
+    CONSTRAINT fk_tb_chegada_saida_linha
+        FOREIGN KEY (id_linha) REFERENCES tb_linha (id_linha),
+    CONSTRAINT fk_tb_chegada_saida_carro
+        FOREIGN KEY (carro) REFERENCES tb_veiculo (id_veiculo)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Tipos e registros de avaria de veículo (Tela Mensagem)
+CREATE TABLE IF NOT EXISTS tb_tip_avaria (
+    id_tip    INT         NOT NULL AUTO_INCREMENT COMMENT 'Chave primária',
+    descricao VARCHAR(30) NOT NULL COMMENT 'Descrição do tipo de avaria',
+    PRIMARY KEY (id_tip)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS tb_avaria (
+    id_av      INT      NOT NULL AUTO_INCREMENT COMMENT 'Chave primária',
+    id_vei     INT      NOT NULL COMMENT 'FK tb_veiculo.id_veiculo',
+    id_tip     INT      NOT NULL COMMENT 'FK tb_tip_avaria.id_tip',
+    id_usuario INT      NOT NULL COMMENT 'FK tb_usuario.id_usuario',
+    data       DATETIME NOT NULL COMMENT 'Data/hora (formato yyyy-MM-dd HH:mm:ss)',
+    PRIMARY KEY (id_av),
+    KEY idx_tb_avaria_id_vei (id_vei),
+    KEY idx_tb_avaria_id_tip (id_tip),
+    KEY idx_tb_avaria_id_usuario (id_usuario),
+    KEY idx_tb_avaria_data (data),
+    CONSTRAINT fk_tb_avaria_veiculo
+        FOREIGN KEY (id_vei) REFERENCES tb_veiculo (id_veiculo),
+    CONSTRAINT fk_tb_avaria_tip_avaria
+        FOREIGN KEY (id_tip) REFERENCES tb_tip_avaria (id_tip),
+    CONSTRAINT fk_tb_avaria_usuario
+        FOREIGN KEY (id_usuario) REFERENCES tb_usuario (id_usuario)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=360, initial-scale=1" />
+  <title>Tela 13 - Entrada | Saída (aba Saída)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 360px; height: 800px; overflow: hidden;
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      background: #B9C8D4; color: #0f172a;
+    }
+    header {
+      height: 56px; background: #1e3a5f; color: #fff;
+      display: flex; align-items: center; padding: 0 8px; gap: 4px;
+    }
+    header button {
+      width: 44px; height: 44px; border: 1px solid rgba(255,255,255,.25);
+      border-radius: 6px; background: transparent; color: #fff; font-size: 22px;
+    }
+    header h1 {
+      flex: 1; text-align: center; font-size: 17px; font-weight: 700;
+      letter-spacing: .04em; text-transform: uppercase; margin-right: 44px;
+    }
+    main {
+      padding: 16px 20px; display: flex; flex-direction: column; gap: 12px;
+      height: calc(800px - 56px);
+    }
+    label {
+      font-size: 15px; font-weight: 600; text-transform: uppercase;
+      display: block; margin-bottom: 6px;
+    }
+    .linha-list-label {
+      font-size: 12px; font-weight: 700; text-transform: uppercase;
+      display: block; margin-bottom: 6px;
+    }
+    .linha-list {
+      max-height: 132px; overflow-y: auto;
+      border: 1px solid #94a3b8; border-radius: 8px; background: #fff;
+    }
+    .linha-item {
+      min-height: 44px; display: flex; align-items: center;
+      padding: 0 12px; font-size: 15px; border-bottom: 1px solid #e2e8f0;
+    }
+    .linha-item:last-child { border-bottom: 0; }
+    .linha-item.selected { background: rgba(30,58,95,.15); font-weight: 600; }
+    input {
+      width: 50%; height: 40px; border: 1px solid #94a3b8; border-radius: 8px;
+      background: #fff; padding: 0 12px; font-size: 14px;
+    }
+    input.input-full {
+      width: 100%;
+    }
+    .select-box {
+      width: 100%; height: 40px; border: 1px solid #94a3b8; border-radius: 8px;
+      background: #fff; padding: 0 36px 0 12px; font-size: 14px;
+      display: flex; align-items: center; position: relative;
+    }
+    .select-box::after {
+      content: '▾'; position: absolute; right: 12px; top: 50%;
+      transform: translateY(-50%); color: #64748b; font-size: 18px; line-height: 1;
+    }
+    .panel {
+      flex: 1; min-height: 0;
+      border: 2px solid rgba(100,116,139,.4); border-radius: 12px;
+      background: rgba(255,255,255,.5); padding: 8px;
+      display: flex; flex-direction: column;
+    }
+    .tabs {
+      display: flex; background: rgba(255,255,255,.6); border-radius: 8px;
+      padding: 4px; gap: 4px; margin-bottom: 8px; flex-shrink: 0;
+    }
+    .tab {
+      flex: 1; height: 32px; border: 0; border-radius: 6px;
+      font-weight: 700; font-size: 12px; text-transform: uppercase;
+    }
+    .tab.active { background: #1e3a5f; color: #fff; }
+    .tab.inactive { background: transparent; color: #334155; }
+    .tab-content { flex: 1; min-height: 0; }
+    .field { margin-bottom: 6px; }
+    .field label { font-size: 13px; margin-bottom: 4px; }
+    .footer {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+      margin-top: auto; padding-top: 12px;
+      border-top: 1px solid rgba(100,116,139,.4);
+    }
+    .btn-3d {
+      height: 48px; border-radius: 8px;
+      border: 1px solid rgba(154, 171, 196, 0.7);
+      background: linear-gradient(180deg, #C8D6E8 0%, #B0C4DE 55%, #8FA8C9 100%);
+      box-shadow:
+        0 6px 14px rgba(15, 23, 42, 0.22),
+        inset 0 2px 4px rgba(255, 255, 255, 0.45),
+        inset 0 -4px 7px rgba(70, 90, 120, 0.25);
+      color: #0f172a; font-size: 16px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.02em;
+      cursor: default; font-family: inherit;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <button aria-label="Voltar">‹</button>
+    <h1>Chegada | Saída</h1>
+  </header>
+  <main>
+    <div>
+      <label class="linha-list-label">Linha(s):</label>
+      <div class="linha-list" role="listbox" aria-label="Linhas disponíveis">
+        <div class="linha-item selected">550-Cidade De Deus - Gávea</div>
+        <div class="linha-item">551-Jardim Botânico - Copacabana</div>
+        <div class="linha-item">552-Lagoa - Ipanema</div>
+        <div class="linha-item">553-Barra - Recreio</div>
+        <div class="linha-item">554-Centro - Tijuca</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="tabs">
+        <button class="tab inactive">Chegada</button>
+        <button class="tab active">Saída</button>
+      </div>
+      <div class="tab-content">
+        <div class="field"><label>Carro</label><input value="30101" readonly /></div>
+        <div class="field"><label>Saída</label><input value="09:15" readonly /></div>
+        <div class="field"><label>Temperatura</label><input value="24" readonly /></div>
+        <div class="field"><label>Linha</label><div class="select-box">551-Jardim Botânico - Copacabana</div></div>
+        <div class="field"><label>Destino</label><input class="input-full" value="02 - Gávea" readonly /></div>
+      </div>
+    </div>
+    <div class="footer">
+      <button class="btn-3d" type="button">Confirmar</button>
+      <button class="btn-3d" type="button">Cancelar</button>
+    </div>
+  </main>
+</body>
+</html>

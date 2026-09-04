@@ -1,0 +1,171 @@
+   8 [P2] PROJETO
+   9 [P2] PROJ_MAP
+  10 [P3] ( SISTEMA DE MAPAS OPERACIONAIS )
+  12 [P5] Versão 1.0
+  14 [P6] Documentação Técnica
+  24 [P9] Deus seja Louvado!
+  28 [P11] 1. Índice
+  46 [P16] 2. Análise de requisitos
+  48 [P18] 2.1 Introdução
+  50 [P20] A região metropolitana da cidade do Rio De Janeiro tem atualmente, diversos modais de transporte urbano, disponibilizado
+  51 [P21] No âmbito municipal, cabe a Secretária de transporte do município do Rio De Janeiro, administrar toda a infraestrutura d
+  52 [P21] Neste contexto, as empresas privadas do modal Rodoviário (ônibus, caminhão, etc...), seguem regras preestabelecidas pela
+  53 [P21] O projeto SAE visa suprir a demanda interna, de uma organização privada que atua no modal “Rodoviário”; O grupo Redentor
+  66 [P25] 2.2 Modal ( Rodoviário )
+  68 [P27] O sistema de transporte urbano carioca conta hoje com todos os principais modais de transporte. Sendo o rodoviário,o que
+  69 [P28] No entanto, devido a reivindicação da sociedade por um sistema de transporte que possibilite uma mobilidade de melhor qu
+  70 [P29] Optou por entregar a iniciativa privada, por meio de licitação pública, cada uma destas áreas geográficas, de modo a sim
+  71 [P30] Deste modo, foram criados os seguintes consórcios rodoviários na cidade:
+  90 [P41] 2.3 Grupo Redentor
+  92 [P43] O grupo Redentor atua na área de transporte (Modal “Rodoviário” ). É composto das seguintes empresas; Redentor, Barra e 
+  93 [P44] Os serviços de transporte são ofertados a cidade 7 dias por semana,24 horas por dia. A quantidade de linhas e carros, é 
+  94 [P44] Para planejar toda logística operacional inerente a dinâmica do transporte que ocorre na cidade, o grupo Redentor tem um
+  95 [P44] No setor Tráfego, existe uma área denominada Setor De Escala, cuja função é a de planejar as escalas de trabalho dos col
+  96 [P45] O Grupo Redentor, atua hoje em 3 (Três) consórcios cidade: Transcarioca, Intersul e Santa Cruz. Procurando sistematicame
+ 100 [P48] 
+ 101 [P48] 
+ 102 [P48] 
+ 103 [P48] 
+ 104 [P49] 
+ 105 [P50] 3. Projeto ProjMap
+ 106 [P51] 
+ 107 [P52] O ProjMap (RedMapa — Sistema de MAPAS Operacionais) é uma aplicação WEB mobile-first desenvolvida para o Grupo Redentor,
+ 108 [P53] 
+ 109 [P52] O sistema substitui o processo manual de elaboração e consulta de MAPAS — documentos operacionais que registram, para ca
+ 110 [P53] 
+ 111 [P52] O objetivo principal do ProjMap é centralizar, em uma única plataforma, o ciclo completo de um MAPA: cadastro do cabeçal
+ 112 [P53] 
+ 113 [P52] O público-alvo são colaboradores do setor de Tráfego — em especial despachantes (perfil operacional) e administradores (
+ 114 [P53] 
+ 115 [P52] Principais funcionalidades — Autenticação: login por matrícula e senha, troca obrigatória de senha no primeiro acesso, s
+ 116 [P53] 
+ 117 [P52] Lista de MAPAS (Lista_mapa): visualização tabular dos MAPAS cadastrados — número (cod_map), empresa, linha e turno — com
+ 118 [P53] 
+ 119 [P52] Cadastro de MAPA (Cad_mapa): formulário de cabeçalho em modo inclusão ou edição, com geração automática do código numéri
+ 120 [P53] 
+ 121 [P52] Tela Mapa: área superior com listagem de carros (itens do MAPA) e área inferior com viagens do carro selecionado; permit
+ 122 [P53] 
+ 123 [P52] Perfis de acesso: Administrador (codigo_perfil = 1) e Despachante (codigo_perfil = 2). Ambos acessam o módulo MAPA após 
+ 124 [P53] 
+ 125 [P52] Stack tecnológica (visão resumida): FrontEnd React Native HTML, CSS e JavaScript consome API REST JSON implementada em P
+ 126 [P53] 
+ 127 [P52] Estado de evolução: o BackEnd de autenticação (/api/v1/auth/*), a camada de acesso a dados (DAL) e o modelo relacional d
+ 128 [P53] 
+ 129 [P52] Convenções: RedMapa é o nome da aplicação; PROJ_MAP identifica o repositório e o projeto de desenvolvimento; MAPA (maiús
+ 130 [P53] 
+ 131 [P53] 
+ 132 [P53] 
+ 133 [P53] 
+ 134 [P53] 
+ 135 [P53] 
+ 136 [P53] 
+ 137 [P53] 
+ 138 [P53] 
+ 139 [P53] 
+ 140 [P53] 
+ 141 [P53] 
+ 142 [P53] 
+ 143 [P53] 
+ 144 [P53] 
+ 145 [P53] 
+ 146 [P53] 
+ 147 [P53] 
+ 148 [P53] 
+ 149 [P53] 
+ 150 [P53] 
+ 151 [P53] 
+ 152 [P53] 
+ 153 [P53] 
+ 154 [P53] 
+ 155 [P53] 
+ 156 [P53] 
+ 157 [P53] 
+ 158 [P53] 
+ 159 [P53] 
+ 160 [P53] 
+ 161 [P53] 
+ 162 [P53] 
+ 163 [P53] 
+ 164 [P54] 
+ 165 [P55] 4. Análise de requisitos
+ 166 [P56] A Análise de requisitos é uma técnica da engenharia de software, que tem por objetivo determinar as necessidades reais d
+ 168 [P59] 
+ 169 [P60] 2.1 Fontes de informação
+ 170 [P61] Abaixo segue lista dos colaboradores que tem atuado como fonte de informação para o projeto. Ou seja, são funcionários q
+ 172 [P64] 
+ 174 [P67] 
+ 175 [P68] 
+ 176 [P68] 
+ 177 [P69] 
+ 178 [P70] 
+ 179 [P70] 
+ 180 [P70] 
+ 181 [P70] 
+ 182 [P70] 
+ 183 [P70] 
+ 184 [P70] 
+ 185 [P70] 
+ 186 [P70] 
+ 187 [P70] 
+ 188 [P70] 
+ 189 [P70] 
+ 190 [P70] 
+ 191 [P71] 
+ 192 [P72] 5. O Escopo
+ 193 [P73] 
+ 194 [P74] A quantidade e diversidade dos processos operacionais é grande. De modo que se faz necessário definir quais serão as nec
+ 195 [P75] 
+ 196 [P76] 5.1 O que o sistema oferece:
+ 198 [P79] 
+ 199 [P80] 5.2 O que o sistema não oferece:
+ 200 [P81] O sistema não deverá oferecer qualquer funcionalidade, que não tenha sido explicitamente citada acima. No entanto, como 
+ 201 [P70] 
+ 202 [P70] 
+ 203 [P70] 
+ 204 [P70] 
+ 205 [P70] 
+ 206 [P82] 
+ 207 [P50] 6. Arquitetura
+ 208 [P83] 
+ 209 [P84] 6.1 Visão geral
+ 210 [P52] O RedMapa segue uma arquitetura cliente-servidor em camadas, com FrontEnd dinâmico (React Native/Rective Native) consumi
+ 211 [P53] 
+ 212 [P52] ┌─────────────────┐ HTTPS/JSON ┌──────────────────────┐ SQL ┌─────────────┐
+ 213 [P52] │ Cliente WEB │ ◄─────────────────► │ BackEnd Python │ ◄──────────► │ MariaDB │
+ 214 [P52] │ (browser) │ cookie HttpOnly │ Flask + DAL │ pymysql │ banco map │
+ 215 [P52] └─────────────────┘ └──────────────────────┘ └─────────────┘
+ 216 [P52] │
+ 217 [P52] │ sessão em memória
+ 218 [P52] ▼
+ 219 [P52] SessionStore (processo)
+ 220 [P53] 
+ 221 [P84] 
+ 222 [P84] 
+ 223 [P84] 
+ 224 [P85] Estrutura do projeto:
+ 225 [P84] 
+ 226 [P84] 6.2 Sistema operacional e ambiente
+ 228 [P53] 
+ 229 [P84] 
+ 230 [P84] 6.3 Stack tecnológica
+ 231 [P84] 6.3.1 FrontEnd (planejado / em especificação)
+ 233 [P53] 
+ 234 [P52] O FrontEnd React Native (Expo) está na pasta FrontEnd/ (App.tsx, src/api, src/config, src/navigation, src/screens, src/u
+ 235 [P53] 
+ 236 [P84] 6.3.2 BackEnd (implementado)
+ 238 [P53] 
+ 239 [P53] 
+ 240 [P53] 
+ 241 [P93] 7. Cronograma
+ 242 [P94] 
+ 244 [P97] 
+ 246 [P124] 
+ 247 [P124] 
+ 248 [P124] 
+ 249 [P53] 
+ 268 [P125] 8.) Regras de negócio
+ 271 [P125] 8.1) Login
+ 311 [P132] 9.) Requisitos
+ 313 [P131] 9.1) Login
+ 361 [P195] 9.2) Tela principal
+ 372 [P125] 8.) Interface grafica ( Front End)
