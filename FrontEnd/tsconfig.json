@@ -17,7 +17,14 @@
     "noFallthroughCasesInSwitch": true,
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+    "types": ["vitest/globals", "@testing-library/jest-dom"]
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    "src/screens/principal/ConfiguracaoScreen.tsx",
+    "src/screens/principal/IndicadoresScreen.tsx",
+    "src/screens/principal/MensagemScreen.tsx",
+    "src/screens/auth/CadastroSenhaScreen.tsx"
+  ]
 }

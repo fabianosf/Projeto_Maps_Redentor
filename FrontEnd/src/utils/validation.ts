@@ -1,16 +1,14 @@
+import { validarPoliticaSenha } from './validacoes';
+
 /** RF-02 / RF-20 — matrícula numérica, máximo 5 dígitos. */
 export const MATRICULA_MAX_LENGTH = 5;
 
 /** RF-20 — nome alfanumérico, máximo 50 caracteres. */
 export const NOME_MAX_LENGTH = 50;
 
-/** RF-03 / RF-14 / RF-RN-007 — senha definitiva (8+, maiúscula, dígito, especial). */
-const PASSWORD_POLICY =
-  /^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;/`~]).{8,}$/;
-
 /** RF-03 — mesma política da Tela 02, validada no Confirmar do login. */
 export function isValidPasswordFormat(value: string): boolean {
-  return PASSWORD_POLICY.test(value.trim());
+  return validarPoliticaSenha(value);
 }
 
 /** Nome: letras, números e espaços (inclui acentos). */
@@ -45,7 +43,7 @@ export function isAlphanumericName(value: string): boolean {
 
 export function validatePassword(nova: string, confirmacao: string): string | null {
   if (nova !== confirmacao) return 'Senhas digitadas diferentes!';
-  if (!PASSWORD_POLICY.test(nova)) {
+  if (!validarPoliticaSenha(nova)) {
     return 'Senha inválida!';
   }
   return null;

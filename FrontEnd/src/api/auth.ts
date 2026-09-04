@@ -1,15 +1,15 @@
 import { apiFetch } from './client';
 import type {
-  ApiErrorBody,
-  ChangePasswordSuccess,
-  LoginSuccess,
+  ChangePasswordResponse,
+  LoginResponse,
   MeResponse,
-} from '../types';
+} from '@/types/auth';
 
-export async function login(matricula: string, senha: string) {
-  return apiFetch<LoginSuccess | ApiErrorBody>('/auth/login', {
+export async function login(matricula: string, senha: string): Promise<LoginResponse> {
+  return apiFetch<LoginResponse>('/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ matricula, senha }),
+    body: { matricula, senha },
+    skipSessionExpired: true,
   });
 }
 
@@ -17,38 +17,42 @@ export async function changePassword(
   changeToken: string,
   novaSenha: string,
   confirmacaoSenha: string,
-) {
-  return apiFetch<ChangePasswordSuccess | ApiErrorBody>('/auth/change-password', {
+): Promise<ChangePasswordResponse> {
+  return apiFetch<ChangePasswordResponse>('/auth/change-password', {
     method: 'POST',
-    body: JSON.stringify({
+    body: {
       change_token: changeToken,
       nova_senha: novaSenha,
       confirmacao_senha: confirmacaoSenha,
-    }),
+    },
+    skipSessionExpired: true,
   });
 }
 
-export async function cancelChangePassword(changeToken?: string) {
+export async function cancelChangePassword(changeToken?: string): Promise<{ ok: boolean }> {
   return apiFetch<{ ok: boolean }>('/auth/cancel-change-password', {
     method: 'POST',
-    body: JSON.stringify({ change_token: changeToken ?? null }),
+    body: { change_token: changeToken ?? null },
+    skipSessionExpired: true,
   });
 }
 
-export async function logout() {
+export async function logout(): Promise<{ ok: boolean }> {
   return apiFetch<{ ok: boolean }>('/auth/logout', {
     method: 'POST',
+    skipSessionExpired: true,
   });
 }
 
-export async function cancelLogin() {
+export async function cancelLogin(): Promise<{ ok: boolean }> {
   return apiFetch<{ ok: boolean }>('/auth/cancel-login', {
     method: 'POST',
+    skipSessionExpired: true,
   });
 }
 
-export async function me() {
-  return apiFetch<MeResponse | ApiErrorBody>('/auth/me', {
+export async function me(): Promise<MeResponse> {
+  return apiFetch<MeResponse>('/auth/me', {
     method: 'GET',
   });
 }

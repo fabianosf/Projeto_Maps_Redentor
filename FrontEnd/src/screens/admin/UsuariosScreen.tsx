@@ -7,8 +7,8 @@ import {
   type KeyboardEvent,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { me } from '@/api/auth';
 import { getCadastros } from '@/api/cadastros';
+import { ApiRequestError } from '@/api/client';
 import {
   createUser,
   deleteUser,
@@ -18,6 +18,12 @@ import {
   resetUserPassword,
   updateUserProfile,
 } from '@/api/users';
+import { AlertDialog } from '@/components/AlertDialog';
+import { AppShell } from '@/components/AppShell';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { FormField } from '@/components/FormField';
+import { LoadingState } from '@/components/LoadingState';
+import { PageHeader } from '@/components/PageHeader';
 import {
   ButtonToolbar,
   IconDeletar,
@@ -26,10 +32,6 @@ import {
   IconReset,
   IconSalvar,
 } from '@/components/shared/ButtonToolbar';
-import { AppAlertDialog } from '@/components/shared/AppAlertDialog';
-import { AppDialog } from '@/components/shared/AppDialog';
-import { PageHeader } from '@/components/shared/PageHeader';
-import { FormField } from '@/components/forms/FormField';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -48,6 +50,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useAuth } from '@/context/AuthContext';
 import { useScreenBg } from '@/hooks/useScreenBg';
 import type { CodigoPerfil, ErpFuncionario, PerfilItem, UsuarioLista } from '@/types';
 import type {
@@ -55,7 +58,12 @@ import type {
   EmpresaCadastro,
   LocalCadastro,
   TurnoCadastro,
-} from '@/types/cadastros';
+} from '@/types/cadastro';
+import {
+  canAccessCadastroUsuario,
+  canResetSenhaUsuario,
+  PERFIL_DESPACHANTE,
+} from '@/utils/perfilAccess';
 import {
   isAlphanumericName,
   isValidMatricula,
@@ -63,10 +71,6 @@ import {
   NOME_MAX_LENGTH,
   onlyMatriculaDigits,
 } from '@/utils/validation';
-import {
-  canAccessCadastroUsuario,
-  canResetSenhaUsuario,
-} from '@/utils/perfilAccess';
 
 /** idle | include | edit */
 type FormMode = 'idle' | 'include' | 'edit';
@@ -82,7 +86,6 @@ const MSG_NAO_ENCONTRADA = 'Matrícula não encontrada';
 const MSG_NOME_INVALIDO =
   'Nome deve ser alfanumérico (letras, números e espaços).';
 const MSG_NOME_TAMANHO = `Nome deve ter no máximo ${NOME_MAX_LENGTH} caracteres.`;
-const PERFIL_DESPACHANTE: CodigoPerfil = 2;
 const SCREEN_BG = '#b9c8d4';
 
 function buildFotoSrc(
@@ -110,13 +113,22 @@ function FotoPlaceholder() {
   );
 }
 
-/** Tela 03 — Cadastro de Usuário (regras de estado) */
+function apiErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof ApiRequestError) {
+    return err.body.mensagem || fallback;
+  }
+  return fallback;
+}
+
+/** Tela 03 — Cadastro de Usuário (regras de estado). */
 export function UsuariosScreen() {
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
   const matriculaRef = useRef<HTMLInputElement>(null);
 
-  const [allowed, setAllowed] = useState(false);
-  const [podeResetSenha, setPodeResetSenha] = useState(false);
+  const allowed = canAccessCadastroUsuario(user?.codigo_perfil);
+  const podeResetSenha = canResetSenhaUsuario(user?.codigo_perfil);
+
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<FormMode>('idle');
@@ -124,7 +136,7 @@ export function UsuariosScreen() {
   const [idUsuario, setIdUsuario] = useState<number | null>(null);
   const [matricula, setMatricula] = useState('');
   const [nome, setNome] = useState('');
-  const [codigoPerfil, setCodigoPerfil] = useState<CodigoPerfil>(2);
+  const [codigoPerfil, setCodigoPerfil] = useState<CodigoPerfil>(PERFIL_DESPACHANTE);
   const [perfis, setPerfis] = useState<PerfilItem[]>([]);
   const [cadastros, setCadastros] = useState<CadastrosMestres | null>(null);
   const [idEmpresa, setIdEmpresa] = useState('');
@@ -168,7 +180,7 @@ export function UsuariosScreen() {
     setIdUsuario(null);
     setMatricula('');
     setNome('');
-    setCodigoPerfil(2);
+    setCodigoPerfil(PERFIL_DESPACHANTE);
     setFotoSrc(null);
     if (cadastros) aplicarDefaultsCadastros(cadastros);
     else limparVinculos();
@@ -204,45 +216,40 @@ export function UsuariosScreen() {
     [aplicarDefaultsCadastros, aplicarVinculosFromUsuario, limparVinculos],
   );
 
-  const carregarCadastros = useCallback(async () => {
-    const { response, data } = await getCadastros();
-    if (response.ok && data && 'ok' in data && data.ok === true) {
+  const carregarCadastros = useCallback(async (): Promise<CadastrosMestres | null> => {
+    try {
+      const data = await getCadastros();
       setCadastros(data.cadastros);
       return data.cadastros;
+    } catch {
+      return null;
     }
-    return null;
   }, []);
 
-  const carregarPerfis = useCallback(async () => {
-    const { response, data } = await listPerfis();
-    if (response.ok && data && 'ok' in data && data.ok === true) {
+  const carregarPerfis = useCallback(async (): Promise<PerfilItem[]> => {
+    try {
+      const data = await listPerfis();
       setPerfis(data.perfis);
       return data.perfis;
+    } catch {
+      return [];
     }
-    return [] as PerfilItem[];
   }, []);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      navigate('/login', { replace: true });
+      return;
+    }
+    if (!allowed) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
-        const { response, data } = await me();
-        if (!response.ok || !data || !('usuario' in data)) {
-          navigate('/', { replace: true });
-          return;
-        }
-        if (!canAccessCadastroUsuario(data.usuario.codigo_perfil)) {
-          setInfoMsg('Acesso restrito a Administradores e Inspetores.');
-          setAllowed(false);
-          return;
-        }
-        if (!cancelled) {
-          setPodeResetSenha(canResetSenhaUsuario(data.usuario.codigo_perfil));
-          setAllowed(true);
-          await Promise.all([carregarPerfis(), carregarCadastros()]);
-        }
-      } catch {
-        navigate('/', { replace: true });
+        await Promise.all([carregarPerfis(), carregarCadastros()]);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -250,9 +257,9 @@ export function UsuariosScreen() {
     return () => {
       cancelled = true;
     };
-  }, [carregarCadastros, carregarPerfis, focusMatricula, navigate]);
+  }, [allowed, authLoading, carregarCadastros, carregarPerfis, navigate, user]);
 
-  // RF-17 — idle: somente Novo/Pesquisar; matrícula só em inclusão
+  // Estado inicial: só Novo/Pesquisar; salvar/deletar só após incluir ou pesquisar.
   const matriculaEnabled = mode === 'include';
   const nomeEnabled = mode === 'include' || mode === 'edit';
   const perfilEnabled = mode === 'include' || mode === 'edit';
@@ -264,7 +271,8 @@ export function UsuariosScreen() {
   const canPesquisar = !busy;
   const canSalvar = !busy && (mode === 'include' || mode === 'edit');
   const canDeletar = !busy && mode === 'edit' && idUsuario != null;
-  const canReset = !busy && mode === 'edit' && podeResetSenha;
+  // Inspetor: reset sempre desabilitado (negócio + UX); backend exige Admin.
+  const canReset = !busy && mode === 'edit' && idUsuario != null && podeResetSenha;
 
   const onNovo = async () => {
     if (busy) return;
@@ -275,9 +283,12 @@ export function UsuariosScreen() {
       setMatricula('');
       setNome('');
       setFotoSrc(null);
-      const desp = lista.find((p) => Number(p.codigo_perfil) === 2);
-      setCodigoPerfil((desp ? Number(desp.codigo_perfil) : 2) as CodigoPerfil);
+      const desp = lista.find((p) => Number(p.codigo_perfil) === PERFIL_DESPACHANTE);
+      setCodigoPerfil(
+        (desp ? Number(desp.codigo_perfil) : PERFIL_DESPACHANTE) as CodigoPerfil,
+      );
       if (cad) aplicarDefaultsCadastros(cad);
+      else limparVinculos();
       setMode('include');
       focusMatricula();
     } catch {
@@ -298,23 +309,15 @@ export function UsuariosScreen() {
 
     setBusy(true);
     try {
-      const { response, data } = await getErpFuncionario(mat);
-      if (!response.ok || !data || !('ok' in data) || data.ok !== true) {
-        const msg =
-          data && 'mensagem' in data && data.mensagem
-            ? data.mensagem
-            : MSG_NAO_ENCONTRADA;
-        showMsg(msg);
-        setNome('');
-        setFotoSrc(null);
-        focusMatricula();
-        return;
-      }
+      const data = await getErpFuncionario(mat);
       const func = data.funcionario;
       setNome(String(func.nome).slice(0, NOME_MAX_LENGTH));
       setFotoSrc(buildFotoSrc(func));
-    } catch {
-      showMsg('Falha de comunicação com a API.');
+    } catch (err) {
+      showMsg(apiErrorMessage(err, MSG_NAO_ENCONTRADA));
+      setNome('');
+      setFotoSrc(null);
+      focusMatricula();
     } finally {
       setBusy(false);
     }
@@ -331,23 +334,8 @@ export function UsuariosScreen() {
     setBusy(true);
     try {
       const [, cad] = await Promise.all([carregarPerfis(), carregarCadastros()]);
-      const { response, data } = await getUserByMatricula(mat);
-      if (!response.ok || !data || !('ok' in data) || data.ok !== true) {
-        const msg =
-          data && 'mensagem' in data && data.mensagem
-            ? data.mensagem
-            : MSG_NAO_ENCONTRADA;
-        showMsg(msg);
-        setIdUsuario(null);
-        setNome('');
-        setFotoSrc(null);
-        setCodigoPerfil(PERFIL_DESPACHANTE);
-        if (cad) aplicarDefaultsCadastros(cad);
-        else limparVinculos();
-        setMode('idle');
-        return;
-      }
-      const u = data.usuario as UsuarioLista;
+      const data = await getUserByMatricula(mat);
+      const u = data.usuario;
       const perfil = Number(u.codigo_perfil) as CodigoPerfil;
       setIdUsuario(u.id_usuario);
       setMatricula(String(u.matricula));
@@ -358,8 +346,13 @@ export function UsuariosScreen() {
       setMode('edit');
       setPesquisarOpen(false);
       setPesquisarMatricula('');
-    } catch {
-      showMsg('Falha de comunicação com a API.');
+    } catch (err) {
+      showMsg(apiErrorMessage(err, MSG_NAO_ENCONTRADA));
+      setIdUsuario(null);
+      setNome('');
+      setFotoSrc(null);
+      setCodigoPerfil(PERFIL_DESPACHANTE);
+      setMode('idle');
     } finally {
       setBusy(false);
     }
@@ -443,45 +436,24 @@ export function UsuariosScreen() {
     setBusy(true);
     try {
       if (mode === 'include') {
-        const { response, data } = await createUser(
-          mat,
-          nomeTrim,
-          codigoPerfil,
-          vinculos,
+        const data = await createUser(mat, nomeTrim, codigoPerfil, vinculos);
+        const temp = data.usuario.senha_temporaria;
+        showMsg(
+          temp
+            ? `${MSG_CADASTRO_OK} Senha temporária: ${temp}`
+            : MSG_CADASTRO_OK,
         );
-        if (!response.ok || !data || !('ok' in data) || data.ok !== true) {
-          showMsg(
-            data && 'mensagem' in data && data.mensagem
-              ? data.mensagem
-              : 'Falha ao salvar usuário.',
-          );
-          return;
-        }
-        showMsg(MSG_CADASTRO_OK);
         goIdle();
         return;
       }
 
       if (mode === 'edit' && idUsuario != null) {
-        const { response, data } = await updateUserProfile(
-          idUsuario,
-          codigoPerfil,
-          nomeTrim,
-          vinculos,
-        );
-        if (!response.ok || !data || !('ok' in data) || data.ok !== true) {
-          showMsg(
-            data && 'mensagem' in data && data.mensagem
-              ? data.mensagem
-              : 'Falha ao atualizar usuário.',
-          );
-          return;
-        }
+        await updateUserProfile(idUsuario, codigoPerfil, nomeTrim, vinculos);
         showMsg(MSG_ATUALIZADO_OK);
         goIdle();
       }
-    } catch {
-      showMsg('Falha de comunicação com a API.');
+    } catch (err) {
+      showMsg(apiErrorMessage(err, 'Falha ao salvar usuário.'));
     } finally {
       setBusy(false);
     }
@@ -492,42 +464,30 @@ export function UsuariosScreen() {
     setConfirmDelete(false);
     setBusy(true);
     try {
-      const { response, data } = await deleteUser(idUsuario);
-      if (!response.ok) {
-        showMsg(
-          data && 'mensagem' in data && data.mensagem
-            ? data.mensagem
-            : 'Falha ao deletar usuário.',
-        );
-        return;
-      }
+      await deleteUser(idUsuario);
       showMsg(MSG_EXCLUIDO_OK);
       goIdle();
-    } catch {
-      showMsg('Falha de comunicação com a API.');
+    } catch (err) {
+      showMsg(apiErrorMessage(err, 'Falha ao deletar usuário.'));
     } finally {
       setBusy(false);
     }
   };
 
   const confirmarReset = async () => {
+    // Regra de negócio: Inspetor nunca reseta (não só visual).
     if (idUsuario == null || !podeResetSenha) return;
     setConfirmReset(false);
     setBusy(true);
     try {
-      const { response, data } = await resetUserPassword(idUsuario);
-      if (!response.ok) {
-        showMsg(
-          data && 'mensagem' in data && data.mensagem
-            ? data.mensagem
-            : MSG_RESET_FAIL,
-        );
-        return;
-      }
-      showMsg(MSG_RESET_OK);
+      const data = await resetUserPassword(idUsuario);
+      const temp = data.usuario.senha_temporaria;
+      showMsg(
+        temp ? `${MSG_RESET_OK} Senha temporária: ${temp}` : MSG_RESET_OK,
+      );
       setMode('edit');
-    } catch {
-      showMsg(MSG_RESET_FAIL);
+    } catch (err) {
+      showMsg(apiErrorMessage(err, MSG_RESET_FAIL));
     } finally {
       setBusy(false);
     }
@@ -567,161 +527,194 @@ export function UsuariosScreen() {
     },
   ];
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
-      <div className="page bg-[#b9c8d4]">
-        <PageHeader title="Cadastro de Usuário" onBack={() => navigate(-1)} />
-        <div className="flex flex-1 items-center justify-center text-muted-foreground">
-          Carregando…
+      <AppShell className="bg-[#b9c8d4]">
+        <div className="page bg-[#b9c8d4]">
+          <PageHeader title="Cadastro de Usuário" onBack={() => navigate(-1)} />
+          <LoadingState />
         </div>
-      </div>
+      </AppShell>
     );
   }
 
   if (!allowed) {
     return (
-      <div className="page bg-[#b9c8d4]">
-        <PageHeader title="Cadastro de Usuário" onBack={() => navigate('/configuracao')} />
-        <AppDialog
-          open={infoMsg !== null}
-          message={infoMsg ?? ''}
-          confirmLabel="OK"
-          onConfirm={() => {
-            setInfoMsg(null);
-            navigate('/configuracao');
-          }}
-        />
-      </div>
+      <AppShell className="bg-[#b9c8d4]">
+        <div className="page bg-[#b9c8d4]">
+          <PageHeader
+            title="Cadastro de Usuário"
+            onBack={() => navigate('/configuracao')}
+          />
+          <AlertDialog
+            open
+            message="Acesso restrito a Administradores e Inspetores."
+            confirmLabel="OK"
+            onConfirm={() => navigate('/configuracao')}
+          />
+        </div>
+      </AppShell>
     );
   }
 
   return (
-    <div className="page bg-[#b9c8d4]">
-      <PageHeader
-        title="Cadastro de Usuário"
-        onBack={() => navigate('/configuracao')}
-      />
+    <AppShell className="bg-[#b9c8d4]">
+      <div className="page bg-[#b9c8d4]">
+        <PageHeader
+          title="Cadastro de Usuário"
+          onBack={() => navigate('/configuracao')}
+        />
 
-      <div className="page-body bg-[#b9c8d4]">
-        <div className="field-stack">
-          <div className="mb-4 flex items-start gap-3">
-            <div className="w-[calc(50%-6px)] shrink-0">
-              <FormField
-                ref={matriculaRef}
-                label="Matrícula"
-                requiredMark
-                name="matricula"
-                type="tel"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={MATRICULA_MAX_LENGTH}
-                placeholder="Digite a matrícula"
-                value={matricula}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                  setMatricula(onlyMatriculaDigits(e.target.value));
-                  if (mode === 'include') {
-                    setFotoSrc(null);
-                  }
-                }}
-                onKeyDown={onMatriculaKeyDown}
-                onBlur={onMatriculaBlur}
-                disabled={!matriculaEnabled}
-                enterKeyHint="done"
-              />
-            </div>
-            <div className="-mt-[1mm] ml-auto flex flex-col items-start gap-1.5">
-              <Label className="text-[15px] font-semibold uppercase leading-none text-slate-900">
-                FOTO:
-              </Label>
-              <div
-                className="flex h-[112px] w-[148px] items-center justify-center overflow-hidden rounded-lg border border-slate-400 bg-white"
-                aria-label="Foto do funcionário"
-              >
-                {fotoSrc ? (
-                  <img
-                    src={fotoSrc}
-                    alt="Foto do funcionário"
-                    className="h-full w-full object-cover object-top"
-                  />
-                ) : (
-                  <FotoPlaceholder />
-                )}
+        <div className="page-body bg-[#b9c8d4]">
+          <div className="field-stack">
+            <div className="mb-4 flex items-start gap-3">
+              <div className="w-[calc(50%-6px)] shrink-0">
+                <FormField
+                  ref={matriculaRef}
+                  label="Matrícula"
+                  requiredMark
+                  name="matricula"
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={MATRICULA_MAX_LENGTH}
+                  placeholder="Digite a matrícula"
+                  value={matricula}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                    setMatricula(onlyMatriculaDigits(e.target.value));
+                    if (mode === 'include') {
+                      setFotoSrc(null);
+                    }
+                  }}
+                  onKeyDown={onMatriculaKeyDown}
+                  onBlur={onMatriculaBlur}
+                  disabled={!matriculaEnabled}
+                  enterKeyHint="done"
+                />
+              </div>
+              <div className="-mt-[1mm] ml-auto flex flex-col items-start gap-1.5">
+                <Label className="text-[15px] font-semibold uppercase leading-none text-slate-900">
+                  FOTO:
+                </Label>
+                <div
+                  className="flex h-[112px] w-[148px] items-center justify-center overflow-hidden rounded-lg border border-slate-400 bg-white"
+                  aria-label="Foto do funcionário"
+                >
+                  {fotoSrc ? (
+                    <img
+                      src={fotoSrc}
+                      alt="Foto do funcionário"
+                      className="h-full w-full object-cover object-top"
+                    />
+                  ) : (
+                    <FotoPlaceholder />
+                  )}
+                </div>
               </div>
             </div>
-          </div>
 
-          <FormField
-            label="Nome"
-            requiredMark
-            name="nome"
-            type="text"
-            maxLength={NOME_MAX_LENGTH}
-            placeholder="Nome do usuário"
-            value={nome}
-            onChange={(e) => setNome(e.target.value.slice(0, NOME_MAX_LENGTH))}
-            disabled={!nomeEnabled}
-          />
+            <FormField
+              label="Nome"
+              requiredMark
+              name="nome"
+              type="text"
+              maxLength={NOME_MAX_LENGTH}
+              placeholder="Nome do usuário"
+              value={nome}
+              onChange={(e) => setNome(e.target.value.slice(0, NOME_MAX_LENGTH))}
+              disabled={!nomeEnabled}
+            />
 
-          <div className="flex w-full flex-col gap-1.5">
-            <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900">
-              Perfil <span className="req"> *</span>
-            </Label>
-            <Select
-              value={String(codigoPerfil)}
-              onValueChange={(v) => {
-                const perfil = Number(v) as CodigoPerfil;
-                setCodigoPerfil(perfil);
-                sincronizarVinculosPorPerfil(perfil, cadastros);
-              }}
-              disabled={!perfilEnabled}
-            >
-              <SelectTrigger
-                className="h-12 rounded-lg bg-white text-base"
-                disabled={!perfilEnabled}
-              >
-                <SelectValue placeholder="Selecione o perfil" />
-              </SelectTrigger>
-              <SelectContent>
-                {perfis.map((p) => (
-                  <SelectItem key={p.id_perfil} value={String(p.codigo_perfil)}>
-                    {p.descricao}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid grid-cols-2 items-start gap-3">
             <div className="flex w-full flex-col gap-1.5">
               <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900">
-                Empresa
+                Perfil <span className="req"> *</span>
               </Label>
               <Select
-                value={idEmpresa}
-                onValueChange={setIdEmpresa}
-                disabled={!vinculoEnabled}
+                value={String(codigoPerfil)}
+                onValueChange={(v) => {
+                  const perfil = Number(v) as CodigoPerfil;
+                  setCodigoPerfil(perfil);
+                  sincronizarVinculosPorPerfil(perfil, cadastros);
+                }}
+                disabled={!perfilEnabled}
               >
                 <SelectTrigger
                   className="h-12 rounded-lg bg-white text-base"
-                  disabled={!vinculoEnabled}
+                  disabled={!perfilEnabled}
                 >
-                  <SelectValue placeholder="Selecione" />
+                  <SelectValue placeholder="Selecione o perfil" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(cadastros?.empresas ?? []).map((e) => (
-                    <SelectItem key={e.id_empresa} value={String(e.id_empresa)}>
-                      {e.descricao}
+                  {perfis.map((p) => (
+                    <SelectItem key={p.id_perfil} value={String(p.codigo_perfil)}>
+                      {p.descricao}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="grid grid-cols-2 items-start gap-3">
+              <div className="flex w-full flex-col gap-1.5">
+                <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900">
+                  Empresa
+                </Label>
+                <Select
+                  value={idEmpresa}
+                  onValueChange={setIdEmpresa}
+                  disabled={!vinculoEnabled}
+                >
+                  <SelectTrigger
+                    className="h-12 rounded-lg bg-white text-base"
+                    disabled={!vinculoEnabled}
+                  >
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(cadastros?.empresas ?? []).map((e) => (
+                      <SelectItem key={e.id_empresa} value={String(e.id_empresa)}>
+                        {e.descricao}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex w-full flex-col gap-1.5">
+                <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900">
+                  Turno
+                </Label>
+                <Select
+                  value={idTurno}
+                  onValueChange={setIdTurno}
+                  disabled={!vinculoEnabled}
+                >
+                  <SelectTrigger
+                    className="h-12 rounded-lg bg-white text-base"
+                    disabled={!vinculoEnabled}
+                  >
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(cadastros?.turnos ?? []).map((t) => (
+                      <SelectItem key={t.id_turno} value={String(t.id_turno)}>
+                        {t.descricao}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="flex w-full flex-col gap-1.5">
               <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900">
-                Turno
+                Local
               </Label>
-              <Select value={idTurno} onValueChange={setIdTurno} disabled={!vinculoEnabled}>
+              <Select
+                value={idLocal}
+                onValueChange={setIdLocal}
+                disabled={!vinculoEnabled}
+              >
                 <SelectTrigger
                   className="h-12 rounded-lg bg-white text-base"
                   disabled={!vinculoEnabled}
@@ -729,9 +722,9 @@ export function UsuariosScreen() {
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(cadastros?.turnos ?? []).map((t) => (
-                    <SelectItem key={t.id_turno} value={String(t.id_turno)}>
-                      {t.descricao}
+                  {(cadastros?.locais ?? []).map((l) => (
+                    <SelectItem key={l.id_local} value={String(l.id_local)}>
+                      {`${l.codigo_local} - ${l.descricao}`}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -739,123 +732,102 @@ export function UsuariosScreen() {
             </div>
           </div>
 
-          <div className="flex w-full flex-col gap-1.5">
-            <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900">
-              Local
-            </Label>
-            <Select value={idLocal} onValueChange={setIdLocal} disabled={!vinculoEnabled}>
-              <SelectTrigger
-                className="h-12 rounded-lg bg-white text-base"
-                disabled={!vinculoEnabled}
-              >
-                <SelectValue placeholder="Selecione" />
-              </SelectTrigger>
-              <SelectContent>
-                {(cadastros?.locais ?? []).map((l) => (
-                  <SelectItem key={l.id_local} value={String(l.id_local)}>
-                    {`${l.codigo_local} - ${l.descricao}`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+          <Separator className="bg-black" />
 
-        <Separator className="bg-black" />
+          <ButtonToolbar actions={actions} />
 
-        <ButtonToolbar actions={actions} />
-
-        <div className="mt-2 grid grid-cols-4 gap-2.5">
-          <span className="col-span-3" />
-          <Button
-            type="button"
-            variant="toolbar"
-            size="toolbar"
-            disabled={!canReset}
-            onClick={() => {
-              if (!canReset) return;
-              setConfirmReset(true);
-            }}
-          >
-            <span aria-hidden="true" className="[&_svg]:h-5 [&_svg]:w-5">
-              <IconReset />
-            </span>
-            <span>Reset</span>
-          </Button>
-        </div>
-      </div>
-
-      <AppDialog
-        open={infoMsg !== null}
-        message={infoMsg ?? ''}
-        confirmLabel="OK"
-        onConfirm={() => setInfoMsg(null)}
-      />
-
-      <AppAlertDialog
-        open={confirmDelete}
-        title="Excluir usuário"
-        message="Confirma a exclusão deste usuário?"
-        confirmLabel="Deletar"
-        cancelLabel="Cancelar"
-        onConfirm={() => void confirmarDeletar()}
-        onCancel={() => setConfirmDelete(false)}
-      />
-
-      <AppAlertDialog
-        open={confirmReset}
-        title="Resetar senha"
-        message="A senha será redefinida para a provisória e o usuário deverá trocá-la no próximo acesso. Continuar?"
-        confirmLabel="Resetar"
-        cancelLabel="Cancelar"
-        onConfirm={() => void confirmarReset()}
-        onCancel={() => setConfirmReset(false)}
-      />
-
-      <Dialog open={pesquisarOpen} onOpenChange={setPesquisarOpen}>
-        <DialogContent className="max-w-[340px] border-slate-400/50 bg-[#B9C8D4] p-5">
-          <DialogHeader>
-            <DialogTitle className="text-center text-[16px] uppercase tracking-wide text-slate-900">
-              Pesquisar usuário
-            </DialogTitle>
-          </DialogHeader>
-          <div className="mt-2">
-            <Label
-              htmlFor="pesquisa_matricula_usuario"
-              className="mb-1.5 block text-sm font-semibold text-slate-800"
-            >
-              Matrícula
-            </Label>
-            <Input
-              id="pesquisa_matricula_usuario"
-              inputMode="numeric"
-              autoComplete="off"
-              value={pesquisarMatricula}
-              onChange={(e) =>
-                setPesquisarMatricula(onlyMatriculaDigits(e.target.value))
-              }
-              maxLength={MATRICULA_MAX_LENGTH}
-              className="h-12 rounded-lg border-slate-400 bg-white text-base text-slate-900"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  void executarBuscaMatricula(pesquisarMatricula);
-                }
-              }}
-            />
-          </div>
-          <DialogFooter className="mt-5">
+          <div className="mt-2 grid grid-cols-4 gap-2.5">
+            <span className="col-span-3" />
             <Button
               type="button"
-              className="w-full"
-              disabled={busy || !pesquisarMatricula.trim()}
-              onClick={() => void executarBuscaMatricula(pesquisarMatricula)}
+              variant="toolbar"
+              size="toolbar"
+              disabled={!canReset}
+              onClick={() => {
+                if (!canReset) return;
+                setConfirmReset(true);
+              }}
             >
-              OK
+              <span aria-hidden="true" className="[&_svg]:h-5 [&_svg]:w-5">
+                <IconReset />
+              </span>
+              <span>Reset</span>
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+          </div>
+        </div>
+
+        <AlertDialog
+          open={infoMsg !== null}
+          message={infoMsg ?? ''}
+          confirmLabel="OK"
+          onConfirm={() => setInfoMsg(null)}
+        />
+
+        <ConfirmDialog
+          open={confirmDelete}
+          title="Excluir usuário"
+          message="Confirma a exclusão lógica deste usuário? (ativo = false; dados preservados)"
+          confirmLabel="Deletar"
+          cancelLabel="Cancelar"
+          onConfirm={() => void confirmarDeletar()}
+          onCancel={() => setConfirmDelete(false)}
+        />
+
+        <ConfirmDialog
+          open={confirmReset}
+          title="Resetar senha"
+          message="Uma senha temporária segura será gerada e o usuário deverá trocá-la no próximo acesso. Continuar?"
+          confirmLabel="Resetar"
+          cancelLabel="Cancelar"
+          onConfirm={() => void confirmarReset()}
+          onCancel={() => setConfirmReset(false)}
+        />
+
+        <Dialog open={pesquisarOpen} onOpenChange={setPesquisarOpen}>
+          <DialogContent className="max-w-[340px] border-slate-400/50 bg-[#B9C8D4] p-5">
+            <DialogHeader>
+              <DialogTitle className="text-center text-[16px] uppercase tracking-wide text-slate-900">
+                Pesquisar usuário
+              </DialogTitle>
+            </DialogHeader>
+            <div className="mt-2">
+              <Label
+                htmlFor="pesquisa_matricula_usuario"
+                className="mb-1.5 block text-sm font-semibold text-slate-800"
+              >
+                Matrícula
+              </Label>
+              <Input
+                id="pesquisa_matricula_usuario"
+                inputMode="numeric"
+                autoComplete="off"
+                value={pesquisarMatricula}
+                onChange={(e) =>
+                  setPesquisarMatricula(onlyMatriculaDigits(e.target.value))
+                }
+                maxLength={MATRICULA_MAX_LENGTH}
+                className="h-12 rounded-lg border-slate-400 bg-white text-base text-slate-900"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void executarBuscaMatricula(pesquisarMatricula);
+                  }
+                }}
+              />
+            </div>
+            <DialogFooter className="mt-5">
+              <Button
+                type="button"
+                className="w-full"
+                disabled={busy || !pesquisarMatricula.trim()}
+                onClick={() => void executarBuscaMatricula(pesquisarMatricula)}
+              >
+                OK
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </AppShell>
   );
 }

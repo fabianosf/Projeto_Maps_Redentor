@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from .auth_service import hash_senha
-from .constants import PERFIL_DESPACHANTE, SENHA_PROVISORIA
+from .constants import PERFIL_DESPACHANTE, gerar_senha_provisoria
 from .erp_service import ErpError, anexar_foto_erp, matricula_existe_erp
 from .matricula_validation import matricula_valida
 
@@ -236,7 +236,8 @@ def criar_usuario(
     if not existe.empty:
         return ServiceError("Matrícula já cadastrada.", "matricula_duplicada")
 
-    senha_hash = hash_senha(SENHA_PROVISORIA)
+    senha_plana = gerar_senha_provisoria()
+    senha_hash = hash_senha(senha_plana)
     ok = dal.create(
         """
         INSERT INTO tb_usuario (
@@ -259,6 +260,8 @@ def criar_usuario(
         (matricula,),
     )
     usuario = row.iloc[0].to_dict()
+    # Exposta uma única vez na resposta — nunca persistida em texto puro.
+    usuario["senha_temporaria"] = senha_plana
     if erp_dal is not None:
         anexar_foto_erp(erp_dal, matricula, usuario)
     return usuario
@@ -355,7 +358,8 @@ def resetar_senha(dal, id_usuario: int) -> dict[str, Any] | ServiceError:
     if erro_ativo:
         return erro_ativo
 
-    senha_hash = hash_senha(SENHA_PROVISORIA)
+    senha_plana = gerar_senha_provisoria()
+    senha_hash = hash_senha(senha_plana)
     ok = dal.update(
         """
         UPDATE tb_usuario
@@ -383,5 +387,6 @@ def resetar_senha(dal, id_usuario: int) -> dict[str, Any] | ServiceError:
             "nao_encontrado",
         )
     data = row.iloc[0].to_dict()
+    data["senha_temporaria"] = senha_plana
     data["mensagem"] = "Reset de usuário realizado com sucesso!"
     return data

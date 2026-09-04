@@ -1,56 +1,39 @@
 import { apiFetch } from './client';
-import type { ApiErrorBody } from '@/types';
+import type {
+  Guia,
+  GuiaDeleteResponse,
+  GuiaPayload,
+  GuiaResponse,
+} from '@/types/guia';
 
-export interface GuiaRecord {
-  id_guia: number;
-  numero: string;
-  id_empresa?: number | null;
-  id_linha?: number | null;
-  id_turno?: number | null;
-  id_veiculo?: number | null;
-  id_motorista?: number | null;
-  numero_frota?: string | null;
-  matricula_motorista?: string | null;
-  hor_ini?: string | null;
-  hor_fim?: string | null;
-  roleta01_ini?: number | null;
-  roleta01_fim?: number | null;
-  roleta2_ini?: number | null;
-  roleta2_fim?: number | null;
-  observacao?: string | null;
-  data?: string | null;
+/** @deprecated Prefer type Guia from @/types/guia */
+export type GuiaRecord = Guia;
+
+export async function getGuiaByNumero(numero: string): Promise<GuiaResponse> {
+  return apiFetch<GuiaResponse>(`/guia/by-numero/${encodeURIComponent(numero)}`, {
+    method: 'GET',
+  });
 }
 
-export async function getGuiaByNumero(numero: string) {
-  return apiFetch<{ ok: true; guia: GuiaRecord } | ApiErrorBody>(
-    `/guia/by-numero/${encodeURIComponent(numero)}`,
-    { method: 'GET' },
-  );
-}
-
-export async function createGuia(body: Record<string, unknown>) {
-  return apiFetch<
-    | { ok: true; guia: GuiaRecord; mensagem?: string }
-    | ApiErrorBody
-  >('/guia', {
+export async function createGuia(body: GuiaPayload): Promise<GuiaResponse> {
+  return apiFetch<GuiaResponse>('/guia', {
     method: 'POST',
-    body: JSON.stringify(body),
+    body,
   });
 }
 
-export async function updateGuia(idGuia: number, body: Record<string, unknown>) {
-  return apiFetch<
-    | { ok: true; guia: GuiaRecord; mensagem?: string }
-    | ApiErrorBody
-  >(`/guia/${idGuia}`, {
+export async function updateGuia(
+  idGuia: number,
+  body: GuiaPayload,
+): Promise<GuiaResponse> {
+  return apiFetch<GuiaResponse>(`/guia/${idGuia}`, {
     method: 'PUT',
-    body: JSON.stringify(body),
+    body,
   });
 }
 
-export async function deleteGuia(idGuia: number) {
-  return apiFetch<{ ok: true; mensagem?: string } | ApiErrorBody>(
-    `/guia/${idGuia}`,
-    { method: 'DELETE' },
-  );
+export async function deleteGuia(idGuia: number): Promise<GuiaDeleteResponse> {
+  return apiFetch<GuiaDeleteResponse>(`/guia/${idGuia}`, {
+    method: 'DELETE',
+  });
 }

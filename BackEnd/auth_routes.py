@@ -35,6 +35,7 @@ from .auth_session import (
     destroy_session,
     get_current_session,
 )
+from .security import limiter
 from .session_store import SessionRecord
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/v1/auth")
@@ -47,6 +48,7 @@ def init_auth_routes(app, dal_factory: Callable[[], Any]) -> None:
 
 
 @auth_bp.post("/login")
+@limiter.limit("10 per minute")
 def login():
     body = request.get_json(silent=True) or {}
     matricula = str(body.get("matricula", "")).strip()
@@ -86,6 +88,7 @@ def login():
 
 
 @auth_bp.post("/change-password")
+@limiter.limit("10 per minute")
 def change_password():
     body = request.get_json(silent=True) or {}
     change_token = str(body.get("change_token", "")).strip()
@@ -105,6 +108,7 @@ def change_password():
 
 
 @auth_bp.post("/cancel-change-password")
+@limiter.limit("10 per minute")
 def cancel_change_password():
     body = request.get_json(silent=True) or {}
     change_token = body.get("change_token")
@@ -117,6 +121,7 @@ def cancel_change_password():
 
 
 @auth_bp.post("/cancel-login")
+@limiter.limit("10 per minute")
 def cancel_login():
     destroy_session(request.cookies)
     response = jsonify({"ok": True})

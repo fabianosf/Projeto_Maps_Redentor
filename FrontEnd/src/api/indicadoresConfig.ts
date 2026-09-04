@@ -1,50 +1,57 @@
 import { apiFetch } from './client';
-import type { ApiErrorBody } from '../types';
 import type {
   IndicadoresCatalogoResponse,
   IndicadoresPermitidosMeResponse,
   IndicadoresSaveResponse,
   IndicadoresVinculoResponse,
   PerfisIndicadoresListResponse,
-} from '../types/indicadores';
+} from '@/types/indicador';
 
-export async function listIndicadoresCatalogo() {
-  return apiFetch<IndicadoresCatalogoResponse | ApiErrorBody>(
-    '/indicadores-config/indicadores',
-    { method: 'GET' },
-  );
+export async function getIndicadoresCatalogo(): Promise<IndicadoresCatalogoResponse> {
+  return apiFetch<IndicadoresCatalogoResponse>('/indicadores-config/indicadores', {
+    method: 'GET',
+  });
 }
 
-export async function listPerfisIndicadoresConfig() {
-  return apiFetch<PerfisIndicadoresListResponse | ApiErrorBody>(
-    '/indicadores-config/perfis',
-    { method: 'GET' },
-  );
+export async function getPerfisIndicadores(): Promise<PerfisIndicadoresListResponse> {
+  return apiFetch<PerfisIndicadoresListResponse>('/indicadores-config/perfis', {
+    method: 'GET',
+  });
 }
 
-export async function getIndicadoresPermitidosMe() {
-  return apiFetch<IndicadoresPermitidosMeResponse | ApiErrorBody>(
+/** RN-08 — só indicadores do perfil da sessão (ignora query manipulada). */
+export async function getIndicadoresPermitidosMe(): Promise<IndicadoresPermitidosMeResponse> {
+  return apiFetch<IndicadoresPermitidosMeResponse>(
     '/indicadores-config/me/indicadores',
     { method: 'GET' },
   );
 }
 
-export async function getIndicadoresVinculoPerfil(idPerfil: number) {
-  return apiFetch<IndicadoresVinculoResponse | ApiErrorBody>(
+export async function getIndicadoresPorPerfil(
+  idPerfil: number,
+): Promise<IndicadoresVinculoResponse> {
+  return apiFetch<IndicadoresVinculoResponse>(
     `/indicadores-config/${idPerfil}/indicadores`,
     { method: 'GET' },
   );
 }
 
-export async function saveIndicadoresVinculoPerfil(
+export async function saveIndicadoresPerfil(
   idPerfil: number,
   idInds: number[],
-) {
-  return apiFetch<IndicadoresSaveResponse | ApiErrorBody>(
+): Promise<IndicadoresSaveResponse> {
+  return apiFetch<IndicadoresSaveResponse>(
     `/indicadores-config/${idPerfil}/indicadores`,
     {
       method: 'PUT',
-      body: JSON.stringify({ id_inds: idInds }),
+      body: { id_inds: idInds },
     },
   );
 }
+
+/** @deprecated Prefer getPerfisIndicadores */
+export const listPerfisIndicadoresConfig = getPerfisIndicadores;
+/** @deprecated Prefer getIndicadoresPorPerfil */
+export const getIndicadoresVinculoPerfil = getIndicadoresPorPerfil;
+/** @deprecated Prefer saveIndicadoresPerfil */
+export const saveIndicadoresVinculoPerfil = saveIndicadoresPerfil;

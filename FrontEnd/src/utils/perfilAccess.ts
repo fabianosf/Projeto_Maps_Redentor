@@ -17,3 +17,8 @@ export function canAccessCadastroUsuario(codigoPerfil: number | null | undefined
 export function canResetSenhaUsuario(codigoPerfil: number | null | undefined): boolean {
   return codigoPerfil === PERFIL_ADMIN;
 }
+
+/** RF-MAP — Administrador ou Despachante. */
+export function canAccessMapas(codigoPerfil: number | null | undefined): boolean {
+  return codigoPerfil === PERFIL_ADMIN || codigoPerfil === PERFIL_DESPACHANTE;
+}

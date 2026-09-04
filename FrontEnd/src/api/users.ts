@@ -1,11 +1,10 @@
 import { apiFetch } from './client';
 import type {
-  ApiErrorBody,
   ErpFuncionarioResponse,
   PerfisListResponse,
   UserMutationResponse,
   UsersListResponse,
-} from '../types';
+} from '@/types';
 
 export type UsuarioVinculos = {
   id_empresa?: number | null;
@@ -13,27 +12,23 @@ export type UsuarioVinculos = {
   id_local?: number | null;
 };
 
-export async function listUsers() {
-  return apiFetch<UsersListResponse | ApiErrorBody>('/users', {
-    method: 'GET',
-  });
+export async function listUsers(): Promise<UsersListResponse> {
+  return apiFetch<UsersListResponse>('/users', { method: 'GET' });
 }
 
-export async function listPerfis() {
-  return apiFetch<PerfisListResponse | ApiErrorBody>('/users/perfis', {
-    method: 'GET',
-  });
+export async function listPerfis(): Promise<PerfisListResponse> {
+  return apiFetch<PerfisListResponse>('/users/perfis', { method: 'GET' });
 }
 
-export async function getUserByMatricula(matricula: string) {
-  return apiFetch<UserMutationResponse | ApiErrorBody>(
+export async function getUserByMatricula(matricula: string): Promise<UserMutationResponse> {
+  return apiFetch<UserMutationResponse>(
     `/users/by-matricula/${encodeURIComponent(matricula)}`,
     { method: 'GET' },
   );
 }
 
-export async function getErpFuncionario(matricula: string) {
-  return apiFetch<ErpFuncionarioResponse | ApiErrorBody>(
+export async function getErpFuncionario(matricula: string): Promise<ErpFuncionarioResponse> {
+  return apiFetch<ErpFuncionarioResponse>(
     `/users/erp-funcionario/${encodeURIComponent(matricula)}`,
     { method: 'GET' },
   );
@@ -44,17 +39,17 @@ export async function createUser(
   nome: string,
   codigoPerfil: number,
   vinculos?: UsuarioVinculos,
-) {
-  return apiFetch<UserMutationResponse | ApiErrorBody>('/users', {
+): Promise<UserMutationResponse> {
+  return apiFetch<UserMutationResponse>('/users', {
     method: 'POST',
-    body: JSON.stringify({
+    body: {
       matricula,
       nome,
       codigo_perfil: codigoPerfil,
       id_empresa: vinculos?.id_empresa ?? null,
       id_turno: vinculos?.id_turno ?? null,
       id_local: vinculos?.id_local ?? null,
-    }),
+    },
   });
 }
 
@@ -63,29 +58,31 @@ export async function updateUserProfile(
   codigoPerfil: number,
   nome?: string,
   vinculos?: UsuarioVinculos,
-) {
-  return apiFetch<UserMutationResponse | ApiErrorBody>(`/users/${idUsuario}`, {
+): Promise<UserMutationResponse> {
+  return apiFetch<UserMutationResponse>(`/users/${idUsuario}`, {
     method: 'PUT',
-    body: JSON.stringify({
+    body: {
       codigo_perfil: codigoPerfil,
       ...(nome !== undefined ? { nome } : {}),
       id_empresa: vinculos?.id_empresa ?? null,
       id_turno: vinculos?.id_turno ?? null,
       id_local: vinculos?.id_local ?? null,
-    }),
+    },
   });
 }
 
-export async function deleteUser(idUsuario: number) {
-  return apiFetch<{ ok: boolean; mensagem?: string } | ApiErrorBody>(
-    `/users/${idUsuario}`,
-    { method: 'DELETE' },
-  );
+export async function deleteUser(
+  idUsuario: number,
+): Promise<{ ok: boolean; mensagem?: string }> {
+  return apiFetch<{ ok: boolean; mensagem?: string }>(`/users/${idUsuario}`, {
+    method: 'DELETE',
+  });
 }
 
-export async function resetUserPassword(idUsuario: number) {
-  return apiFetch<UserMutationResponse | ApiErrorBody>(
-    `/users/${idUsuario}/reset-password`,
-    { method: 'POST' },
-  );
+export async function resetUserPassword(
+  idUsuario: number,
+): Promise<UserMutationResponse> {
+  return apiFetch<UserMutationResponse>(`/users/${idUsuario}/reset-password`, {
+    method: 'POST',
+  });
 }

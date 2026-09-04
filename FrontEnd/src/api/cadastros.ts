@@ -1,9 +1,6 @@
 import { apiFetch } from './client';
-import type { ApiErrorBody } from '../types';
-import type { CadastrosMestres } from '../types/cadastros';
+import type { CadastrosResponse } from '@/types/cadastro';
 
-export async function getCadastros() {
-  return apiFetch<
-    { ok: true; cadastros: CadastrosMestres } | ApiErrorBody
-  >('/cadastros', { method: 'GET' });
+export async function getCadastros(): Promise<CadastrosResponse> {
+  return apiFetch<CadastrosResponse>('/cadastros', { method: 'GET' });
 }

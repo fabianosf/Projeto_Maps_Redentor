@@ -41,9 +41,15 @@ def get_perfis():
 @indicadores_config_bp.get("/me/indicadores")
 @require_session
 def get_indicadores_permitidos_sessao():
-    """RN-08 — leitura dos indicadores habilitados para o perfil logado."""
+    """
+    RN-08 — indicadores habilitados para o perfil logado.
+    Não aceita id_perfil/codigo_perfil na URL/query (anti-manipulação).
+    """
+    # Qualquer tentativa de forçar outro perfil via query é ignorada.
+    _ = request.args.get("id_perfil")
+    _ = request.args.get("codigo_perfil")
     usuario = g.auth_usuario
-    indicadores = listar_indicadores_permitidos(g.dal, usuario.codigo_perfil)
+    indicadores = listar_indicadores_permitidos(g.dal, int(usuario.codigo_perfil))
     return jsonify({"ok": True, "indicadores": indicadores}), 200
 
 

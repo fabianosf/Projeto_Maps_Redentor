@@ -1,88 +1,68 @@
-export type CodigoPerfil = 1 | 2 | 3;
+/** Barrel de tipos do FrontEnd RedMapa. */
 
-export interface UsuarioPublico {
-  id_usuario: number;
-  matricula: string;
-  nome: string;
-  codigo_perfil: CodigoPerfil;
-  trocar_senha: boolean;
-}
+export type {
+  ApiError,
+  ApiResult,
+  ApiSuccess,
+} from './api';
+export { isApiError, isApiSuccess } from './api';
 
-export interface ApiErrorBody {
-  ok: false;
-  mensagem: string;
-  codigo?: string;
-}
+export type {
+  AuthSession,
+  ChangePasswordResponse,
+  LoginRequest,
+  LoginResponse,
+  LogoutResponse,
+  MeResponse,
+  Permissao,
+} from './auth';
 
-export interface LoginSuccess {
-  ok: true;
-  trocar_senha: boolean;
-  change_token?: string;
-  usuario: UsuarioPublico;
-}
+export type {
+  CodigoPerfil,
+  ErpFuncionario,
+  ErpFuncionarioResponse,
+  PerfilItem,
+  PerfisListResponse,
+  UserMutationResponse,
+  UsersListResponse,
+  UsuarioLista,
+  UsuarioPublico,
+} from './usuario';
 
-export interface ChangePasswordSuccess {
-  ok: true;
-  mensagem: string;
-}
+export type {
+  CadastrosMestres,
+  CadastrosResponse,
+  EmpresaCadastro,
+  LinhaCadastro,
+  LocalCadastro,
+  MotoristaCadastro,
+  TurnoCadastro,
+  VeiculoCadastro,
+} from './cadastro';
 
-export interface MeResponse {
-  ok: true;
-  usuario: UsuarioPublico;
-  sessao: {
-    matricula: string;
-    codigo_perfil: CodigoPerfil;
-  };
-}
+export type { Guia, GuiaDeleteResponse, GuiaResponse } from './guia';
 
-/** Item de GET /api/v1/users */
-export interface UsuarioLista {
-  id_usuario: number;
-  matricula: string;
-  nome: string;
-  ativo: boolean | number;
-  trocar_senha: boolean | number;
-  id_perfil?: number;
-  codigo_perfil: CodigoPerfil | number;
-  perfil_descricao?: string;
-  id_empresa?: number | null;
-  id_turno?: number | null;
-  id_local?: number | null;
-  foto_base64?: string | null;
-  foto_mime?: string | null;
-}
+export type {
+  EntradaSaidaContextoResponse,
+  EntradaSaidaRegistrarRequest,
+  EntradaSaidaRegistrarResponse,
+  LinhaEntradaSaida,
+  LinhasSaidaResponse,
+  LocalEntradaSaida,
+} from './entradaSaida';
 
-/** Funcionário retornado pelo ERP Oracle (GET /users/erp-funcionario) */
-export interface ErpFuncionario {
-  cod_func: string;
-  nome: string;
-  foto_base64?: string | null;
-  foto_mime?: string | null;
-}
+export type {
+  Indicador,
+  IndicadorPermitido,
+  IndicadorPermitidoItem,
+  IndicadorVinculo,
+  IndicadorVinculoItem,
+  IndicadoresCatalogoResponse,
+  IndicadoresPermitidosMeResponse,
+  IndicadoresSaveResponse,
+  IndicadoresVinculoResponse,
+  PerfisIndicadoresListResponse,
+} from './indicador';
 
-export interface ErpFuncionarioResponse {
-  ok: true;
-  funcionario: ErpFuncionario;
-}
-
-export interface UsersListResponse {
-  ok: true;
-  usuarios: UsuarioLista[];
-}
-
-export interface UserMutationResponse {
-  ok: true;
-  usuario: UsuarioLista;
-  mensagem?: string;
-}
-
-export interface PerfilItem {
-  id_perfil: number;
-  codigo_perfil: number;
-  descricao: string;
-}
-
-export interface PerfisListResponse {
-  ok: true;
-  perfis: PerfilItem[];
-}
+/** @deprecated Use ApiError — mantido para imports legados. */
+export type { ApiError as ApiErrorBody } from './api';

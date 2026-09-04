@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath, URL } from 'node:url';
 
@@ -12,9 +12,7 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
-    // Libera túneis (ngrok / cloudflare) para testar no celular.
     allowedHosts: true,
-    // Drive de rede (H:) / Windows: fs.watch nativo falha (UNKNOWN watch).
     watch: {
       usePolling: true,
       interval: 1000,
@@ -26,6 +24,11 @@ export default defineConfig({
       },
     },
   },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    css: true,
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+  },
 });
-
-
