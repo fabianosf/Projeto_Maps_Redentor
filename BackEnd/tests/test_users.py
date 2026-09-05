@@ -76,6 +76,28 @@ def test_inativacao_logica(client):
     excl2 = client.delete(f"/api/v1/users/{id_u}")
     assert excl2.status_code == 409
 
+    # POST com mesma matrícula reativa (mesmo id)
+    reat = client.post(
+        "/api/v1/users",
+        json={"matricula": "44", "nome": "Reativado Ok", "codigo_perfil": 3},
+    )
+    assert reat.status_code == 200
+    body = reat.get_json()
+    assert body["ok"] is True
+    assert body["reativado"] is True
+    assert body["senha_temporaria"]
+    assert body["usuario"]["id_usuario"] == id_u
+    assert body["usuario"]["nome"] == "Reativado Ok"
+    assert int(body["usuario"]["ativo"]) in (1, True) or body["usuario"]["ativo"] is True
+
+    # Ativo: duplicata
+    dup = client.post(
+        "/api/v1/users",
+        json={"matricula": "44", "nome": "Dup", "codigo_perfil": 3},
+    )
+    assert dup.status_code == 409
+    assert dup.get_json()["codigo"] == "matricula_duplicada"
+
 
 def test_reset_bloqueado_para_inspetor(client):
     # Admin cria usuário alvo
@@ -114,3 +136,29 @@ def test_reset_admin_ok(client):
     assert body["ok"] is True
     assert body["usuario"]["senha_temporaria"]
     assert body["usuario"]["senha_temporaria"] != "12345"
+
+
+def test_erp_mock_get_e_post_sem_oracle(client):
+    """REDMAPA_ERP_ENABLED=0: GET usa mock local; POST sem Oracle."""
+    auth_client(client, "1")
+    erp = client.get("/api/v1/users/erp-funcionario/59800")
+    assert erp.status_code == 200
+    func = erp.get_json()["funcionario"]
+    assert func["cod_func"] == "59800"
+    assert func["nome"] == "Jose Ricardo"
+    assert func.get("foto_base64") is None
+
+    miss = client.get("/api/v1/users/erp-funcionario/11111")
+    assert miss.status_code == 404
+    assert miss.get_json()["codigo"] == "funcionario_nao_encontrado"
+
+    criado = client.post(
+        "/api/v1/users",
+        json={
+            "matricula": "59800",
+            "nome": "Jose Ricardo",
+            "codigo_perfil": 3,
+        },
+    )
+    assert criado.status_code == 201
+    assert criado.get_json()["usuario"]["matricula"] == "59800"

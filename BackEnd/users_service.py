@@ -188,6 +188,29 @@ def buscar_por_matricula(
     return usuario
 
 
+def _esta_ativo(valor: Any) -> bool:
+    """Normaliza BOOLEAN/int/numpy vindos do DAL."""
+    if valor is None:
+        return False
+    if isinstance(valor, bool):
+        return valor
+    try:
+        return int(valor) != 0
+    except (TypeError, ValueError):
+        return bool(valor)
+
+
+def _carregar_usuario_por_matricula(dal, matricula: str) -> dict[str, Any]:
+    row = dal.read(
+        f"""
+        {_SELECT_USUARIO}
+        WHERE u.matricula = ?
+        """,
+        (matricula,),
+    )
+    return row.iloc[0].to_dict()
+
+
 def criar_usuario(
     dal,
     matricula: str,
@@ -230,11 +253,37 @@ def criar_usuario(
             return erro_v
 
     existe = dal.read(
-        "SELECT id_usuario FROM tb_usuario WHERE matricula = ?",
+        "SELECT id_usuario, ativo FROM tb_usuario WHERE matricula = ?",
         (matricula,),
     )
     if not existe.empty:
-        return ServiceError("Matrícula já cadastrada.", "matricula_duplicada")
+        row_ex = existe.iloc[0]
+        if _esta_ativo(row_ex["ativo"]):
+            return ServiceError("Matrícula já cadastrada.", "matricula_duplicada")
+
+        # Soft-deleted: reativa o mesmo id_usuario (sem INSERT / DELETE físico).
+        id_usuario = int(row_ex["id_usuario"])
+        senha_plana = gerar_senha_provisoria()
+        senha_hash = hash_senha(senha_plana)
+        ok = dal.update(
+            """
+            UPDATE tb_usuario
+            SET nome = ?, senha = ?, id_perfil = ?,
+                id_empresa = ?, id_turno = ?, id_local = ?,
+                ativo = TRUE, trocar_senha = TRUE
+            WHERE id_usuario = ?
+            """,
+            (nome, senha_hash, id_perfil, emp_id, tur_id, loc_id, id_usuario),
+        )
+        if not ok:
+            return ServiceError("Falha ao reativar usuário.", "persistencia")
+
+        usuario = _carregar_usuario_por_matricula(dal, matricula)
+        usuario["senha_temporaria"] = senha_plana
+        usuario["reativado"] = True
+        if erp_dal is not None:
+            anexar_foto_erp(erp_dal, matricula, usuario)
+        return usuario
 
     senha_plana = gerar_senha_provisoria()
     senha_hash = hash_senha(senha_plana)
@@ -245,23 +294,17 @@ def criar_usuario(
             id_empresa, id_turno, id_local,
             ativo, trocar_senha
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1)
+        VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, TRUE)
         """,
         (matricula, nome, senha_hash, id_perfil, emp_id, tur_id, loc_id),
     )
     if not ok:
         return ServiceError("Falha ao cadastrar usuário.", "persistencia")
 
-    row = dal.read(
-        f"""
-        {_SELECT_USUARIO}
-        WHERE u.matricula = ?
-        """,
-        (matricula,),
-    )
-    usuario = row.iloc[0].to_dict()
+    usuario = _carregar_usuario_por_matricula(dal, matricula)
     # Exposta uma única vez na resposta — nunca persistida em texto puro.
     usuario["senha_temporaria"] = senha_plana
+    usuario["reativado"] = False
     if erp_dal is not None:
         anexar_foto_erp(erp_dal, matricula, usuario)
     return usuario
@@ -334,7 +377,7 @@ def atualizar_perfil(
 
 
 def excluir_usuario(dal, id_usuario: int) -> ServiceError | None:
-    """Inativa usuário (RF-23 — soft delete: ativo = 0)."""
+    """Inativa usuário (RF-23 — soft delete: ativo = FALSE)."""
     row = dal.read(
         "SELECT id_usuario, ativo FROM tb_usuario WHERE id_usuario = ?",
         (id_usuario,),
@@ -345,7 +388,7 @@ def excluir_usuario(dal, id_usuario: int) -> ServiceError | None:
         return ServiceError("Usuário já está inativo.", "usuario_inativo")
 
     ok = dal.update(
-        "UPDATE tb_usuario SET ativo = 0 WHERE id_usuario = ?",
+        "UPDATE tb_usuario SET ativo = FALSE WHERE id_usuario = ?",
         (id_usuario,),
     )
     if not ok:
@@ -363,7 +406,7 @@ def resetar_senha(dal, id_usuario: int) -> dict[str, Any] | ServiceError:
     ok = dal.update(
         """
         UPDATE tb_usuario
-        SET senha = ?, trocar_senha = 1
+        SET senha = ?, trocar_senha = TRUE
         WHERE id_usuario = ?
         """,
         (senha_hash, id_usuario),

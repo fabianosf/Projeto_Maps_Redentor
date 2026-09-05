@@ -502,10 +502,9 @@ class DAL:
         sql: str,
         values: Optional[Union[Sequence[Any], Any]],
     ):
-        if values is None:
-            return sql, values
-
         if self.sgbd == "oracle":
+            if values is None:
+                return sql, values
             if "?" in sql:
                 if isinstance(values, (list, tuple)):
                     for i in range(len(values)):
@@ -515,8 +514,62 @@ class DAL:
                     values = [values]
             return sql, values
 
-        if self.sgbd in ("mariadb", "postgresql") and "?" in sql:
+        if self.sgbd in ("mariadb", "postgresql") and values is not None and "?" in sql:
             sql = sql.replace("?", "%s")
+
+        # PostgreSQL: BOOLEAN ≠ integer.
+        # SET/VALUES → = TRUE/FALSE; WHERE/comparação → IS TRUE/FALSE.
+        if self.sgbd == "postgresql":
+            import re
+
+            # 1) Atribuições em SET (nunca "SET col IS FALSE" — sintaxe inválida).
+            sql = re.sub(
+                r"(SET|,)\s*ativo\s*=\s*1\b",
+                r"\1 ativo = TRUE",
+                sql,
+                flags=re.IGNORECASE,
+            )
+            sql = re.sub(
+                r"(SET|,)\s*ativo\s*=\s*0\b",
+                r"\1 ativo = FALSE",
+                sql,
+                flags=re.IGNORECASE,
+            )
+            sql = re.sub(
+                r"(SET|,)\s*trocar_senha\s*=\s*1\b",
+                r"\1 trocar_senha = TRUE",
+                sql,
+                flags=re.IGNORECASE,
+            )
+            sql = re.sub(
+                r"(SET|,)\s*trocar_senha\s*=\s*0\b",
+                r"\1 trocar_senha = FALSE",
+                sql,
+                flags=re.IGNORECASE,
+            )
+            # 2) Comparações restantes (WHERE / AND / OR).
+            sql = re.sub(r"\bativo\s*=\s*1\b", "ativo IS TRUE", sql, flags=re.IGNORECASE)
+            sql = re.sub(r"\bativo\s*=\s*0\b", "ativo IS FALSE", sql, flags=re.IGNORECASE)
+            sql = re.sub(
+                r"\btrocar_senha\s*=\s*1\b",
+                "trocar_senha IS TRUE",
+                sql,
+                flags=re.IGNORECASE,
+            )
+            sql = re.sub(
+                r"\btrocar_senha\s*=\s*0\b",
+                "trocar_senha IS FALSE",
+                sql,
+                flags=re.IGNORECASE,
+            )
+            # 3) INSERT ... VALUES (..., 1, 0) para booleans.
+            sql = re.sub(r",\s*1\s*,\s*0\s*\)", ", TRUE, FALSE)", sql)
+            sql = re.sub(r",\s*1\s*,\s*1\s*\)", ", TRUE, TRUE)", sql)
+            sql = re.sub(r",\s*0\s*,\s*1\s*\)", ", FALSE, TRUE)", sql)
+            sql = re.sub(r",\s*0\s*,\s*0\s*\)", ", FALSE, FALSE)", sql)
+            if re.search(r"\bativo\b", sql, flags=re.IGNORECASE):
+                sql = re.sub(r",\s*1\s*\)", ", TRUE)", sql)
+                sql = re.sub(r",\s*0\s*\)", ", FALSE)", sql)
 
         return sql, values
 

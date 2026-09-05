@@ -48,6 +48,9 @@ export type UsersListResponse = ApiSuccess<{ usuarios: UsuarioLista[] }>;
 export type UserMutationResponse = ApiSuccess<{
   usuario: UsuarioLista;
   mensagem?: string;
+  reativado?: boolean;
+  /** Presente na reativação (também em usuario.senha_temporaria). */
+  senha_temporaria?: string;
 }>;
 export type PerfisListResponse = ApiSuccess<{ perfis: PerfilItem[] }>;
 export type ErpFuncionarioResponse = ApiSuccess<{ funcionario: ErpFuncionario }>;

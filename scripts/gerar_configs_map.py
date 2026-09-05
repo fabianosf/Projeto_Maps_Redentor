@@ -20,36 +20,58 @@ CHAVE_DIR = os.path.join(ARQUIVOS_CRIP_DIR, "chave")
 ARQ_DIR = os.path.join(ARQUIVOS_CRIP_DIR, "arq")
 KEY_PATH = os.path.join(CHAVE_DIR, "chave.key")
 
-CONFIGS = {
-    # Parametros.png — servidor MariaDB da rede (RedMapa / banco map)
-    "map.dat": {
-        "sgbd": "mariadb",
-        "servidor": "10.1.1.29",
-        "porta": "3306",
-        "usuario": "alberto",
-        "senha": "at5001",
-        "bd": "map",
-    },
+def _senha_postgres() -> str:
+    """Senha Postgres só via ambiente / .env local — nunca hardcode versionado."""
+    senha = (os.environ.get("PGPASSWORD") or "").strip()
+    if senha:
+        return senha
+    for nome in (".env.local", ".env"):
+        caminho = os.path.join(BASE_DIR, nome)
+        if not os.path.isfile(caminho):
+            continue
+        with open(caminho, encoding="utf-8") as fh:
+            for linha in fh:
+                linha = linha.strip()
+                if not linha or linha.startswith("#") or "=" not in linha:
+                    continue
+                chave, _, valor = linha.partition("=")
+                if chave.strip() == "PGPASSWORD":
+                    return valor.strip().strip("'\"")
+    raise SystemExit(
+        "PGPASSWORD não definido. Exporte a variável ou grave em .env.local "
+        "(gitignored) antes de gerar map_PostGree.dat."
+    )
 
-    "map_PostGree.dat": {
-        "sgbd": "postgresql",
-        "servidor": "localhost",
-        "porta": "5432",
-        "usuario": "postgres",
-        "senha": "postgres",
-        "bd": "map",
-    },
 
-    # PROJ_ONIX — banco crip (MariaDB rede)
-    "crip.dat": {
-        "sgbd": "mariadb",
-        "servidor": "10.1.1.29",
-        "porta": "3306",
-        "usuario": "alberto",
-        "senha": "at5001",
-        "bd": "crip",
-    },
-}
+def _configs() -> dict:
+    return {
+        # Parametros.png — servidor MariaDB da rede (RedMapa / banco map)
+        "map.dat": {
+            "sgbd": "mariadb",
+            "servidor": "10.1.1.29",
+            "porta": "3306",
+            "usuario": "alberto",
+            "senha": "at5001",
+            "bd": "map",
+        },
+        "map_PostGree.dat": {
+            "sgbd": "postgresql",
+            "servidor": "localhost",
+            "porta": "5432",
+            "usuario": os.environ.get("PGUSER", "fabianosf"),
+            "senha": _senha_postgres(),
+            "bd": os.environ.get("PGDATABASE", "map"),
+        },
+        # PROJ_ONIX — banco crip (MariaDB rede)
+        "crip.dat": {
+            "sgbd": "mariadb",
+            "servidor": "10.1.1.29",
+            "porta": "3306",
+            "usuario": "alberto",
+            "senha": "at5001",
+            "bd": "crip",
+        },
+    }
 
 
 def _carregar_ou_criar_chave() -> bytes:
@@ -79,10 +101,11 @@ def _gerar_arquivo(nome: str, dados: dict, chave: bytes) -> str:
 
 def main() -> int:
     chave = _carregar_ou_criar_chave()
-    for nome, dados in CONFIGS.items():
+    for nome, dados in _configs().items():
         caminho = _gerar_arquivo(nome, dados, chave)
         print(f"Gerado: {caminho}")
     print("\nAjuste usuario/senha nos .dat conforme seu ambiente local.")
+    print("map_PostGree.dat usa PGPASSWORD (env ou .env.local) — sem senha no código.")
     return 0
 
 

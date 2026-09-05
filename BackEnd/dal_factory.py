@@ -25,6 +25,12 @@ def normalizar_config_arquivo(valor: str) -> str:
     return nome
 
 
+def is_erp_enabled() -> bool:
+    """REDMAPA_ERP_ENABLED — default 0 (dev local sem Oracle/erp.dat)."""
+    raw = (os.getenv("REDMAPA_ERP_ENABLED", "0") or "0").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
 def create_dal(
     config_arquivo: Optional[str] = None,
     sgbd: Optional[str] = None,

@@ -11,6 +11,9 @@ Executar:
 Variáveis de ambiente:
     REDMAPA_CONFIG        — basename em DAL/arquivos_crip/arq/ (padrão: map)
     REDMAPA_SGBD          — mariadb | postgresql (padrão: mariadb)
+    REDMAPA_ERP_ENABLED   — 0|1 (padrão 0: sem Oracle; 1 exige erp.dat)
+    REDMAPA_ERP_CONFIG    — basename ERP (padrão: erp) — só se ENABLED=1
+    REDMAPA_ERP_SGBD      — padrão oracle — só se ENABLED=1
     REDMAPA_COOKIE_SECURE — true em produção (HTTPS)
     REDMAPA_CORS_ORIGINS  — origens CORS separadas por vírgula (sem '*')
     REDMAPA_HOST          — padrão 0.0.0.0

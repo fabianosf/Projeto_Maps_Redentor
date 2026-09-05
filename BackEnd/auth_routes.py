@@ -21,11 +21,11 @@ from .auth_middleware import (
 )
 from .auth_service import (
     AuthError,
-    DB_UNAVAILABLE_MESSAGE,
     LoginSuccess,
     autenticar_login,
     buscar_usuario_por_id,
     cancelar_troca_senha,
+    mensagem_db_indisponivel,
     trocar_senha,
     usuario_publico,
 )
@@ -56,9 +56,10 @@ def login():
     senha = str(body.get("senha", ""))
 
     # DAL engole falha de conexão e devolve DataFrame vazio → sem este check
-    # o login retornava 401 "Login inválido!" com MariaDB parado.
+    # o login retornava 401 "Login inválido!" com o SGBD parado.
     if not g.dal.test_connection():
-        return json_error(DB_UNAVAILABLE_MESSAGE, 503, "db_indisponivel")
+        sgbd = g.dal.get_sgbd() if hasattr(g.dal, "get_sgbd") else ""
+        return json_error(mensagem_db_indisponivel(sgbd), 503, "db_indisponivel")
 
     resultado = autenticar_login(g.dal, matricula, senha)
     if isinstance(resultado, AuthError):

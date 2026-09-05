@@ -96,6 +96,64 @@ def _id_pk_informado(valor: Any) -> bool:
     return valor is not None and valor != ""
 
 
+def _resolver_id_empresa(dal, payload: dict[str, Any]) -> int | None:
+    """Resolve id_empresa por PK, codigo_empresa ou descricao (campo empresa)."""
+    id_empresa = payload.get("id_empresa")
+    if _id_pk_informado(id_empresa):
+        empresa = dal.read(
+            "SELECT id_empresa FROM tb_empresa WHERE id_empresa = ? AND ativo = 1",
+            (int(id_empresa),),
+        )
+        if empresa.empty and int(id_empresa) != 0:
+            empresa = dal.read(
+                "SELECT id_empresa FROM tb_empresa WHERE codigo_empresa = ? AND ativo = 1",
+                (int(id_empresa),),
+            )
+        if not empresa.empty:
+            return int(empresa.iloc[0]["id_empresa"])
+
+    descricao = str(payload.get("empresa") or "").strip()
+    if descricao:
+        empresa = dal.read(
+            """
+            SELECT id_empresa FROM tb_empresa
+            WHERE LOWER(TRIM(descricao)) = LOWER(?) AND ativo = 1
+            """,
+            (descricao,),
+        )
+        if not empresa.empty:
+            return int(empresa.iloc[0]["id_empresa"])
+
+        # Cria sob demanda (combo UI: Futuro/Redentor/Barra) alinhado ao seed.
+        codigos_conhecidos = {"redentor": 1, "futuro": 2, "barra": 3}
+        codigo = codigos_conhecidos.get(descricao.lower())
+        if codigo is None:
+            max_df = dal.read(
+                "SELECT COALESCE(MAX(codigo_empresa), 0) AS max_cod FROM tb_empresa"
+            )
+            codigo = int(max_df.iloc[0]["max_cod"]) + 1
+        ok = dal.create(
+            """
+            INSERT INTO tb_empresa (codigo_empresa, descricao, ativo)
+            VALUES (?, ?, 1)
+            """,
+            (codigo, descricao),
+        )
+        if not ok:
+            return None
+        criada = dal.read(
+            """
+            SELECT id_empresa FROM tb_empresa
+            WHERE LOWER(TRIM(descricao)) = LOWER(?) AND ativo = 1
+            """,
+            (descricao,),
+        )
+        if not criada.empty:
+            return int(criada.iloc[0]["id_empresa"])
+
+    return None
+
+
 def _resolver_id_turno(dal, payload: dict[str, Any]) -> int | MapaError:
     id_turno = payload.get("id_turno")
     if _id_pk_informado(id_turno):
@@ -156,20 +214,7 @@ def _resolver_id_linha(dal, payload: dict[str, Any]) -> int | MapaError:
     if codigo_int <= 0:
         return MapaError("Linha inválida.", "validacao")
 
-    id_empresa = payload.get("id_empresa")
-    id_empresa_ok: int | None = None
-    if _id_pk_informado(id_empresa):
-        empresa = dal.read(
-            "SELECT id_empresa FROM tb_empresa WHERE id_empresa = ? AND ativo = 1",
-            (int(id_empresa),),
-        )
-        if empresa.empty and int(id_empresa) != 0:
-            empresa = dal.read(
-                "SELECT id_empresa FROM tb_empresa WHERE codigo_empresa = ? AND ativo = 1",
-                (int(id_empresa),),
-            )
-        if not empresa.empty:
-            id_empresa_ok = int(empresa.iloc[0]["id_empresa"])
+    id_empresa_ok = _resolver_id_empresa(dal, payload)
 
     existente = dal.read(
         "SELECT id_linha FROM tb_linha WHERE codigo_linha = ? AND ativo = 1",
@@ -958,10 +1003,10 @@ def listar_cadastros_mestres(dal) -> dict[str, list[dict[str, Any]]]:
         "veiculos": _rows(
             dal,
             """
-            SELECT id_veiculo, codigo_veiculo, numero_frota, placa, ativo
+            SELECT id_veiculo, codigo_veiculo, numero_frota, placa, ativo, id_empresa
             FROM tb_veiculo
             WHERE ativo = 1
-            ORDER BY CAST(numero_frota AS UNSIGNED), numero_frota
+            ORDER BY SUBSTR(numero_frota, 2), numero_frota
             """,
         ),
         "motoristas": _rows(

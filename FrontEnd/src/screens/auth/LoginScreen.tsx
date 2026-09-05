@@ -23,7 +23,6 @@ import { useScreenBg } from '@/hooks/useScreenBg';
 import { actionBtn3dMd } from '@/lib/actionBtn3d';
 import {
   isValidMatricula,
-  isValidPasswordFormat,
 } from '@/utils/validation';
 
 const LOGIN_BG = '#b9c8d4';
@@ -84,7 +83,7 @@ export function LoginScreen() {
       showError(MATRICULA_INVALIDA, 'matricula');
       return;
     }
-    if (!senha || !isValidPasswordFormat(senha)) {
+    if (!senha) {
       showError(SENHA_INVALIDA, 'senha');
       return;
     }

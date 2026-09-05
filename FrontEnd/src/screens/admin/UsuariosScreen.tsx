@@ -76,6 +76,7 @@ import {
 type FormMode = 'idle' | 'include' | 'edit';
 
 const MSG_CADASTRO_OK = 'Usuário cadastrado com sucesso!';
+const MSG_REATIVADO_OK = 'Usuario reativado com sucesso';
 const MSG_ATUALIZADO_OK = 'Usuário atualizado com sucesso!';
 const MSG_EXCLUIDO_OK = 'Usuário excluído com sucesso!';
 const MSG_RESET_OK = 'Reset de usuário realizado com sucesso!';
@@ -86,6 +87,8 @@ const MSG_NAO_ENCONTRADA = 'Matrícula não encontrada';
 const MSG_NOME_INVALIDO =
   'Nome deve ser alfanumérico (letras, números e espaços).';
 const MSG_NOME_TAMANHO = `Nome deve ter no máximo ${NOME_MAX_LENGTH} caracteres.`;
+const MSG_ERP_INDISPONIVEL =
+  'ERP indisponivel. Preencha nome manualmente.';
 const SCREEN_BG = '#b9c8d4';
 
 function buildFotoSrc(
@@ -298,10 +301,12 @@ export function UsuariosScreen() {
     }
   };
 
-  const validarMatriculaErp = async () => {
+  const validarMatriculaErp = async (opts?: { fromBlur?: boolean }) => {
     if (busy || mode !== 'include') return;
     const mat = matricula.trim();
     if (!mat || !isValidMatricula(mat)) {
+      // Blur com matrícula vazia/inválida: não chama ERP nem mostra erro.
+      if (opts?.fromBlur) return;
       showMsg(MSG_MATRICULA_INVALIDA);
       focusMatricula();
       return;
@@ -314,6 +319,16 @@ export function UsuariosScreen() {
       setNome(String(func.nome).slice(0, NOME_MAX_LENGTH));
       setFotoSrc(buildFotoSrc(func));
     } catch (err) {
+      const erpOff =
+        err instanceof ApiRequestError &&
+        err.status === 503 &&
+        err.body.codigo === 'erp_indisponivel';
+      if (erpOff) {
+        showMsg(MSG_ERP_INDISPONIVEL);
+        setFotoSrc(null);
+        // Cadastro manual: não limpa nome nem força foco na matrícula.
+        return;
+      }
       showMsg(apiErrorMessage(err, MSG_NAO_ENCONTRADA));
       setNome('');
       setFotoSrc(null);
@@ -373,9 +388,8 @@ export function UsuariosScreen() {
   };
 
   const onMatriculaBlur = () => {
-    if (mode === 'include' && matricula.trim()) {
-      void validarMatriculaErp();
-    }
+    if (mode !== 'include') return;
+    void validarMatriculaErp({ fromBlur: true });
   };
 
   const onSalvar = async () => {
@@ -437,12 +451,19 @@ export function UsuariosScreen() {
     try {
       if (mode === 'include') {
         const data = await createUser(mat, nomeTrim, codigoPerfil, vinculos);
-        const temp = data.usuario.senha_temporaria;
-        showMsg(
-          temp
-            ? `${MSG_CADASTRO_OK} Senha temporária: ${temp}`
-            : MSG_CADASTRO_OK,
-        );
+        const temp =
+          data.usuario.senha_temporaria ?? data.senha_temporaria;
+        if (data.reativado) {
+          showMsg(
+            temp ? `${MSG_REATIVADO_OK}. Senha temporária: ${temp}` : MSG_REATIVADO_OK,
+          );
+        } else {
+          showMsg(
+            temp
+              ? `${MSG_CADASTRO_OK} Senha temporária: ${temp}`
+              : MSG_CADASTRO_OK,
+          );
+        }
         goIdle();
         return;
       }

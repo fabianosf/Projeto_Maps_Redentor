@@ -59,6 +59,8 @@ export interface MapaHeaderPayload {
   id_linha?: number | null;
   codigo_linha?: string | number | null;
   id_empresa?: number | null;
+  /** Rótulo do combo (Futuro/Redentor/Barra) — backend resolve/cria em tb_empresa. */
+  empresa?: string | null;
   id_turno: number;
   codigo_turno?: number | null;
   turno?: string | null;

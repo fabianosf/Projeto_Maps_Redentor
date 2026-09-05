@@ -70,12 +70,16 @@ def test_cors_nunca_wildcard(monkeypatch):
     assert "https://app.exemplo.com" in origins
 
 
-def test_senha_provisoria_aleatoria_nao_12345():
-    samples = {gerar_senha_provisoria() for _ in range(5)}
-    assert len(samples) == 5
+def test_senha_provisoria_aleatoria_obedece_politica():
+    samples = {gerar_senha_provisoria() for _ in range(20)}
+    assert len(samples) >= 15
     assert "12345" not in samples
     for s in samples:
-        assert len(s) >= 12
+        assert len(s) >= 8
+        assert any(c.isupper() for c in s)
+        assert any(c.islower() for c in s)
+        assert any(c.isdigit() for c in s)
+        assert any(c in '!@#$%^&*(),.?":{}|<>_-+=[]\\;/`~' for c in s)
 
 
 def test_hash_bcrypt_roundtrip():

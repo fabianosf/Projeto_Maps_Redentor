@@ -75,6 +75,8 @@ Variáveis (`BackEnd/app.py`):
 
 - `REDMAPA_CONFIG` — basename em `arq/` (padrão `map`)
 - `REDMAPA_SGBD` — `mariadb` \| `postgresql`
+- `REDMAPA_ERP_ENABLED` — `0` (padrão local, sem Oracle) \| `1` (exige `erp.dat`)
+- `REDMAPA_ERP_CONFIG` / `REDMAPA_ERP_SGBD` — só com `REDMAPA_ERP_ENABLED=1`
 - `REDMAPA_COOKIE_SECURE` — `true` só com HTTPS
 - `REDMAPA_HOST` / `REDMAPA_PORT` — bind (padrão `0.0.0.0:5000`)
 - `FLASK_DEBUG` — `1` em desenvolvimento

@@ -28,15 +28,34 @@ LIMITE_TENTATIVAS_MESSAGE = "Limite máximo de tentativas!"
 QTD_MAX_TENTATIVAS_CHAVE = "QTD_MAX_TENTATIVAS"
 BLOQUEIO_TENTATIVAS_CHAVE = "BLOQUEIO_TENTATIVAS_LOGIN"
 QTD_MAX_TENTATIVAS_PADRAO = 3
-DB_UNAVAILABLE_MESSAGE = "Banco de dados indisponível. Verifique se o MariaDB está em execução."
 PASSWORD_MISMATCH_MESSAGE = "Senhas digitadas diferentes!"
 PASSWORD_INVALID_MESSAGE = "Senha inválida!"
 PASSWORD_SUCCESS_MESSAGE = "senha cadastrada com sucesso!"
 GENERIC_ERROR_MESSAGE = "Operação não autorizada."
 
+_SGBD_NOME_EXIBICAO = {
+    "mariadb": "MariaDB",
+    "mysql": "MariaDB",
+    "postgresql": "PostgreSQL",
+    "postgres": "PostgreSQL",
+    "postgree": "PostgreSQL",
+    "oracle": "Oracle",
+}
+
+
+def mensagem_db_indisponivel(sgbd: str = "") -> str:
+    """Mensagem 503 alinhada ao SGBD configurado (não hardcode MariaDB)."""
+    nome = _SGBD_NOME_EXIBICAO.get((sgbd or "").strip().lower(), "banco de dados")
+    return f"Banco de dados indisponível. Verifique se o {nome} está em execução."
+
+
+# Compat: imports antigos / testes que ainda referenciam a constante.
+DB_UNAVAILABLE_MESSAGE = mensagem_db_indisponivel("mariadb")
+
 BCRYPT_ROUNDS = 12
+# Mín. 8; 1 maiúscula; 1 minúscula; 1 dígito; 1 especial (RF-03 / RF-RN-007).
 _PASSWORD_POLICY = re.compile(
-    r'^(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;/`~]).{8,}$'
+    r'^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\;/`~]).{8,}$'
 )
 
 
@@ -175,7 +194,7 @@ def bloqueio_tentativas_ativo(dal) -> bool:
 def _inativar_usuario(dal, id_usuario: int) -> bool:
     return bool(
         dal.update(
-            "UPDATE tb_usuario SET ativo = 0 WHERE id_usuario = ?",
+            "UPDATE tb_usuario SET ativo = FALSE WHERE id_usuario = ?",
             (id_usuario,),
         )
     )
@@ -194,8 +213,8 @@ def autenticar_login(dal, matricula: str, senha: str) -> LoginSuccess | AuthErro
         return AuthError(mensagem=MATRICULA_INVALIDA_MESSAGE, codigo="matricula_invalida")
     if not senha:
         return AuthError(mensagem=PASSWORD_INVALID_MESSAGE, codigo="senha_invalida")
-    if not _PASSWORD_POLICY.match(senha):
-        return AuthError(mensagem=PASSWORD_INVALID_MESSAGE, codigo="senha_invalida")
+    # Política forte (_PASSWORD_POLICY) vale na troca/cadastro de senha definitiva,
+    # não no login — senha provisória/admin curta (ex.: "123") precisa autenticar.
 
     usuario = buscar_usuario_por_matricula(dal, matricula)
     if usuario is None or not usuario.ativo:
@@ -250,7 +269,7 @@ def trocar_senha(
     ok = dal.update(
         """
         UPDATE tb_usuario
-        SET senha = ?, trocar_senha = 0
+        SET senha = ?, trocar_senha = FALSE
         WHERE id_usuario = ?
         """,
         (novo_hash, id_usuario),

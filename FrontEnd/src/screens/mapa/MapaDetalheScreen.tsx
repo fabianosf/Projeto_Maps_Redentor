@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import { useNavigate, useParams } from 'react-router-dom';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { getCadastros } from '@/api/cadastros';
+import { getCadastros, createVeiculo } from '@/api/cadastros';
 import { ApiRequestError } from '@/api/client';
 import {
   createItem,
@@ -19,6 +19,7 @@ import { FormField } from '@/components/FormField';
 import { LoadingState } from '@/components/LoadingState';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
@@ -77,6 +78,7 @@ export function MapaDetalheScreen() {
   const [busy, setBusy] = useState(false);
 
   const [idVeiculo, setIdVeiculo] = useState('');
+  const [frotaDigitada, setFrotaDigitada] = useState('');
   const [idMotorista, setIdMotorista] = useState('');
   const [horIni, setHorIni] = useState('');
   const [horFim, setHorFim] = useState('');
@@ -127,14 +129,79 @@ export function MapaDetalheScreen() {
     [mapa, selectedItemId],
   );
 
+  const idEmpresaMapa = useMemo(() => {
+    if (!mapa || !cadastros) return null;
+    const nome = String(mapa.empresa ?? '').trim().toLowerCase();
+    if (!nome) return null;
+    const byDesc = (cadastros.empresas ?? []).find(
+      (e) => String(e.descricao).trim().toLowerCase() === nome,
+    );
+    if (byDesc) return Number(byDesc.id_empresa);
+    return null;
+  }, [mapa, cadastros]);
+
+  const veiculosFiltrados = useMemo(() => {
+    const todos = cadastros?.veiculos ?? [];
+    if (idEmpresaMapa == null || !Number.isFinite(idEmpresaMapa)) return [];
+    return todos.filter((v) => Number(v.id_empresa) === idEmpresaMapa);
+  }, [cadastros, idEmpresaMapa]);
+
+  const frotaNorm = frotaDigitada.trim().toUpperCase();
+  const veiculosSugestoes = useMemo(() => {
+    if (!frotaNorm) return veiculosFiltrados;
+    return veiculosFiltrados.filter((v) =>
+      String(v.numero_frota).toUpperCase().includes(frotaNorm),
+    );
+  }, [veiculosFiltrados, frotaNorm]);
+
+  const frotaExata = useMemo(() => {
+    if (!frotaNorm) return null;
+    return (
+      veiculosFiltrados.find(
+        (v) => String(v.numero_frota).toUpperCase() === frotaNorm,
+      ) ?? null
+    );
+  }, [veiculosFiltrados, frotaNorm]);
+
+  const podeCadastrarFrota = Boolean(
+    frotaNorm && !frotaExata && idEmpresaMapa != null && mapa?.empresa,
+  );
+
   const openItemDialog = () => {
     if (!mapa) return;
     setIdVeiculo('');
+    setFrotaDigitada('');
     setIdMotorista('');
     setHorIni(toDateTimeLocal(mapa.inicio_jornada_des));
     setHorFim(toDateTimeLocal(mapa.fim_jornada_des));
     setChegada(toDateTimeLocal(mapa.inicio_jornada_des));
     setItemDialog(true);
+  };
+
+  const onCadastrarVeiculoInline = async () => {
+    if (!podeCadastrarFrota || idEmpresaMapa == null || busy) return;
+    setBusy(true);
+    try {
+      const res = await createVeiculo({
+        numero_frota: frotaNorm,
+        id_empresa: idEmpresaMapa,
+      });
+      const v = res.veiculo;
+      setCadastros((prev) =>
+        prev
+          ? { ...prev, veiculos: [...(prev.veiculos ?? []), v] }
+          : prev,
+      );
+      setIdVeiculo(String(v.id_veiculo));
+      setFrotaDigitada(String(v.numero_frota));
+      toast.success(`Veículo ${v.numero_frota} cadastrado.`);
+    } catch (err) {
+      toast.error(
+        err instanceof ApiRequestError ? err.message : 'Falha ao cadastrar veículo.',
+      );
+    } finally {
+      setBusy(false);
+    }
   };
 
   const onSalvarItem = async (e: FormEvent) => {
@@ -481,29 +548,53 @@ export function MapaDetalheScreen() {
             <form className="field-stack" onSubmit={(e) => void onSalvarItem(e)}>
               <div className="flex w-full flex-col gap-1.5">
                 <Label className="text-[15px] font-semibold">Veículo *</Label>
-                <Select
-                  modal={false}
-                  value={idVeiculo}
-                  onValueChange={setIdVeiculo}
-                >
-                  <SelectTrigger className="h-12 bg-white text-base">
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent position="popper" className="z-[400]">
-                    {(cadastros?.veiculos ?? []).length === 0 ? (
-                      <SelectItem value="__empty_veiculo" disabled>
-                        Nenhum veículo cadastrado
-                      </SelectItem>
-                    ) : (
-                      (cadastros?.veiculos ?? []).map((v) => (
-                        <SelectItem key={v.id_veiculo} value={String(v.id_veiculo)}>
-                          {v.numero_frota}
-                          {v.placa ? ` · ${v.placa}` : ''}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                <Input
+                  name="frota"
+                  placeholder="Ex.: C47654"
+                  value={frotaDigitada}
+                  onChange={(e) => {
+                    const v = e.target.value.toUpperCase();
+                    setFrotaDigitada(v);
+                    const exact = veiculosFiltrados.find(
+                      (x) => String(x.numero_frota).toUpperCase() === v.trim(),
+                    );
+                    setIdVeiculo(exact ? String(exact.id_veiculo) : '');
+                  }}
+                  className="h-12 rounded-lg border-slate-400 bg-white text-base"
+                  autoComplete="off"
+                />
+                {veiculosSugestoes.length > 0 && (
+                  <div className="max-h-36 overflow-y-auto rounded-lg border border-slate-300 bg-white">
+                    {veiculosSugestoes.map((v) => (
+                      <button
+                        key={v.id_veiculo}
+                        type="button"
+                        className={
+                          String(v.id_veiculo) === idVeiculo
+                            ? 'flex w-full px-3 py-2 text-left text-base bg-secondary'
+                            : 'flex w-full px-3 py-2 text-left text-base hover:bg-secondary/60'
+                        }
+                        onClick={() => {
+                          setIdVeiculo(String(v.id_veiculo));
+                          setFrotaDigitada(String(v.numero_frota));
+                        }}
+                      >
+                        {v.numero_frota}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {podeCadastrarFrota && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-auto whitespace-normal py-2 text-left text-sm"
+                    disabled={busy || idEmpresaMapa == null}
+                    onClick={() => void onCadastrarVeiculoInline()}
+                  >
+                    Cadastrar novo veículo {frotaNorm} para {mapa?.empresa}?
+                  </Button>
+                )}
               </div>
 
               <div className="flex w-full flex-col gap-1.5">

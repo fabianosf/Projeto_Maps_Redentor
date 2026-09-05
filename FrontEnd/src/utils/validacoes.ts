@@ -7,16 +7,17 @@
 const CARACTERE_GRAFICO = /[!@#$%^&*(),.?":{}|<>_\-+=[\]\\;/`~]/;
 
 /**
- * Política de senha definitiva (RF-03 / RF-14 / RF-RN-007):
+ * Política de senha definitiva (RF-03 / RF-14 / RF-RN-007) — Tela 02:
  * - mínimo 8 caracteres
- * - letras e números
- * - pelo menos 1 caractere gráfico (especial)
  * - pelo menos 1 maiúscula
+ * - pelo menos 1 minúscula
+ * - pelo menos 1 número
+ * - pelo menos 1 caractere especial
  */
 export function validarPoliticaSenha(senha: string): boolean {
   if (senha.length < 8) return false;
   if (!/[A-Z]/.test(senha)) return false;
-  if (!/[A-Za-z]/.test(senha)) return false;
+  if (!/[a-z]/.test(senha)) return false;
   if (!/\d/.test(senha)) return false;
   if (!CARACTERE_GRAFICO.test(senha)) return false;
   return true;

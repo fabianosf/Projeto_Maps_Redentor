@@ -36,7 +36,8 @@ def dal():
 
 @pytest.fixture
 def app(dal, monkeypatch):
-    # Evita chamada real ao ERP Oracle nos endpoints de usuários.
+    # Dev local / testes: ERP desligado (sem erp.dat / Oracle).
+    monkeypatch.setenv("REDMAPA_ERP_ENABLED", "0")
     monkeypatch.setattr(
         "BackEnd.users_routes.get_erp_dal_instance",
         lambda: None,

@@ -44,8 +44,26 @@ const MAPA_BG = '#B9C8D4';
 /** Opções fixas do combo Empresa (sempre renderizadas). */
 const EMPRESA_OPCOES = ['Futuro', 'Redentor', 'Barra'] as const;
 
+/** codigo_empresa alinhado a schema_seed.sql (não usar indexOf+1). */
+const EMPRESA_CODIGO: Record<(typeof EMPRESA_OPCOES)[number], number> = {
+  Redentor: 1,
+  Futuro: 2,
+  Barra: 3,
+};
+
 /** Opções fixas do combo Turno (sempre renderizadas). */
 const TURNO_OPCOES = ['TURNO 01', 'TURNO 02', 'TURNO 03'] as const;
+
+/** Sentinel: Radix trata value="" como uncontrolled. */
+const SELECT_EMPTY = '__empty__';
+
+function toSelectValue(v: string): string {
+  return v === '' ? SELECT_EMPTY : v;
+}
+
+function fromSelectValue(v: string): string {
+  return v === SELECT_EMPTY ? '' : v;
+}
 
 function maskHHMM(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 4);
@@ -57,6 +75,16 @@ function toId(v: unknown): string {
   if (v == null || v === '') return '';
   const n = Number(v);
   return Number.isFinite(n) ? String(Math.trunc(n)) : String(v).trim();
+}
+
+function formatLinhaCodigo(l: {
+  id_linha: number;
+  codigo_linha?: number;
+}): string {
+  if (l.codigo_linha != null && Number.isFinite(Number(l.codigo_linha))) {
+    return String(Math.trunc(Number(l.codigo_linha)));
+  }
+  return String(l.id_linha);
 }
 
 function normalizeEmpresaLabel(raw: string): string {
@@ -100,10 +128,7 @@ export function MapaFormScreen() {
   const [fimHHMM, setFimHHMM] = useState('');
   const [empresa, setEmpresa] = useState<string>(EMPRESA_OPCOES[0]);
   const [idLinha, setIdLinha] = useState('');
-  const [codigoLinha, setCodigoLinha] = useState('');
   const [turno, setTurno] = useState<string>(TURNO_OPCOES[0]);
-
-  const todasLinhas = useMemo(() => cadastros?.linhas ?? [], [cadastros]);
 
   const resolveEmpresaId = (label: string): number | null => {
     const nome = normalizeEmpresaLabel(label);
@@ -112,10 +137,37 @@ export function MapaFormScreen() {
       (e) => String(e.descricao).trim().toLowerCase() === nome.toLowerCase(),
     );
     if (byDesc) return Number(toId(byDesc.id_empresa));
-    const codigo = EMPRESA_OPCOES.indexOf(nome as (typeof EMPRESA_OPCOES)[number]) + 1;
+    const codigo = EMPRESA_CODIGO[nome as (typeof EMPRESA_OPCOES)[number]];
+    if (codigo == null) return null;
     const byCodigo = list.find((e) => Number(e.codigo_empresa) === codigo);
     if (byCodigo) return Number(toId(byCodigo.id_empresa));
-    return codigo > 0 ? codigo : null;
+    // Sem cadastro carregado: envia codigo_empresa (backend resolve / cria).
+    return codigo;
+  };
+
+  const idEmpresaResolvido = useMemo(
+    () => resolveEmpresaId(empresa),
+    // cadastros altera o match por descricao/codigo
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resolveEmpresaId usa cadastros/empresa
+    [empresa, cadastros],
+  );
+
+  const linhasFiltradas = useMemo(() => {
+    const todas = cadastros?.linhas ?? [];
+    if (idEmpresaResolvido == null || !Number.isFinite(idEmpresaResolvido)) {
+      return [];
+    }
+    const idEmp = String(idEmpresaResolvido);
+    return todas.filter((l) => String(l.id_empresa) === idEmp);
+  }, [cadastros, idEmpresaResolvido]);
+
+  const limparCamposLinha = () => {
+    setIdLinha('');
+  };
+
+  const onEmpresaChange = (nome: string) => {
+    setEmpresa(normalizeEmpresaLabel(nome));
+    limparCamposLinha();
   };
 
   const resolveTurnoId = (label: string): number | null => {
@@ -159,14 +211,14 @@ export function MapaFormScreen() {
           setEmpresa(normalizeEmpresaLabel(String(m.empresa ?? EMPRESA_OPCOES[0])));
           setTurno(normalizeTurnoLabel(String(m.turno ?? TURNO_OPCOES[0])));
           const linha = cad.linhas.find((l) => toId(l.id_linha) === toId(m.id_linha));
-          if (linha) {
-            setCodigoLinha(String(linha.codigo_linha ?? linha.descricao ?? ''));
-            if (linha.empresa) setEmpresa(normalizeEmpresaLabel(String(linha.empresa)));
+          if (linha?.empresa) {
+            setEmpresa(normalizeEmpresaLabel(String(linha.empresa)));
           }
         } else {
           setDataBR(todayBR());
           setEmpresa(EMPRESA_OPCOES[0]);
           setTurno(TURNO_OPCOES[0]);
+          setIdLinha('');
         }
       } catch (e) {
         if (!cancelled) {
@@ -203,13 +255,9 @@ export function MapaFormScreen() {
       return;
     }
 
-    const codigoLinhaTrim = codigoLinha.trim();
-    if (!codigoLinhaTrim) {
-      toast.error('O campo Linha é obrigatório.');
-      return;
-    }
-    if (!Number.isFinite(Number(codigoLinhaTrim)) || Number(codigoLinhaTrim) <= 0) {
-      toast.error('Informe um código de Linha válido.');
+    const linhaSel = linhasFiltradas.find((l) => toId(l.id_linha) === idLinha);
+    if (!idLinha || !linhaSel) {
+      toast.error('Selecione a linha.');
       return;
     }
 
@@ -231,26 +279,14 @@ export function MapaFormScreen() {
       return;
     }
 
-    let linhaId = idLinha;
-    if (linhaId === '') {
-      const codigoNum = Number(codigoLinhaTrim);
-      const byCode = todasLinhas.find((l) => {
-        const c = Number(l.codigo_linha);
-        return (
-          (Number.isFinite(codigoNum) && c === codigoNum) ||
-          String(l.codigo_linha ?? '') === codigoLinhaTrim ||
-          String(l.descricao ?? '').trim() === codigoLinhaTrim
-        );
-      });
-      if (byCode) linhaId = toId(byCode.id_linha);
-    }
-
     const codigoTurno =
       TURNO_OPCOES.indexOf(turnoSelecionado as (typeof TURNO_OPCOES)[number]) + 1;
 
     const payload: MapaHeaderPayload = {
-      codigo_linha: Number(codigoLinhaTrim),
+      id_linha: Number(linhaSel.id_linha),
+      codigo_linha: Number(linhaSel.codigo_linha),
       id_empresa: Number(idEmpresaNum),
+      empresa: normalizeEmpresaLabel(empresa),
       id_turno: Number(idTurnoNum),
       codigo_turno: Number(codigoTurno),
       turno: turnoSelecionado,
@@ -261,9 +297,6 @@ export function MapaFormScreen() {
         : null,
       observacao: null,
     };
-    if (linhaId !== '' && Number.isFinite(Number(linhaId))) {
-      payload.id_linha = Number(linhaId);
-    }
 
     setBusy(true);
     try {
@@ -347,7 +380,7 @@ export function MapaFormScreen() {
               <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900">
                 Empresa
               </Label>
-              <Select value={empresa} onValueChange={setEmpresa}>
+              <Select value={empresa} onValueChange={onEmpresaChange}>
                 <SelectTrigger className="h-12 w-full rounded-lg border-slate-400 bg-white text-base text-slate-900">
                   <SelectValue placeholder="Futuro" />
                 </SelectTrigger>
@@ -387,37 +420,46 @@ export function MapaFormScreen() {
             </div>
 
             <div className="grid grid-cols-2 items-start gap-3">
-              <FormField
-                label="LINHA"
-                name="linha"
-                requiredMark
-                required
-                inputMode="numeric"
-                placeholder="000"
-                value={codigoLinha}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setCodigoLinha(v);
-                  const codigoNum = Number(v.trim());
-                  const linha = todasLinhas.find((l) => {
-                    const c = Number(l.codigo_linha);
-                    return (
-                      (Number.isFinite(codigoNum) && c === codigoNum) ||
-                      String(l.codigo_linha ?? '') === v.trim() ||
-                      String(l.descricao ?? '').trim() === v.trim()
-                    );
-                  });
-                  if (linha) {
-                    setIdLinha(toId(linha.id_linha));
-                    if (linha.empresa) {
-                      setEmpresa(normalizeEmpresaLabel(String(linha.empresa)));
+              <div className="flex w-full flex-col gap-1.5">
+                <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900">
+                  Linha <span className="req">*</span>
+                </Label>
+                <Select
+                  value={toSelectValue(idLinha)}
+                  onValueChange={(v) => setIdLinha(fromSelectValue(v))}
+                  disabled={linhasFiltradas.length === 0}
+                >
+                  <SelectTrigger
+                    className="h-12 w-full rounded-lg border-slate-400 bg-white text-base text-slate-900"
+                    title={
+                      linhasFiltradas.find((l) => toId(l.id_linha) === idLinha)
+                        ?.descricao ?? undefined
                     }
-                  } else {
-                    setIdLinha('');
-                  }
-                }}
-                className="bg-white"
-              />
+                  >
+                    <SelectValue
+                      placeholder={
+                        linhasFiltradas.length === 0
+                          ? 'Sem linhas para a empresa'
+                          : 'Selecione'
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent position="popper" className="z-[300]">
+                    <SelectItem value={SELECT_EMPTY} disabled className="hidden">
+                      Selecione
+                    </SelectItem>
+                    {linhasFiltradas.map((l) => (
+                      <SelectItem
+                        key={l.id_linha}
+                        value={String(l.id_linha)}
+                        title={l.descricao || undefined}
+                      >
+                        {formatLinhaCodigo(l)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
               <div className="flex w-full flex-col gap-1.5">
                 <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900">

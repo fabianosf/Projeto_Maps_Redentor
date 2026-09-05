@@ -35,6 +35,7 @@ export interface VeiculoCadastro {
   codigo_veiculo?: number;
   numero_frota: string;
   placa?: string;
+  id_empresa?: number;
   ativo?: number;
 }
 
