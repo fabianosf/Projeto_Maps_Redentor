@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Optional
 
+from .cadastros_service import CadastroError, criar_veiculo
 from .constants import COD_MAP_INSERT_RETRIES, COD_MAP_MAX
 
 
@@ -215,22 +216,18 @@ def _resolver_id_linha(dal, payload: dict[str, Any]) -> int | MapaError:
         return MapaError("Linha inválida.", "validacao")
 
     id_empresa_ok = _resolver_id_empresa(dal, payload)
-
-    existente = dal.read(
-        "SELECT id_linha FROM tb_linha WHERE codigo_linha = ? AND ativo = 1",
-        (codigo_int,),
-    )
-    if not existente.empty:
-        id_ok = int(existente.iloc[0]["id_linha"])
-        if id_empresa_ok is not None:
-            dal.update(
-                "UPDATE tb_linha SET id_empresa = ? WHERE id_linha = ?",
-                (id_empresa_ok, id_ok),
-            )
-        return id_ok
-
     if id_empresa_ok is None:
         return MapaError("Empresa é obrigatória para cadastrar a linha.", "validacao")
+
+    existente = dal.read(
+        """
+        SELECT id_linha FROM tb_linha
+        WHERE codigo_linha = ? AND id_empresa = ? AND ativo = 1
+        """,
+        (codigo_int, id_empresa_ok),
+    )
+    if not existente.empty:
+        return int(existente.iloc[0]["id_linha"])
 
     locais = _garantir_locais_padrao(dal)
     if isinstance(locais, MapaError):
@@ -248,11 +245,24 @@ def _resolver_id_linha(dal, payload: dict[str, Any]) -> int | MapaError:
         (codigo_int, id_empresa_ok, descricao, id_origem, id_destino),
     )
     if not ok:
+        # Corrida / UNIQUE (id_empresa, codigo_linha)
+        existente = dal.read(
+            """
+            SELECT id_linha FROM tb_linha
+            WHERE codigo_linha = ? AND id_empresa = ?
+            """,
+            (codigo_int, id_empresa_ok),
+        )
+        if not existente.empty:
+            return int(existente.iloc[0]["id_linha"])
         return MapaError("Falha ao cadastrar a linha.", "persistencia")
 
     criada = dal.read(
-        "SELECT id_linha FROM tb_linha WHERE codigo_linha = ?",
-        (codigo_int,),
+        """
+        SELECT id_linha FROM tb_linha
+        WHERE codigo_linha = ? AND id_empresa = ?
+        """,
+        (codigo_int, id_empresa_ok),
     )
     if criada.empty:
         return MapaError("Falha ao cadastrar a linha.", "persistencia")
@@ -354,7 +364,7 @@ def obter_indicadores(
 def obter_mapa_completo(dal, id_registro: int) -> dict[str, Any] | MapaError:
     cab = dal.read(
         """
-        SELECT m.*, l.descricao AS linha, e.descricao AS empresa, t.descricao AS turno,
+        SELECT m.*, l.id_empresa, l.descricao AS linha, e.descricao AS empresa, t.descricao AS turno,
                u.nome AS despachante, u.matricula AS matricula_despachante
         FROM tb_map m
         INNER JOIN tb_linha l ON l.id_linha = m.id_linha
@@ -373,7 +383,7 @@ def obter_mapa_completo(dal, id_registro: int) -> dict[str, Any] | MapaError:
         SELECT i.*, v.numero_frota, v.placa, mot.nome AS motorista, mot.matricula AS matricula_motorista
         FROM tb_item_map i
         INNER JOIN tb_veiculo v ON v.id_veiculo = i.id_veiculo
-        INNER JOIN tb_motorista mot ON mot.id_motorista = i.id_motorista
+        LEFT JOIN tb_motorista mot ON mot.id_motorista = i.id_motorista
         WHERE i.idmap = ?
         ORDER BY i.id_item
         """,
@@ -406,6 +416,44 @@ def obter_mapa_completo(dal, id_registro: int) -> dict[str, Any] | MapaError:
     return resultado
 
 
+def _resolver_ou_criar_veiculo_mapa(
+    dal, payload: dict[str, Any], id_empresa: int
+) -> int | MapaError:
+    """Valida frota do cabeçalho; cria veículo se não existir; exige mesma empresa."""
+    frota_raw = payload.get("numero_frota")
+    if frota_raw is None or str(frota_raw).strip() == "":
+        frota_raw = payload.get("veiculo")
+    frota = str(frota_raw or "").strip().upper()
+    if not frota:
+        return MapaError("Veículo é obrigatório.", "validacao")
+
+    existente = dal.read(
+        """
+        SELECT id_veiculo, id_empresa, numero_frota, ativo
+        FROM tb_veiculo
+        WHERE UPPER(TRIM(numero_frota)) = ?
+        LIMIT 1
+        """,
+        (frota,),
+    )
+    if not existente.empty:
+        row = existente.iloc[0]
+        if int(row.get("ativo") or 0) not in (1, True):
+            return MapaError(f"Veículo {frota} está inativo.", "validacao")
+        id_emp_vei = row["id_empresa"]
+        if id_emp_vei is None or int(id_emp_vei) != int(id_empresa):
+            return MapaError(
+                f"Veículo {frota} não pertence à empresa selecionada.",
+                "validacao",
+            )
+        return int(row["id_veiculo"])
+
+    criado = criar_veiculo(dal, numero_frota=frota, id_empresa=int(id_empresa))
+    if isinstance(criado, CadastroError):
+        return MapaError(criado.mensagem, criado.codigo)
+    return int(criado["id_veiculo"])
+
+
 def criar_mapa(dal, id_usuario: int, payload: dict[str, Any]) -> dict[str, Any] | MapaError:
     id_linha = _resolver_id_linha(dal, payload)
     if isinstance(id_linha, MapaError):
@@ -413,6 +461,14 @@ def criar_mapa(dal, id_usuario: int, payload: dict[str, Any]) -> dict[str, Any] 
     id_turno = _resolver_id_turno(dal, payload)
     if isinstance(id_turno, MapaError):
         return id_turno
+
+    id_empresa_ok = _resolver_id_empresa(dal, payload)
+    if id_empresa_ok is None:
+        return MapaError("Empresa é obrigatória.", "validacao")
+
+    id_veiculo = _resolver_ou_criar_veiculo_mapa(dal, payload, int(id_empresa_ok))
+    if isinstance(id_veiculo, MapaError):
+        return id_veiculo
 
     data_parsed = _parse_date(payload.get("data"))
     if isinstance(data_parsed, MapaError):
@@ -430,49 +486,114 @@ def criar_mapa(dal, id_usuario: int, payload: dict[str, Any]) -> dict[str, Any] 
     observacao = payload.get("observacao")
     fim_sql = fim.strftime("%Y-%m-%d %H:%M:%S") if fim is not None else None
 
-    # Retry sob concorrência: UNIQUE(cod_map) — DAL faz commit por comando.
+    # Retry sob concorrência: UNIQUE(cod_map). Map + 1º item na mesma transação.
     last_error: MapaError | None = None
     for _ in range(COD_MAP_INSERT_RETRIES):
         cod_map = _gerar_proximo_cod_map(dal)
         if isinstance(cod_map, MapaError):
             return cod_map
 
-        ok = dal.create(
-            """
-            INSERT INTO tb_map (
-                cod_map, id_usuario, id_linha, id_turno, data,
-                inicio_jornada_des, fim_jornada_des, observacao
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                cod_map,
-                id_usuario,
-                int(id_linha),
-                int(id_turno),
-                data_parsed.isoformat(),
-                inicio.strftime("%Y-%m-%d %H:%M:%S"),
-                fim_sql,
-                observacao,
-            ),
-        )
-        if ok:
-            row = dal.read(
-                "SELECT id_registro, cod_map FROM tb_map WHERE cod_map = ?",
-                (cod_map,),
-            )
-            if row.empty:
-                return MapaError("Falha ao criar MAPA.", "persistencia")
-            id_registro = int(row.iloc[0]["id_registro"])
+        try:
+            with dal.transaction():
+                ok_map = dal.create(
+                    """
+                    INSERT INTO tb_map (
+                        cod_map, id_usuario, id_linha, id_turno, data,
+                        inicio_jornada_des, fim_jornada_des, observacao
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        cod_map,
+                        id_usuario,
+                        int(id_linha),
+                        int(id_turno),
+                        data_parsed.isoformat(),
+                        inicio.strftime("%Y-%m-%d %H:%M:%S"),
+                        fim_sql,
+                        observacao,
+                    ),
+                )
+                if not ok_map:
+                    raise RuntimeError("falha_insert_map")
+
+                row = dal.read(
+                    "SELECT id_registro FROM tb_map WHERE cod_map = ?",
+                    (cod_map,),
+                )
+                if row.empty:
+                    raise RuntimeError("falha_ler_map")
+                id_registro = int(row.iloc[0]["id_registro"])
+
+                ok_item = dal.create(
+                    """
+                    INSERT INTO tb_item_map (
+                        idmap, id_veiculo, id_motorista,
+                        hor_ini_jor, hor_fim_jor, chegada_ponto
+                    ) VALUES (?, ?, NULL, NULL, NULL, NULL)
+                    """,
+                    (id_registro, int(id_veiculo)),
+                )
+                if not ok_item:
+                    raise RuntimeError("falha_insert_item")
+
             completo = obter_mapa_completo(dal, id_registro)
             assert not isinstance(completo, MapaError)
             return completo
-
-        last_error = MapaError(
-            "Conflito ao gerar cod_map. Tente novamente.",
-            "cod_map_conflito",
-        )
+        except Exception:
+            last_error = MapaError(
+                "Conflito ao gerar cod_map. Tente novamente.",
+                "cod_map_conflito",
+            )
+            continue
 
     return last_error or MapaError("Falha ao criar MAPA.", "persistencia")
+
+
+def _sincronizar_primeiro_item_veiculo(
+    dal, id_registro: int, id_veiculo: int
+) -> MapaError | None:
+    itens = dal.read(
+        """
+        SELECT id_item FROM tb_item_map
+        WHERE idmap = ?
+        ORDER BY id_item
+        LIMIT 1
+        """,
+        (id_registro,),
+    )
+    if itens.empty:
+        ok = dal.create(
+            """
+            INSERT INTO tb_item_map (
+                idmap, id_veiculo, id_motorista,
+                hor_ini_jor, hor_fim_jor, chegada_ponto
+            ) VALUES (?, ?, NULL, NULL, NULL, NULL)
+            """,
+            (id_registro, int(id_veiculo)),
+        )
+        if not ok:
+            return MapaError("Falha ao incluir veículo no MAPA.", "persistencia")
+        return None
+
+    id_item = int(itens.iloc[0]["id_item"])
+    conflito = _erro_veiculo_ja_alocado(
+        dal, id_registro, int(id_veiculo), id_item_excluir=id_item
+    )
+    if conflito is not None:
+        return conflito
+
+    ok = dal.update(
+        "UPDATE tb_item_map SET id_veiculo = ? WHERE id_item = ?",
+        (int(id_veiculo), id_item),
+    )
+    if not ok:
+        conflito = _erro_veiculo_ja_alocado(
+            dal, id_registro, int(id_veiculo), id_item_excluir=id_item
+        )
+        if conflito is not None:
+            return conflito
+        return MapaError("Falha ao atualizar veículo do MAPA.", "persistencia")
+    return None
 
 
 def atualizar_mapa(
@@ -491,6 +612,14 @@ def atualizar_mapa(
     id_turno = _resolver_id_turno(dal, payload)
     if isinstance(id_turno, MapaError):
         return id_turno
+
+    id_empresa_ok = _resolver_id_empresa(dal, payload)
+    if id_empresa_ok is None:
+        return MapaError("Empresa é obrigatória.", "validacao")
+
+    id_veiculo = _resolver_ou_criar_veiculo_mapa(dal, payload, int(id_empresa_ok))
+    if isinstance(id_veiculo, MapaError):
+        return id_veiculo
 
     data_parsed = _parse_date(payload.get("data"))
     if isinstance(data_parsed, MapaError):
@@ -526,6 +655,10 @@ def atualizar_mapa(
     )
     if not ok:
         return MapaError("Falha ao atualizar MAPA.", "persistencia")
+
+    sync_err = _sincronizar_primeiro_item_veiculo(dal, id_registro, int(id_veiculo))
+    if sync_err is not None:
+        return sync_err
 
     completo = obter_mapa_completo(dal, id_registro)
     assert not isinstance(completo, MapaError)
@@ -638,6 +771,34 @@ def _resolver_id_motorista(dal, payload: dict[str, Any]) -> int | MapaError:
     return MapaError("Matrícula é obrigatória.", "validacao")
 
 
+def _erro_veiculo_ja_alocado(
+    dal,
+    idmap: int,
+    id_veiculo: int,
+    id_item_excluir: int | None = None,
+) -> MapaError | None:
+    """UNIQUE (idmap, id_veiculo) — mensagem estável antes/depois do DML."""
+    if id_item_excluir is None:
+        existe = dal.read(
+            "SELECT id_item FROM tb_item_map WHERE idmap = ? AND id_veiculo = ?",
+            (idmap, int(id_veiculo)),
+        )
+    else:
+        existe = dal.read(
+            """
+            SELECT id_item FROM tb_item_map
+            WHERE idmap = ? AND id_veiculo = ? AND id_item <> ?
+            """,
+            (idmap, int(id_veiculo), int(id_item_excluir)),
+        )
+    if not existe.empty:
+        return MapaError(
+            "Este carro já está alocado neste MAPA.",
+            "conflito_veiculo",
+        )
+    return None
+
+
 def criar_item_map(
     dal, id_registro: int, payload: dict[str, Any]
 ) -> dict[str, Any] | MapaError:
@@ -654,6 +815,10 @@ def criar_item_map(
     id_motorista = _resolver_id_motorista(dal, payload)
     if isinstance(id_motorista, MapaError):
         return id_motorista
+
+    conflito = _erro_veiculo_ja_alocado(dal, id_registro, int(id_veiculo))
+    if conflito is not None:
+        return conflito
 
     data_mapa = mapa.iloc[0]["data"]
     horarios = _normalizar_horarios_item(payload, data_mapa)
@@ -677,6 +842,10 @@ def criar_item_map(
         ),
     )
     if not ok:
+        # Corrida / UNIQUE: DAL engole IntegrityError e devolve False
+        conflito = _erro_veiculo_ja_alocado(dal, id_registro, int(id_veiculo))
+        if conflito is not None:
+            return conflito
         return MapaError(
             "Falha ao gravar o registro no banco (verifique horários e vínculos).",
             "persistencia",
@@ -761,7 +930,7 @@ def _item_map_detalhe(dal, id_item: int) -> dict[str, Any] | None:
                mot.matricula AS matricula_motorista
         FROM tb_item_map i
         INNER JOIN tb_veiculo v ON v.id_veiculo = i.id_veiculo
-        INNER JOIN tb_motorista mot ON mot.id_motorista = i.id_motorista
+        LEFT JOIN tb_motorista mot ON mot.id_motorista = i.id_motorista
         WHERE i.id_item = ?
         """,
         (id_item,),
@@ -778,7 +947,7 @@ def atualizar_item_map(
 ) -> dict[str, Any] | MapaError:
     atual = dal.read(
         """
-        SELECT i.id_item, m.data AS data_mapa
+        SELECT i.id_item, i.idmap, m.data AS data_mapa
         FROM tb_item_map i
         INNER JOIN tb_map m ON m.id_registro = i.idmap
         WHERE i.id_item = ?
@@ -788,12 +957,19 @@ def atualizar_item_map(
     if atual.empty:
         return MapaError("Item não encontrado.", "nao_encontrado")
 
+    idmap = int(atual.iloc[0]["idmap"])
     id_veiculo = _resolver_id_veiculo(dal, payload)
     if isinstance(id_veiculo, MapaError):
         return id_veiculo
     id_motorista = _resolver_id_motorista(dal, payload)
     if isinstance(id_motorista, MapaError):
         return id_motorista
+
+    conflito = _erro_veiculo_ja_alocado(
+        dal, idmap, int(id_veiculo), id_item_excluir=id_item
+    )
+    if conflito is not None:
+        return conflito
 
     horarios = _normalizar_horarios_item(payload, atual.iloc[0]["data_mapa"])
     if isinstance(horarios, MapaError):
@@ -817,6 +993,11 @@ def atualizar_item_map(
         ),
     )
     if not ok:
+        conflito = _erro_veiculo_ja_alocado(
+            dal, idmap, int(id_veiculo), id_item_excluir=id_item
+        )
+        if conflito is not None:
+            return conflito
         return MapaError("Falha ao atualizar item.", "persistencia")
 
     item = _item_map_detalhe(dal, id_item)

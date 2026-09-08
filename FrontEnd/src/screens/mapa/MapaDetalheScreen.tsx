@@ -58,6 +58,45 @@ import {
 
 const MAPA_BG = '#B9C8D4';
 
+const EMPRESA_FAIXA_FROTA: Record<
+  string,
+  { letra: string; min: number; max: number; exemplo: string }
+> = {
+  redentor: { letra: 'C', min: 40000, max: 40999, exemplo: 'C40000' },
+  futuro: { letra: 'C', min: 30000, max: 30999, exemplo: 'C30000' },
+  barra: { letra: 'D', min: 13000, max: 13999, exemplo: 'D13000' },
+};
+
+const RE_FROTA = /^[A-Za-z]\d{5}$/;
+
+function faixaFrotaEmpresa(empresaLabel: string | null | undefined) {
+  const key = String(empresaLabel ?? '')
+    .trim()
+    .toLowerCase();
+  return EMPRESA_FAIXA_FROTA[key] ?? null;
+}
+
+function validarFrotaEmpresaMapa(
+  frota: string,
+  empresaLabel: string | null | undefined,
+): string | null {
+  const f = frota.trim().toUpperCase();
+  const faixa = faixaFrotaEmpresa(empresaLabel);
+  if (!faixa) return 'Empresa do MAPA sem faixa de frota configurada.';
+  if (!f) return `Informe o veículo (ex.: ${faixa.exemplo}).`;
+  if (!RE_FROTA.test(f)) {
+    return `Veículo inválido. Use 1 letra + 5 números (ex.: ${faixa.exemplo}).`;
+  }
+  if (f[0] !== faixa.letra) {
+    return `Veículo da empresa ${empresaLabel} deve começar com ${faixa.letra}.`;
+  }
+  const numero = Number(f.slice(1));
+  if (!Number.isFinite(numero) || numero < faixa.min || numero > faixa.max) {
+    return `Frota fora da faixa de ${empresaLabel} (${faixa.letra}${faixa.min}–${faixa.letra}${faixa.max}).`;
+  }
+  return null;
+}
+
 /** Detalhe do MAPA — carros + viagens. Rota: `/mapas/:id` */
 export function MapaDetalheScreen() {
   const navigate = useNavigate();
@@ -130,7 +169,13 @@ export function MapaDetalheScreen() {
   );
 
   const idEmpresaMapa = useMemo(() => {
-    if (!mapa || !cadastros) return null;
+    if (!mapa) return null;
+    const fromApi = mapa.id_empresa;
+    if (fromApi != null && Number.isFinite(Number(fromApi))) {
+      return Number(fromApi);
+    }
+    // Fallback temporário: match por descrição
+    if (!cadastros) return null;
     const nome = String(mapa.empresa ?? '').trim().toLowerCase();
     if (!nome) return null;
     const byDesc = (cadastros.empresas ?? []).find(
@@ -163,8 +208,25 @@ export function MapaDetalheScreen() {
     );
   }, [veiculosFiltrados, frotaNorm]);
 
+  const frotaJaNoMapa = useMemo(() => {
+    if (!mapa || !frotaNorm) return false;
+    return mapa.itens.some(
+      (i) => String(i.numero_frota ?? '').toUpperCase() === frotaNorm,
+    );
+  }, [mapa, frotaNorm]);
+
+  const erroFaixaFrota = useMemo(
+    () => (frotaNorm ? validarFrotaEmpresaMapa(frotaNorm, mapa?.empresa) : null),
+    [frotaNorm, mapa?.empresa],
+  );
+
   const podeCadastrarFrota = Boolean(
-    frotaNorm && !frotaExata && idEmpresaMapa != null && mapa?.empresa,
+    frotaNorm &&
+      !frotaExata &&
+      !frotaJaNoMapa &&
+      !erroFaixaFrota &&
+      idEmpresaMapa != null &&
+      mapa?.empresa,
   );
 
   const openItemDialog = () => {
@@ -180,6 +242,15 @@ export function MapaDetalheScreen() {
 
   const onCadastrarVeiculoInline = async () => {
     if (!podeCadastrarFrota || idEmpresaMapa == null || busy) return;
+    const erroFaixa = validarFrotaEmpresaMapa(frotaNorm, mapa?.empresa);
+    if (erroFaixa) {
+      toast.error(erroFaixa);
+      return;
+    }
+    if (frotaJaNoMapa) {
+      toast.error('Este carro já está alocado neste MAPA.');
+      return;
+    }
     setBusy(true);
     try {
       const res = await createVeiculo({
@@ -207,14 +278,66 @@ export function MapaDetalheScreen() {
   const onSalvarItem = async (e: FormEvent) => {
     e.preventDefault();
     if (!mapa || busy) return;
-    if (!idVeiculo || !idMotorista || !horIni || !horFim || !chegada) {
-      toast.error('Preencha veículo, motorista e horários.');
+
+    const frota = frotaDigitada.trim().toUpperCase();
+    // Somente frota da empresa do MAPA — nunca cadastros.veiculos completo.
+    let veiculoId = idVeiculo.trim();
+    if (!veiculoId && frota) {
+      const exact = veiculosFiltrados.find(
+        (x) => String(x.numero_frota).toUpperCase() === frota,
+      );
+      if (exact) {
+        veiculoId = String(exact.id_veiculo);
+        setIdVeiculo(veiculoId);
+      }
+    }
+
+    if (!frota && !veiculoId) {
+      toast.error('Informe o veículo (número da frota).');
       return;
     }
+
+    const erroFaixa = validarFrotaEmpresaMapa(frota || frotaNorm, mapa.empresa);
+    if (frota && erroFaixa) {
+      toast.error(erroFaixa);
+      return;
+    }
+
+    if (
+      frota &&
+      mapa.itens.some((i) => String(i.numero_frota ?? '').toUpperCase() === frota)
+    ) {
+      toast.error('Este carro já está alocado neste MAPA.');
+      return;
+    }
+
+    if (
+      veiculoId &&
+      mapa.itens.some((i) => String(i.id_veiculo) === veiculoId)
+    ) {
+      toast.error('Este carro já está alocado neste MAPA.');
+      return;
+    }
+
+    if (!veiculoId) {
+      toast.error(
+        'Veículo não encontrado. Selecione na lista ou use “Cadastrar novo veículo”.',
+      );
+      return;
+    }
+    if (!idMotorista.trim()) {
+      toast.error('Selecione o motorista.');
+      return;
+    }
+    if (!horIni.trim() || !horFim.trim() || !chegada.trim()) {
+      toast.error('Preencha início, fim de jornada e chegada ao ponto.');
+      return;
+    }
+
     setBusy(true);
     try {
       const data = await createItem(mapa.id_registro, {
-        id_veiculo: Number(idVeiculo),
+        id_veiculo: Number(veiculoId),
         id_motorista: Number(idMotorista),
         hor_ini_jor: fromDateTimeLocal(horIni),
         hor_fim_jor: fromDateTimeLocal(horFim),
@@ -550,19 +673,30 @@ export function MapaDetalheScreen() {
                 <Label className="text-[15px] font-semibold">Veículo *</Label>
                 <Input
                   name="frota"
-                  placeholder="Ex.: C47654"
+                  placeholder={
+                    faixaFrotaEmpresa(mapa?.empresa)?.exemplo ?? 'Ex.: C30000'
+                  }
                   value={frotaDigitada}
                   onChange={(e) => {
-                    const v = e.target.value.toUpperCase();
+                    const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
                     setFrotaDigitada(v);
                     const exact = veiculosFiltrados.find(
                       (x) => String(x.numero_frota).toUpperCase() === v.trim(),
                     );
                     setIdVeiculo(exact ? String(exact.id_veiculo) : '');
                   }}
-                  className="h-12 rounded-lg border-slate-400 bg-white text-base"
+                  className="h-12 rounded-lg border-slate-400 bg-white text-base uppercase"
                   autoComplete="off"
+                  maxLength={6}
                 />
+                {frotaNorm && erroFaixaFrota ? (
+                  <p className="text-[13px] text-destructive">{erroFaixaFrota}</p>
+                ) : null}
+                {frotaNorm && frotaJaNoMapa ? (
+                  <p className="text-[13px] text-destructive">
+                    Este carro já está alocado neste MAPA.
+                  </p>
+                ) : null}
                 {veiculosSugestoes.length > 0 && (
                   <div className="max-h-36 overflow-y-auto rounded-lg border border-slate-300 bg-white">
                     {veiculosSugestoes.map((v) => (

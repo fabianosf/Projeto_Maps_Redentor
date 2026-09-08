@@ -51,8 +51,42 @@ const EMPRESA_CODIGO: Record<(typeof EMPRESA_OPCOES)[number], number> = {
   Barra: 3,
 };
 
+/** Faixa de frota por empresa (1 letra + 5 dígitos). */
+const EMPRESA_FAIXA_FROTA: Record<
+  (typeof EMPRESA_OPCOES)[number],
+  { letra: string; min: number; max: number; exemplo: string }
+> = {
+  Redentor: { letra: 'C', min: 40000, max: 40999, exemplo: 'C40000' },
+  Futuro: { letra: 'C', min: 30000, max: 30999, exemplo: 'C30000' },
+  Barra: { letra: 'D', min: 13000, max: 13999, exemplo: 'D13000' },
+};
+
 /** Opções fixas do combo Turno (sempre renderizadas). */
 const TURNO_OPCOES = ['TURNO 01', 'TURNO 02', 'TURNO 03'] as const;
+
+const RE_FROTA = /^[A-Za-z]\d{5}$/;
+
+function normalizarFrota(raw: string): string {
+  return raw.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6);
+}
+
+function validarFrotaEmpresa(frota: string, empresaLabel: string): string | null {
+  const f = frota.trim().toUpperCase();
+  const nome = normalizeEmpresaLabel(empresaLabel) as (typeof EMPRESA_OPCOES)[number];
+  const faixa = EMPRESA_FAIXA_FROTA[nome];
+  if (!f) return `Informe o veículo (ex.: ${faixa.exemplo}).`;
+  if (!RE_FROTA.test(f)) {
+    return `Veículo inválido. Use 1 letra + 5 números (ex.: ${faixa.exemplo}).`;
+  }
+  if (f[0] !== faixa.letra) {
+    return `Veículo da empresa ${nome} deve começar com ${faixa.letra}.`;
+  }
+  const numero = Number(f.slice(1));
+  if (!Number.isFinite(numero) || numero < faixa.min || numero > faixa.max) {
+    return `Frota fora da faixa de ${nome} (${faixa.letra}${faixa.min}–${faixa.letra}${faixa.max}).`;
+  }
+  return null;
+}
 
 /** Sentinel: Radix trata value="" como uncontrolled. */
 const SELECT_EMPTY = '__empty__';
@@ -128,6 +162,7 @@ export function MapaFormScreen() {
   const [fimHHMM, setFimHHMM] = useState('');
   const [empresa, setEmpresa] = useState<string>(EMPRESA_OPCOES[0]);
   const [idLinha, setIdLinha] = useState('');
+  const [numeroFrota, setNumeroFrota] = useState('');
   const [turno, setTurno] = useState<string>(TURNO_OPCOES[0]);
 
   const resolveEmpresaId = (label: string): number | null => {
@@ -158,7 +193,14 @@ export function MapaFormScreen() {
       return [];
     }
     const idEmp = String(idEmpresaResolvido);
-    return todas.filter((l) => String(l.id_empresa) === idEmp);
+    return todas
+      .filter((l) => String(l.id_empresa) === idEmp)
+      .slice()
+      .sort(
+        (a, b) =>
+          Number(a.codigo_linha ?? a.id_linha) -
+          Number(b.codigo_linha ?? b.id_linha),
+      );
   }, [cadastros, idEmpresaResolvido]);
 
   const limparCamposLinha = () => {
@@ -168,6 +210,7 @@ export function MapaFormScreen() {
   const onEmpresaChange = (nome: string) => {
     setEmpresa(normalizeEmpresaLabel(nome));
     limparCamposLinha();
+    setNumeroFrota('');
   };
 
   const resolveTurnoId = (label: string): number | null => {
@@ -210,6 +253,8 @@ export function MapaFormScreen() {
           setIdLinha(toId(m.id_linha));
           setEmpresa(normalizeEmpresaLabel(String(m.empresa ?? EMPRESA_OPCOES[0])));
           setTurno(normalizeTurnoLabel(String(m.turno ?? TURNO_OPCOES[0])));
+          const frotaItem = m.itens?.[0]?.numero_frota;
+          setNumeroFrota(frotaItem ? String(frotaItem).toUpperCase() : '');
           const linha = cad.linhas.find((l) => toId(l.id_linha) === toId(m.id_linha));
           if (linha?.empresa) {
             setEmpresa(normalizeEmpresaLabel(String(linha.empresa)));
@@ -219,6 +264,7 @@ export function MapaFormScreen() {
           setEmpresa(EMPRESA_OPCOES[0]);
           setTurno(TURNO_OPCOES[0]);
           setIdLinha('');
+          setNumeroFrota('');
         }
       } catch (e) {
         if (!cancelled) {
@@ -261,6 +307,13 @@ export function MapaFormScreen() {
       return;
     }
 
+    const frotaNorm = numeroFrota.trim().toUpperCase();
+    const erroFrota = validarFrotaEmpresa(frotaNorm, empresa);
+    if (erroFrota) {
+      toast.error(erroFrota);
+      return;
+    }
+
     const turnoSelecionado = normalizeTurnoLabel(turno);
     if (!turno?.trim() || !TURNO_OPCOES.includes(turnoSelecionado as (typeof TURNO_OPCOES)[number])) {
       toast.error('O campo Turno é obrigatório.');
@@ -296,6 +349,7 @@ export function MapaFormScreen() {
         ? combineDateAndTime(dataOk, fimHHMM)
         : null,
       observacao: null,
+      numero_frota: frotaNorm,
     };
 
     setBusy(true);
@@ -429,13 +483,7 @@ export function MapaFormScreen() {
                   onValueChange={(v) => setIdLinha(fromSelectValue(v))}
                   disabled={linhasFiltradas.length === 0}
                 >
-                  <SelectTrigger
-                    className="h-12 w-full rounded-lg border-slate-400 bg-white text-base text-slate-900"
-                    title={
-                      linhasFiltradas.find((l) => toId(l.id_linha) === idLinha)
-                        ?.descricao ?? undefined
-                    }
-                  >
+                  <SelectTrigger className="h-12 w-full rounded-lg border-slate-400 bg-white text-base text-slate-900">
                     <SelectValue
                       placeholder={
                         linhasFiltradas.length === 0
@@ -449,11 +497,7 @@ export function MapaFormScreen() {
                       Selecione
                     </SelectItem>
                     {linhasFiltradas.map((l) => (
-                      <SelectItem
-                        key={l.id_linha}
-                        value={String(l.id_linha)}
-                        title={l.descricao || undefined}
-                      >
+                      <SelectItem key={l.id_linha} value={String(l.id_linha)}>
                         {formatLinhaCodigo(l)}
                       </SelectItem>
                     ))}
@@ -479,6 +523,22 @@ export function MapaFormScreen() {
                 </Select>
               </div>
             </div>
+
+            <FormField
+              label="VEÍCULO"
+              name="veiculo"
+              requiredMark
+              value={numeroFrota}
+              placeholder={
+                EMPRESA_FAIXA_FROTA[
+                  normalizeEmpresaLabel(empresa) as (typeof EMPRESA_OPCOES)[number]
+                ].exemplo
+              }
+              maxLength={6}
+              autoCapitalize="characters"
+              onChange={(e) => setNumeroFrota(normalizarFrota(e.target.value))}
+              className="bg-white uppercase"
+            />
           </div>
 
           <div className="mt-auto grid grid-cols-2 gap-3 border-t border-slate-400/40 pt-5">

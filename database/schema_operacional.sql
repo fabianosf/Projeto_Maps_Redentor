@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS tb_linha (
     id_local_destino INT          NOT NULL COMMENT 'FK tb_local.id_local',
     ativo            TINYINT(1)   NOT NULL DEFAULT 1,
     PRIMARY KEY (id_linha),
-    UNIQUE KEY uk_tb_linha_codigo (codigo_linha),
+    UNIQUE KEY uk_tb_linha_empresa_codigo (id_empresa, codigo_linha),
     KEY idx_tb_linha_id_empresa (id_empresa),
     KEY idx_tb_linha_origem (id_local_origem),
     KEY idx_tb_linha_destino (id_local_destino),
@@ -68,10 +68,14 @@ CREATE TABLE IF NOT EXISTS tb_veiculo (
     numero_frota    VARCHAR(20)  NOT NULL COMMENT 'Número/prefixo na frota',
     placa           VARCHAR(10)  NOT NULL COMMENT 'Placa (Mercosul até 7 caracteres)',
     ativo           TINYINT(1)   NOT NULL DEFAULT 1,
+    id_empresa      INT          NULL     COMMENT 'FK tb_empresa — NULL = legado; API exige em novos',
     PRIMARY KEY (id_veiculo),
     UNIQUE KEY uk_tb_veiculo_codigo (codigo_veiculo),
     UNIQUE KEY uk_tb_veiculo_numero (numero_frota),
-    UNIQUE KEY uk_tb_veiculo_placa (placa)
+    UNIQUE KEY uk_tb_veiculo_placa (placa),
+    KEY idx_tb_veiculo_id_empresa (id_empresa),
+    CONSTRAINT fk_tb_veiculo_empresa
+        FOREIGN KEY (id_empresa) REFERENCES tb_empresa (id_empresa)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Indicadores de operação e vínculo com perfis de usuário
@@ -229,11 +233,12 @@ CREATE TABLE IF NOT EXISTS tb_item_map (
     id_item        INT      NOT NULL AUTO_INCREMENT,
     idmap          INT      NOT NULL COMMENT 'FK tb_map.id_registro',
     id_veiculo     INT      NOT NULL COMMENT 'FK tb_veiculo.id_veiculo',
-    id_motorista   INT      NOT NULL COMMENT 'FK tb_motorista.id_motorista',
+    id_motorista   INT      DEFAULT NULL COMMENT 'FK tb_motorista — opcional no cadastro inicial',
     hor_ini_jor    DATETIME DEFAULT NULL,
     hor_fim_jor    DATETIME DEFAULT NULL,
     chegada_ponto  DATETIME DEFAULT NULL,
     PRIMARY KEY (id_item),
+    UNIQUE KEY uq_tb_item_map_idmap_veiculo (idmap, id_veiculo),
     KEY idx_tb_item_map_idmap (idmap),
     KEY idx_tb_item_map_veiculo (id_veiculo),
     KEY idx_tb_item_map_motorista (id_motorista),

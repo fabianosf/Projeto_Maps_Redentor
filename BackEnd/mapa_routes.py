@@ -99,14 +99,23 @@ def delete_map(id_registro: int):
     return jsonify({"ok": True}), 200
 
 
+def _status_mapa_error(erro: MapaError) -> int:
+    if erro.codigo == "nao_encontrado":
+        return 404
+    if erro.codigo == "conflito_veiculo":
+        return 409
+    return 400
+
+
 @mapa_bp.post("/<int:id_registro>/itens")
 @require_mapa_access
 def create_item(id_registro: int):
     body = request.get_json(silent=True) or {}
     resultado = criar_item_map(_dal(), id_registro, body)
     if isinstance(resultado, MapaError):
-        status = 404 if resultado.codigo == "nao_encontrado" else 400
-        return json_error(resultado.mensagem, status, resultado.codigo)
+        return json_error(
+            resultado.mensagem, _status_mapa_error(resultado), resultado.codigo
+        )
     return jsonify({"ok": True, "item": resultado}), 201
 
 
@@ -116,8 +125,9 @@ def update_item(id_item: int):
     body = request.get_json(silent=True) or {}
     resultado = atualizar_item_map(_dal(), id_item, body)
     if isinstance(resultado, MapaError):
-        status = 404 if resultado.codigo == "nao_encontrado" else 400
-        return json_error(resultado.mensagem, status, resultado.codigo)
+        return json_error(
+            resultado.mensagem, _status_mapa_error(resultado), resultado.codigo
+        )
     return jsonify({"ok": True, "item": resultado}), 200
 
 

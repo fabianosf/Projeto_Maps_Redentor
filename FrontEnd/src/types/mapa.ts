@@ -48,6 +48,8 @@ export interface MapaCompleto {
   fim_jornada_des: string | null;
   observacao?: string | null;
   linha: string;
+  /** PK tb_empresa da linha do MAPA — fonte para filtrar frota no detalhe. */
+  id_empresa?: number | null;
   empresa: string;
   turno: string;
   despachante: string;
@@ -68,6 +70,8 @@ export interface MapaHeaderPayload {
   inicio_jornada_des: string;
   fim_jornada_des?: string | null;
   observacao?: string | null;
+  /** Frota (ex.: C30000) — obrigatória no create/update do cabeçalho. */
+  numero_frota: string;
 }
 
 export interface ItemMapPayload {

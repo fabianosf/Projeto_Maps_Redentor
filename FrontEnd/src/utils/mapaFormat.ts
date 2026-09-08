@@ -98,9 +98,16 @@ export function isValidHHMM(value: string): boolean {
 /** Converte para valor de datetime-local (YYYY-MM-DDTHH:MM). */
 export function toDateTimeLocal(value: string | null | undefined): string {
   if (!value) return '';
-  const s = String(value).replace(' ', 'T');
-  const m = s.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})/);
-  if (m) return `${m[1]}T${m[2]}:${m[3]}`;
+  const s = String(value).trim();
+  const iso = s.replace(' ', 'T').match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})/);
+  if (iso) return `${iso[1]}T${iso[2]}:${iso[3]}`;
+
+  // Flask/RFC (ex.: "Fri, 04 Sep 2026 10:00:00 GMT")
+  const d = new Date(s);
+  if (!Number.isNaN(d.getTime())) {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
   return '';
 }
 

@@ -1,0 +1,52 @@
+Empresa,Numero_Linha,Itinerario,Regiao
+Viação Redentor,306,Praça Seca x Castelo (via Serra / Pau-Ferro),Centro
+Viação Redentor,319 / SV319 / SN319,Terminal Alvorada x Central / Terminal Gentileza,Centro / Zona Norte
+Viação Redentor,348,Riocentro x Candelária (via Linha Amarela / Cidade de Deus),Centro
+Viação Redentor,352,Riocentro x Candelária (via Parque Olímpico / Linha Amarela),Centro
+Viação Redentor,353,Gardênia Azul x Terminal Gentileza (via Méier / Vila Isabel),Centro / Zona Norte
+Viação Redentor,361,Recreio x Castelo (via Linha Amarela),Centro
+Viação Redentor,368 / SN368,Riocentro x Candelária (via Serra / Gardênia Azul),Centro
+Viação Redentor,390 / SV390,Curicica x Candelária (via Serra / Freguesia),Centro
+Viação Redentor,552 / SN552,Alvorada x Rio Sul / Metrô Botafogo (via Praia da Barra / Av. Niemeyer),Zona Sul
+Viação Redentor,553,Recreio x Rio Sul (via Alvorada / Av. das Américas),Zona Sul
+Viação Redentor,554 / SN554,Piabas x Rio Sul / Metrô Botafogo (via Alvorada / Vargem Grande),Zona Sul
+Viação Redentor,600 / SN600,Taquara-Boiúna x Saens Peña,Grande Tijuca / Zona Oeste
+Viação Redentor,601,Taquara-Capela x Saens Peña (via Grajaú),Grande Tijuca / Zona Oeste
+Viação Redentor,607,Cascadura x Rio Comprido,Zona Norte / Centro
+Viação Redentor,610,Tanque x Del Castilho (via Linha Amarela),Zona Norte / Zona Oeste
+Viação Redentor,611,Riocentro x Del Castilho,Zona Norte / Zona Oeste
+Viação Redentor,613,Vargem Grande x Del Castilho (via Linha Amarela),Zona Norte / Zona Oeste
+Viação Redentor,614,Alvorada x Del Castilho (via Linha Amarela),Zona Norte / Zona Oeste
+Viação Redentor,636,Merck x Saens Peña,Grande Tijuca / Zona Oeste
+Viação Redentor,692 / SV692,Méier x Alvorada (via Linha Amarela),Zona Norte / Zona Oeste
+Viação Redentor,844 / 861 / 862 / 880 / 899,Linhas locais e alimentadoras (Barra / Recreio / Jacarepaguá),Local / Zona Oeste
+Transportes Futuro,343 / SP343,Jardim Oceânico / Rio das Pedras x Candelária,Centro
+Transportes Futuro,550,Cidade de Deus / Rio das Pedras x Gávea,Zona Sul / Zona Oeste
+Transportes Futuro,557,Rio das Pedras x Copacabana,Zona Sul / Zona Oeste
+Transportes Futuro,558 (INT6),Cidade de Deus x Copacabana,Zona Sul / Zona Oeste
+Transportes Futuro,565,Tanque x Gávea (via Alvorada),Zona Sul / Zona Oeste
+Transportes Futuro,766,Madureira Shopping x Freguesia (via Cascadura),Zona Norte / Zona Oeste
+Transportes Futuro,831,Taquara x Colônia,Local / Zona Oeste
+Transportes Futuro,859,Covanca x Geremário,Local / Zona Oeste
+Transportes Futuro,900,Merck x Downtown (via Alvorada),Local / Zona Oeste
+Transportes Futuro,932,Gardênia Azul x Tanque (via Pau-Ferro),Local / Zona Oeste
+Transportes Futuro,953,Tanque x Cidade de Deus (via Retiro dos Artistas),Local / Zona Oeste
+Transportes Futuro,954,Taquara x Recreio (via Benvindo de Novaes),Local / Zona Oeste
+Transportes Barra,379,Catiri x Tiradentes,Centro / Zona Oeste
+Transportes Barra,383,Realengo x Praça da República,Centro / Zona Oeste
+Transportes Barra,389,Vila Aliança x Candelária,Centro / Zona Oeste
+Transportes Barra,394 / 394SR,Vila Kennedy x Tiradentes,Centro / Zona Oeste
+Transportes Barra,395,Coqueiros x Tiradentes,Centro / Zona Oeste
+Transportes Barra,731 / 737 / 739,Ligações em Marechal Hermes e Campo Grande,Zona Norte / Zona Oeste
+Transportes Barra,745 / 746,Bangu / Jabour x Cascadura,Zona Norte / Zona Oeste
+Transportes Barra,752 / 756,Jardim Palmares x Coelho Neto,Zona Norte / Zona Oeste
+Transportes Barra,777 / SV777,Padre Miguel x Madureira,Zona Norte / Zona Oeste
+Transportes Barra,784,Vila Kennedy x Marechal Hermes,Zona Norte / Zona Oeste
+Transportes Barra,790 / SV790,Campo Grande x Cascadura,Zona Norte / Zona Oeste
+Transportes Barra,794,Bangu x Cascadura,Zona Norte / Zona Oeste
+Transportes Barra,801 / 803 / SP803,"Bangu Shopping, Senador Camará, Sulacap x Taquara",Zona Oeste
+Transportes Barra,811 / 812,Bangu / Carobinha,Zona Oeste
+Transportes Barra,875,Tanque x Praça Seca,Zona Oeste
+Transportes Barra,878,Tanque x Barra da Tijuca,Zona Oeste
+Transportes Barra,926,Senador Camará x Penha,Zona Norte / Zona Oeste
+Transportes Barra,936,Campo Grande x Fundão,Ilha do Fundão / Zona Oeste

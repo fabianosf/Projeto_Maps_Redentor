@@ -9,6 +9,7 @@ import time
 import platform
 import unicodedata
 
+from contextlib import contextmanager
 from typing import Any, Dict, Optional, Sequence, Union
 
 try:
@@ -261,6 +262,7 @@ class DAL:
             self.pool = ConnectionPool()
             self.pool.set_creator(self._create_connection)
             self.circuit_breaker = CircuitBreaker()
+            self._tls = threading.local()
 
             _log_evento(f"Inicialização concluída | sgbd={self.sgbd}")
         except Exception as exc:
@@ -573,10 +575,54 @@ class DAL:
 
         return sql, values
 
+    @contextmanager
+    def transaction(self):
+        """Agrupa create/update/delete/read na mesma conexão (commit/rollback único)."""
+        if getattr(self._tls, "in_transaction", False):
+            yield
+            return
+
+        conn = self.circuit_breaker.call(self.pool.get_connection)
+        prev_ac = True
+        try:
+            if hasattr(conn, "get_autocommit"):
+                prev_ac = bool(conn.get_autocommit())
+            if hasattr(conn, "autocommit"):
+                if callable(conn.autocommit):
+                    conn.autocommit(False)
+                else:
+                    conn.autocommit = False
+            self._tls.conn = conn
+            self._tls.in_transaction = True
+            yield
+            conn.commit()
+            _log_evento("Transação commitada com sucesso")
+        except Exception:
+            try:
+                conn.rollback()
+                _log_evento("Transação revertida (rollback)")
+            except Exception as rollback_exc:
+                _log_excecao(rollback_exc, "Falha no rollback da transação")
+            raise
+        finally:
+            self._tls.conn = None
+            self._tls.in_transaction = False
+            try:
+                if hasattr(conn, "autocommit"):
+                    if callable(conn.autocommit):
+                        conn.autocommit(prev_ac)
+                    else:
+                        conn.autocommit = prev_ac
+            except Exception:
+                pass
+            self.pool.return_connection(conn)
+
     def execute_query(self, sql, values=None, fetch=True):
         conn = None
         cursor = None
-        operacao = "SELECT" if fetch else "DML/COMMIT"
+        owned = False
+        in_tx = bool(getattr(self._tls, "in_transaction", False))
+        operacao = "SELECT" if fetch else ("DML/TX" if in_tx else "DML/COMMIT")
         qtd_parametros = _contar_parametros(values)
 
         _log_evento(
@@ -584,7 +630,11 @@ class DAL:
         )
 
         try:
-            conn = self.circuit_breaker.call(self.pool.get_connection)
+            if in_tx and getattr(self._tls, "conn", None) is not None:
+                conn = self._tls.conn
+            else:
+                conn = self.circuit_breaker.call(self.pool.get_connection)
+                owned = True
             cursor = conn.cursor()
 
             sql, values = self._ajustar_sql_e_valores(sql, values)
@@ -597,8 +647,7 @@ class DAL:
             if fetch:
                 cols = [c[0] for c in cursor.description]
                 rows = cursor.fetchall()
-                # Encerra transação de leitura (pool + isolation REPEATABLE READ).
-                if not getattr(conn, "get_autocommit", lambda: False)():
+                if owned and not getattr(conn, "get_autocommit", lambda: False)():
                     try:
                         conn.commit()
                     except Exception:
@@ -609,8 +658,15 @@ class DAL:
                 )
                 return pd.DataFrame(rows, columns=cols)
 
-            conn.commit()
-            _log_evento(f"Comando executado e commit realizado | linhas_afetadas={cursor.rowcount}")
+            if not in_tx:
+                conn.commit()
+                _log_evento(
+                    f"Comando executado e commit realizado | linhas_afetadas={cursor.rowcount}"
+                )
+            else:
+                _log_evento(
+                    f"Comando executado na transação | linhas_afetadas={cursor.rowcount}"
+                )
             return True
 
         except Exception as exc:
@@ -620,12 +676,15 @@ class DAL:
                 f"sql={sql}",
             )
 
-            if conn:
+            if conn and not in_tx:
                 try:
                     conn.rollback()
                     _log_evento("Rollback executado após falha na consulta")
                 except Exception as rollback_exc:
                     _log_excecao(rollback_exc, "Falha ao executar rollback após erro na consulta")
+
+            if in_tx:
+                raise
 
             return pd.DataFrame() if fetch else False
 
@@ -633,7 +692,7 @@ class DAL:
             if cursor:
                 cursor.close()
 
-            if conn:
+            if owned and conn:
                 self.pool.return_connection(conn)
 
     def read(self, sql, values=None):

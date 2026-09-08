@@ -17,15 +17,21 @@ class CadastroError:
     codigo: str = "validacao"
 
 
-# Faixas de frota por empresa (letra + número).
-# Barra aceita prefixo C ou D na mesma faixa numérica.
+# Faixas de frota por empresa (1 letra + exatamente 5 dígitos).
+# Prefixo: Futuro/Redentor = C; Barra = D.
 _FAIXAS_FROTA: dict[str, list[tuple[str, int, int]]] = {
-    "redentor": [("C", 47000, 47999)],
-    "futuro": [("C", 30000, 30499)],
-    "barra": [("C", 13000, 13499), ("D", 13000, 13499)],
+    "redentor": [("C", 40000, 40999)],
+    "futuro": [("C", 30000, 30999)],
+    "barra": [("D", 13000, 13999)],
 }
 
-_RE_FROTA = re.compile(r"^([A-Za-z])(\d+)$")
+_RE_FROTA = re.compile(r"^([A-Za-z])(\d{5})$")
+
+_PREFIXO_EMPRESA: dict[str, str] = {
+    "redentor": "C",
+    "futuro": "C",
+    "barra": "D",
+}
 
 
 def _rows(dal, sql: str, values: Any = None) -> list[dict[str, Any]]:
@@ -114,7 +120,7 @@ def _validar_frota_empresa(
     m = _RE_FROTA.fullmatch(frota)
     if not m:
         return CadastroError(
-            "Frota inválida. Use letra + número (ex.: C47654).",
+            "Frota inválida. Use 1 letra + 5 números (ex.: C30000).",
             "validacao",
         )
     letra, num_txt = m.group(1).upper(), m.group(2)
@@ -124,6 +130,13 @@ def _validar_frota_empresa(
         return CadastroError("Frota inválida.", "validacao")
 
     chave = (empresa_descricao or "").strip().lower()
+    prefixo = _PREFIXO_EMPRESA.get(chave)
+    if prefixo and letra != prefixo:
+        return CadastroError(
+            f"Frota da empresa {empresa_descricao} deve começar com {prefixo}.",
+            "validacao",
+        )
+
     faixas = _FAIXAS_FROTA.get(chave)
     if not faixas:
         return CadastroError(
@@ -139,11 +152,11 @@ def _validar_frota_empresa(
 
     if not ok:
         if chave == "redentor":
-            faixa_txt = "C47000–C47999"
+            faixa_txt = "C40000–C40999"
         elif chave == "futuro":
-            faixa_txt = "C30000–C30499"
+            faixa_txt = "C30000–C30999"
         elif chave == "barra":
-            faixa_txt = "C/D13000–C/D13499"
+            faixa_txt = "D13000–D13999"
         else:
             faixa_txt = "faixa da empresa"
         return CadastroError(
