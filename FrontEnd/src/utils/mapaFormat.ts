@@ -102,11 +102,17 @@ export function toDateTimeLocal(value: string | null | undefined): string {
   const iso = s.replace(' ', 'T').match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})/);
   if (iso) return `${iso[1]}T${iso[2]}:${iso[3]}`;
 
-  // Flask/RFC (ex.: "Fri, 04 Sep 2026 10:00:00 GMT")
+  // Flask/RFC (ex.: "Fri, 04 Sep 2026 10:00:00 GMT") — UTC bate com formatHora (HH:MM literal).
   const d = new Date(s);
   if (!Number.isNaN(d.getTime())) {
     const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const useUtc = /GMT|UTC|\bZ\b/i.test(s) || /,\s*\d{2}\s+\w{3}\s+\d{4}/.test(s);
+    const y = useUtc ? d.getUTCFullYear() : d.getFullYear();
+    const m = useUtc ? d.getUTCMonth() + 1 : d.getMonth() + 1;
+    const day = useUtc ? d.getUTCDate() : d.getDate();
+    const hh = useUtc ? d.getUTCHours() : d.getHours();
+    const mm = useUtc ? d.getUTCMinutes() : d.getMinutes();
+    return `${y}-${pad(m)}-${pad(day)}T${pad(hh)}:${pad(mm)}`;
   }
   return '';
 }

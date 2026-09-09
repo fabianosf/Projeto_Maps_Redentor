@@ -71,6 +71,10 @@ def create_app() -> Flask:
 
     app.register_blueprint(mapa_bp)
 
+    from .designacao_routes import designacoes_bp
+
+    app.register_blueprint(designacoes_bp)
+
     @app.get("/api/v1/health")
     def health():
         dal = get_dal()

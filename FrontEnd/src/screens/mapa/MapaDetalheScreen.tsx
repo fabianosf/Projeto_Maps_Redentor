@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
-import { getCadastros, createVeiculo } from '@/api/cadastros';
+import { getCadastros } from '@/api/cadastros';
 import { ApiRequestError } from '@/api/client';
 import {
   createItem,
@@ -11,6 +11,7 @@ import {
   deleteMapa,
   deleteViagem,
   getMapa,
+  updateItem,
 } from '@/api/mapa';
 import { AppShell } from '@/components/AppShell';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -19,7 +20,6 @@ import { FormField } from '@/components/FormField';
 import { LoadingState } from '@/components/LoadingState';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
@@ -58,44 +58,7 @@ import {
 
 const MAPA_BG = '#B9C8D4';
 
-const EMPRESA_FAIXA_FROTA: Record<
-  string,
-  { letra: string; min: number; max: number; exemplo: string }
-> = {
-  redentor: { letra: 'C', min: 40000, max: 40999, exemplo: 'C40000' },
-  futuro: { letra: 'C', min: 30000, max: 30999, exemplo: 'C30000' },
-  barra: { letra: 'D', min: 13000, max: 13999, exemplo: 'D13000' },
-};
-
-const RE_FROTA = /^[A-Za-z]\d{5}$/;
-
-function faixaFrotaEmpresa(empresaLabel: string | null | undefined) {
-  const key = String(empresaLabel ?? '')
-    .trim()
-    .toLowerCase();
-  return EMPRESA_FAIXA_FROTA[key] ?? null;
-}
-
-function validarFrotaEmpresaMapa(
-  frota: string,
-  empresaLabel: string | null | undefined,
-): string | null {
-  const f = frota.trim().toUpperCase();
-  const faixa = faixaFrotaEmpresa(empresaLabel);
-  if (!faixa) return 'Empresa do MAPA sem faixa de frota configurada.';
-  if (!f) return `Informe o veículo (ex.: ${faixa.exemplo}).`;
-  if (!RE_FROTA.test(f)) {
-    return `Veículo inválido. Use 1 letra + 5 números (ex.: ${faixa.exemplo}).`;
-  }
-  if (f[0] !== faixa.letra) {
-    return `Veículo da empresa ${empresaLabel} deve começar com ${faixa.letra}.`;
-  }
-  const numero = Number(f.slice(1));
-  if (!Number.isFinite(numero) || numero < faixa.min || numero > faixa.max) {
-    return `Frota fora da faixa de ${empresaLabel} (${faixa.letra}${faixa.min}–${faixa.letra}${faixa.max}).`;
-  }
-  return null;
-}
+const isAtivo = (ativo?: number) => ativo == null || Number(ativo) === 1;
 
 /** Detalhe do MAPA — carros + viagens. Rota: `/mapas/:id` */
 export function MapaDetalheScreen() {
@@ -109,19 +72,27 @@ export function MapaDetalheScreen() {
   const [loading, setLoading] = useState(true);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
 
-  const [itemDialog, setItemDialog] = useState(false);
+  const [motoristaDialog, setMotoristaDialog] = useState(false);
   const [viagemDialog, setViagemDialog] = useState(false);
   const [confirmDeleteMap, setConfirmDeleteMap] = useState(false);
   const [confirmDeleteItem, setConfirmDeleteItem] = useState(false);
   const [confirmDeleteViagem, setConfirmDeleteViagem] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const [idVeiculo, setIdVeiculo] = useState('');
-  const [frotaDigitada, setFrotaDigitada] = useState('');
+  const [idEmpresaForm, setIdEmpresaForm] = useState('');
+  const [idLinhaForm, setIdLinhaForm] = useState('');
+  const [idVeiculoForm, setIdVeiculoForm] = useState('');
   const [idMotorista, setIdMotorista] = useState('');
+  const [editItemId, setEditItemId] = useState<number | null>(null);
   const [horIni, setHorIni] = useState('');
   const [horFim, setHorFim] = useState('');
   const [chegada, setChegada] = useState('');
+  const [frotaContextoMotorista, setFrotaContextoMotorista] = useState('');
+  const [empresaContextoMotorista, setEmpresaContextoMotorista] = useState('');
+  const [linhaContextoMotorista, setLinhaContextoMotorista] = useState('');
+  /** Remonta o form a cada abertura — evita Select/inputs com state residual. */
+  const [motoristaFormKey, setMotoristaFormKey] = useState(0);
+  const [motoristaDialogMode, setMotoristaDialogMode] = useState<'novo' | 'editar'>('novo');
 
   const [saidaHora, setSaidaHora] = useState('');
   const [chegadaHora, setChegadaHora] = useState('');
@@ -168,161 +139,160 @@ export function MapaDetalheScreen() {
     [mapa, selectedItemId],
   );
 
-  const idEmpresaMapa = useMemo(() => {
-    if (!mapa) return null;
-    const fromApi = mapa.id_empresa;
-    if (fromApi != null && Number.isFinite(Number(fromApi))) {
-      return Number(fromApi);
-    }
-    // Fallback temporário: match por descrição
-    if (!cadastros) return null;
-    const nome = String(mapa.empresa ?? '').trim().toLowerCase();
-    if (!nome) return null;
-    const byDesc = (cadastros.empresas ?? []).find(
-      (e) => String(e.descricao).trim().toLowerCase() === nome,
+  const empresas = useMemo(
+    () => (cadastros?.empresas ?? []).filter((e) => isAtivo(e.ativo)),
+    [cadastros],
+  );
+
+  const linhasFiltradas = useMemo(() => {
+    if (!idEmpresaForm) return [];
+    return (cadastros?.linhas ?? []).filter(
+      (l) => String(l.id_empresa) === idEmpresaForm && isAtivo(l.ativo),
     );
-    if (byDesc) return Number(byDesc.id_empresa);
-    return null;
-  }, [mapa, cadastros]);
+  }, [cadastros, idEmpresaForm]);
 
   const veiculosFiltrados = useMemo(() => {
-    const todos = cadastros?.veiculos ?? [];
-    if (idEmpresaMapa == null || !Number.isFinite(idEmpresaMapa)) return [];
-    return todos.filter((v) => Number(v.id_empresa) === idEmpresaMapa);
-  }, [cadastros, idEmpresaMapa]);
-
-  const frotaNorm = frotaDigitada.trim().toUpperCase();
-  const veiculosSugestoes = useMemo(() => {
-    if (!frotaNorm) return veiculosFiltrados;
-    return veiculosFiltrados.filter((v) =>
-      String(v.numero_frota).toUpperCase().includes(frotaNorm),
+    if (!idEmpresaForm) return [];
+    const idsNoMapa = new Set(
+      (mapa?.itens ?? [])
+        .filter((i) => editItemId == null || i.id_item !== editItemId)
+        .map((i) => Number(i.id_veiculo)),
     );
-  }, [veiculosFiltrados, frotaNorm]);
+    return (cadastros?.veiculos ?? []).filter((v) => {
+      if (!isAtivo(v.ativo)) return false;
+      if (String(v.id_empresa ?? '') !== idEmpresaForm) return false;
+      if (idsNoMapa.has(Number(v.id_veiculo))) return false;
+      return true;
+    });
+  }, [cadastros, idEmpresaForm, mapa, editItemId]);
 
-  const frotaExata = useMemo(() => {
-    if (!frotaNorm) return null;
-    return (
-      veiculosFiltrados.find(
-        (v) => String(v.numero_frota).toUpperCase() === frotaNorm,
-      ) ?? null
-    );
-  }, [veiculosFiltrados, frotaNorm]);
-
-  const frotaJaNoMapa = useMemo(() => {
-    if (!mapa || !frotaNorm) return false;
-    return mapa.itens.some(
-      (i) => String(i.numero_frota ?? '').toUpperCase() === frotaNorm,
-    );
-  }, [mapa, frotaNorm]);
-
-  const erroFaixaFrota = useMemo(
-    () => (frotaNorm ? validarFrotaEmpresaMapa(frotaNorm, mapa?.empresa) : null),
-    [frotaNorm, mapa?.empresa],
+  const motoristas = useMemo(
+    () => cadastros?.motoristas ?? [],
+    [cadastros],
   );
 
-  const podeCadastrarFrota = Boolean(
-    frotaNorm &&
-      !frotaExata &&
-      !frotaJaNoMapa &&
-      !erroFaixaFrota &&
-      idEmpresaMapa != null &&
-      mapa?.empresa,
-  );
-
-  const openItemDialog = () => {
-    if (!mapa) return;
-    setIdVeiculo('');
-    setFrotaDigitada('');
+  const resetMotoristaForm = () => {
+    setIdEmpresaForm('');
+    setIdLinhaForm('');
+    setIdVeiculoForm('');
     setIdMotorista('');
-    setHorIni(toDateTimeLocal(mapa.inicio_jornada_des));
-    setHorFim(toDateTimeLocal(mapa.fim_jornada_des));
-    setChegada(toDateTimeLocal(mapa.inicio_jornada_des));
-    setItemDialog(true);
+    setEditItemId(null);
+    setHorIni('');
+    setHorFim('');
+    setChegada('');
+    setFrotaContextoMotorista('');
+    setEmpresaContextoMotorista('');
+    setLinhaContextoMotorista('');
+    setMotoristaDialogMode('novo');
   };
 
-  const onCadastrarVeiculoInline = async () => {
-    if (!podeCadastrarFrota || idEmpresaMapa == null || busy) return;
-    const erroFaixa = validarFrotaEmpresaMapa(frotaNorm, mapa?.empresa);
-    if (erroFaixa) {
-      toast.error(erroFaixa);
-      return;
-    }
-    if (frotaJaNoMapa) {
-      toast.error('Este carro já está alocado neste MAPA.');
-      return;
-    }
-    setBusy(true);
-    try {
-      const res = await createVeiculo({
-        numero_frota: frotaNorm,
-        id_empresa: idEmpresaMapa,
-      });
-      const v = res.veiculo;
-      setCadastros((prev) =>
-        prev
-          ? { ...prev, veiculos: [...(prev.veiculos ?? []), v] }
-          : prev,
-      );
-      setIdVeiculo(String(v.id_veiculo));
-      setFrotaDigitada(String(v.numero_frota));
-      toast.success(`Veículo ${v.numero_frota} cadastrado.`);
-    } catch (err) {
-      toast.error(
-        err instanceof ApiRequestError ? err.message : 'Falha ao cadastrar veículo.',
-      );
-    } finally {
-      setBusy(false);
-    }
+  const closeMotoristaDialog = () => {
+    setMotoristaDialog(false);
+    resetMotoristaForm();
   };
 
-  const onSalvarItem = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!mapa || busy) return;
+  const limparHorariosMotorista = () => {
+    setHorIni('');
+    setHorFim('');
+    setChegada('');
+  };
 
-    const frota = frotaDigitada.trim().toUpperCase();
-    // Somente frota da empresa do MAPA — nunca cadastros.veiculos completo.
-    let veiculoId = idVeiculo.trim();
-    if (!veiculoId && frota) {
-      const exact = veiculosFiltrados.find(
-        (x) => String(x.numero_frota).toUpperCase() === frota,
+  const openMotoristaNovo = () => {
+    if (!mapa) return;
+    setIdEmpresaForm('');
+    setIdLinhaForm('');
+    setIdVeiculoForm('');
+    setIdMotorista('');
+    setEditItemId(null);
+    setHorIni('');
+    setHorFim('');
+    setChegada('');
+    setFrotaContextoMotorista('');
+    setEmpresaContextoMotorista('');
+    setLinhaContextoMotorista('');
+    setMotoristaDialogMode('novo');
+    setMotoristaFormKey((k) => k + 1);
+    setMotoristaDialog(true);
+  };
+
+  const openMotoristaEditar = (idItem: number) => {
+    if (!mapa) return;
+    const itemAlvo = mapa.itens.find(
+      (i) => String(i.id_item) === String(idItem),
+    );
+    if (!itemAlvo) {
+      toast.error('Carro não encontrado neste MAPA.');
+      return;
+    }
+    const vinculado =
+      itemAlvo.id_motorista != null && Number(itemAlvo.id_motorista) > 0;
+    if (!vinculado) {
+      toast.error('Este carro ainda não tem motorista vinculado.');
+      return;
+    }
+
+    let idEmpresa =
+      itemAlvo.id_empresa != null ? String(itemAlvo.id_empresa) : '';
+    if (!idEmpresa && cadastros) {
+      const linhaCad = cadastros.linhas.find(
+        (l) => Number(l.id_linha) === Number(itemAlvo.id_linha),
       );
-      if (exact) {
-        veiculoId = String(exact.id_veiculo);
-        setIdVeiculo(veiculoId);
+      if (linhaCad) idEmpresa = String(linhaCad.id_empresa);
+      else {
+        const veicCad = cadastros.veiculos.find(
+          (v) => Number(v.id_veiculo) === Number(itemAlvo.id_veiculo),
+        );
+        if (veicCad?.id_empresa != null) idEmpresa = String(veicCad.id_empresa);
       }
     }
 
-    if (!frota && !veiculoId) {
-      toast.error('Informe o veículo (número da frota).');
+    const formInicio = toDateTimeLocal(itemAlvo.hor_ini_jor) ?? '';
+    const formFim = toDateTimeLocal(itemAlvo.hor_fim_jor) ?? '';
+    const formChegada = toDateTimeLocal(itemAlvo.chegada_ponto) ?? '';
+
+    setSelectedItemId(itemAlvo.id_item);
+    setEditItemId(itemAlvo.id_item);
+    setIdEmpresaForm(idEmpresa);
+    setIdLinhaForm(
+      itemAlvo.id_linha != null ? String(itemAlvo.id_linha) : '',
+    );
+    setIdVeiculoForm(
+      itemAlvo.id_veiculo != null ? String(itemAlvo.id_veiculo) : '',
+    );
+    setIdMotorista(
+      itemAlvo.id_motorista != null ? String(itemAlvo.id_motorista) : '',
+    );
+    setHorIni(formInicio);
+    setHorFim(formFim);
+    setChegada(formChegada);
+    setFrotaContextoMotorista(
+      String(itemAlvo.numero_frota ?? itemAlvo.id_veiculo ?? ''),
+    );
+    setEmpresaContextoMotorista(String(itemAlvo.empresa ?? ''));
+    setLinhaContextoMotorista(
+      String(
+        itemAlvo.codigo_linha ?? itemAlvo.linha ?? itemAlvo.id_linha ?? '',
+      ),
+    );
+    setMotoristaDialogMode('editar');
+    setMotoristaFormKey((k) => k + 1);
+    setMotoristaDialog(true);
+  };
+
+  const onSalvarMotorista = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!mapa || busy) return;
+
+    if (!idEmpresaForm.trim()) {
+      toast.error('Selecione a empresa.');
       return;
     }
-
-    const erroFaixa = validarFrotaEmpresaMapa(frota || frotaNorm, mapa.empresa);
-    if (frota && erroFaixa) {
-      toast.error(erroFaixa);
+    if (!idLinhaForm.trim()) {
+      toast.error('Selecione a linha.');
       return;
     }
-
-    if (
-      frota &&
-      mapa.itens.some((i) => String(i.numero_frota ?? '').toUpperCase() === frota)
-    ) {
-      toast.error('Este carro já está alocado neste MAPA.');
-      return;
-    }
-
-    if (
-      veiculoId &&
-      mapa.itens.some((i) => String(i.id_veiculo) === veiculoId)
-    ) {
-      toast.error('Este carro já está alocado neste MAPA.');
-      return;
-    }
-
-    if (!veiculoId) {
-      toast.error(
-        'Veículo não encontrado. Selecione na lista ou use “Cadastrar novo veículo”.',
-      );
+    if (!idVeiculoForm.trim()) {
+      toast.error('Selecione o veículo.');
       return;
     }
     if (!idMotorista.trim()) {
@@ -330,23 +300,37 @@ export function MapaDetalheScreen() {
       return;
     }
     if (!horIni.trim() || !horFim.trim() || !chegada.trim()) {
-      toast.error('Preencha início, fim de jornada e chegada ao ponto.');
+      toast.error('Preencha chegada ao ponto, início e fim de jornada.');
+      return;
+    }
+
+    const payload = {
+      id_linha: Number(idLinhaForm),
+      id_veiculo: Number(idVeiculoForm),
+      id_motorista: Number(idMotorista),
+      hor_ini_jor: fromDateTimeLocal(horIni),
+      hor_fim_jor: fromDateTimeLocal(horFim),
+      chegada_ponto: fromDateTimeLocal(chegada),
+    };
+
+    if (motoristaDialogMode === 'editar' && editItemId == null) {
+      toast.error('Item inválido para edição.');
       return;
     }
 
     setBusy(true);
     try {
-      const data = await createItem(mapa.id_registro, {
-        id_veiculo: Number(veiculoId),
-        id_motorista: Number(idMotorista),
-        hor_ini_jor: fromDateTimeLocal(horIni),
-        hor_fim_jor: fromDateTimeLocal(horFim),
-        chegada_ponto: fromDateTimeLocal(chegada),
-      });
-      toast.success('Carro incluído.');
-      setItemDialog(false);
+      if (motoristaDialogMode === 'novo') {
+        const res = await createItem(mapa.id_registro, payload);
+        toast.success('Motorista vinculado.');
+        setSelectedItemId(res.item.id_item);
+      } else {
+        await updateItem(editItemId!, payload);
+        toast.success('Vínculo atualizado.');
+        setSelectedItemId(editItemId);
+      }
+      closeMotoristaDialog();
       await carregar();
-      setSelectedItemId(data.item.id_item);
     } catch (err) {
       toast.error(
         err instanceof ApiRequestError ? err.message : 'Falha de comunicação com a API.',
@@ -459,6 +443,8 @@ export function MapaDetalheScreen() {
     );
   }
 
+  const isEditar = motoristaDialogMode === 'editar';
+
   return (
     <AppShell className="bg-[#B9C8D4]">
       <div className="page flex min-h-dvh flex-col bg-[#B9C8D4] text-slate-900">
@@ -486,10 +472,7 @@ export function MapaDetalheScreen() {
                 Nº {formatCodMap(mapa.cod_map)}
               </p>
               <p className="text-sm text-muted-foreground">
-                {toDateInput(mapa.data)} · {mapa.empresa}
-              </p>
-              <p className="text-sm">
-                {mapa.linha} · {mapa.turno}
+                {toDateInput(mapa.data)} · {mapa.turno}
               </p>
               <p className="text-xs text-muted-foreground">
                 Desp.: {mapa.despachante} · {formatHora(mapa.inicio_jornada_des)}–
@@ -503,15 +486,16 @@ export function MapaDetalheScreen() {
               <h2 className="text-[13px] font-bold uppercase tracking-wide text-muted-foreground">
                 Carros
               </h2>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <Button
                   type="button"
                   size="icon"
                   className="h-10 w-10 rounded-full"
-                  aria-label="Novo carro"
-                  onClick={openItemDialog}
+                  aria-label="Incluir vínculo"
+                  disabled={false}
+                  onClick={openMotoristaNovo}
                 >
-                  <Plus className="h-5 w-5" />
+                  <UserPlus className="h-5 w-5" />
                 </Button>
                 <Button
                   type="button"
@@ -532,20 +516,26 @@ export function MapaDetalheScreen() {
                 <TableHeader>
                   <TableRow className="bg-secondary/60 hover:bg-secondary/60">
                     <TableHead className="text-[11px] leading-tight">Carro</TableHead>
+                    <TableHead className="text-[11px] leading-tight">Empresa</TableHead>
+                    <TableHead className="text-[11px] leading-tight">Linha</TableHead>
                     <TableHead className="text-[11px] leading-tight">Matrícula</TableHead>
                     <TableHead className="text-[11px] leading-tight">Início</TableHead>
                     <TableHead className="text-[11px] leading-tight">Chegada</TableHead>
+                    <TableHead className="w-10 p-0" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {mapa.itens.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="py-6 text-muted-foreground">
-                        Nenhum carro. Toque em + para incluir.
+                      <TableCell colSpan={7} className="py-6 text-muted-foreground">
+                        Nenhum veículo neste MAPA. Use + para incluir.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    mapa.itens.map((item, i) => (
+                    mapa.itens.map((item, i) => {
+                      const temVinculo =
+                        item.id_motorista != null && Number(item.id_motorista) > 0;
+                      return (
                       <TableRow
                         key={item.id_item}
                         className={`cursor-pointer ${
@@ -557,16 +547,43 @@ export function MapaDetalheScreen() {
                         }`}
                         onClick={() => setSelectedItemId(item.id_item)}
                       >
+                        <TableCell className="text-xs font-medium">
+                          {item.numero_frota
+                            ? String(item.numero_frota)
+                            : String(item.id_veiculo)}
+                        </TableCell>
                         <TableCell className="text-xs">
-                          {item.numero_frota ?? item.id_veiculo}
+                          {item.empresa ?? '—'}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {item.codigo_linha != null
+                            ? String(item.codigo_linha)
+                            : item.linha ?? '—'}
                         </TableCell>
                         <TableCell className="text-xs">
                           {item.matricula_motorista ?? '—'}
                         </TableCell>
                         <TableCell className="text-xs">{formatHora(item.hor_ini_jor)}</TableCell>
                         <TableCell className="text-xs">{formatHora(item.chegada_ponto)}</TableCell>
+                        <TableCell className="p-1 text-right">
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-9 w-9"
+                            aria-label="Editar vínculo"
+                            disabled={!temVinculo}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openMotoristaEditar(item.id_item);
+                            }}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
-                    ))
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
@@ -663,91 +680,166 @@ export function MapaDetalheScreen() {
           </Button>
         </div>
 
-        <Dialog open={itemDialog} onOpenChange={setItemDialog}>
+        <Dialog
+          open={motoristaDialog}
+          onOpenChange={(open) => {
+            if (open) setMotoristaDialog(true);
+            else closeMotoristaDialog();
+          }}
+        >
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Novo carro</DialogTitle>
+              <DialogTitle>
+                {isEditar ? 'Editar vínculo' : 'Vincular motorista'}
+              </DialogTitle>
             </DialogHeader>
-            <form className="field-stack" onSubmit={(e) => void onSalvarItem(e)}>
-              <div className="flex w-full flex-col gap-1.5">
-                <Label className="text-[15px] font-semibold">Veículo *</Label>
-                <Input
-                  name="frota"
-                  placeholder={
-                    faixaFrotaEmpresa(mapa?.empresa)?.exemplo ?? 'Ex.: C30000'
-                  }
-                  value={frotaDigitada}
-                  onChange={(e) => {
-                    const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
-                    setFrotaDigitada(v);
-                    const exact = veiculosFiltrados.find(
-                      (x) => String(x.numero_frota).toUpperCase() === v.trim(),
-                    );
-                    setIdVeiculo(exact ? String(exact.id_veiculo) : '');
-                  }}
-                  className="h-12 rounded-lg border-slate-400 bg-white text-base uppercase"
-                  autoComplete="off"
-                  maxLength={6}
-                />
-                {frotaNorm && erroFaixaFrota ? (
-                  <p className="text-[13px] text-destructive">{erroFaixaFrota}</p>
-                ) : null}
-                {frotaNorm && frotaJaNoMapa ? (
-                  <p className="text-[13px] text-destructive">
-                    Este carro já está alocado neste MAPA.
+            <form
+              key={motoristaFormKey}
+              className="field-stack"
+              onSubmit={(e) => void onSalvarMotorista(e)}
+            >
+              {isEditar ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Empresa:{' '}
+                    <span className="font-semibold text-slate-900">
+                      {empresaContextoMotorista || '—'}
+                    </span>
                   </p>
-                ) : null}
-                {veiculosSugestoes.length > 0 && (
-                  <div className="max-h-36 overflow-y-auto rounded-lg border border-slate-300 bg-white">
-                    {veiculosSugestoes.map((v) => (
-                      <button
-                        key={v.id_veiculo}
-                        type="button"
-                        className={
-                          String(v.id_veiculo) === idVeiculo
-                            ? 'flex w-full px-3 py-2 text-left text-base bg-secondary'
-                            : 'flex w-full px-3 py-2 text-left text-base hover:bg-secondary/60'
-                        }
-                        onClick={() => {
-                          setIdVeiculo(String(v.id_veiculo));
-                          setFrotaDigitada(String(v.numero_frota));
-                        }}
-                      >
-                        {v.numero_frota}
-                      </button>
-                    ))}
+                  <p className="text-sm text-muted-foreground">
+                    Linha:{' '}
+                    <span className="font-semibold text-slate-900">
+                      {linhaContextoMotorista || '—'}
+                    </span>
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Veículo:{' '}
+                    <span className="font-semibold text-slate-900">
+                      {frotaContextoMotorista || '—'}
+                    </span>
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="flex w-full flex-col gap-1.5">
+                    <Label className="text-[15px] font-semibold">Empresa *</Label>
+                    <Select
+                      modal={false}
+                      value={idEmpresaForm ?? ''}
+                      onValueChange={(v) => {
+                        setIdEmpresaForm(v);
+                        setIdLinhaForm('');
+                        setIdVeiculoForm('');
+                        setIdMotorista('');
+                        limparHorariosMotorista();
+                      }}
+                    >
+                      <SelectTrigger className="h-12 bg-white text-base">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent position="popper" className="z-[400]">
+                        {empresas.length === 0 ? (
+                          <SelectItem value="__empty_empresa" disabled>
+                            Nenhuma empresa cadastrada
+                          </SelectItem>
+                        ) : (
+                          empresas.map((e) => (
+                            <SelectItem key={e.id_empresa} value={String(e.id_empresa)}>
+                              {e.descricao}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
                   </div>
-                )}
-                {podeCadastrarFrota && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-auto whitespace-normal py-2 text-left text-sm"
-                    disabled={busy || idEmpresaMapa == null}
-                    onClick={() => void onCadastrarVeiculoInline()}
-                  >
-                    Cadastrar novo veículo {frotaNorm} para {mapa?.empresa}?
-                  </Button>
-                )}
-              </div>
+
+                  <div className="flex w-full flex-col gap-1.5">
+                    <Label className="text-[15px] font-semibold">Linha *</Label>
+                    <Select
+                      modal={false}
+                      value={idLinhaForm ?? ''}
+                      onValueChange={(v) => {
+                        setIdLinhaForm(v);
+                        setIdVeiculoForm('');
+                        setIdMotorista('');
+                        limparHorariosMotorista();
+                      }}
+                      disabled={!idEmpresaForm}
+                    >
+                      <SelectTrigger className="h-12 bg-white text-base">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent position="popper" className="z-[400]">
+                        {linhasFiltradas.length === 0 ? (
+                          <SelectItem value="__empty_linha" disabled>
+                            Nenhuma linha para esta empresa
+                          </SelectItem>
+                        ) : (
+                          linhasFiltradas.map((l) => (
+                            <SelectItem key={l.id_linha} value={String(l.id_linha)}>
+                              {l.codigo_linha != null
+                                ? `${l.codigo_linha} — ${l.descricao}`
+                                : l.descricao}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex w-full flex-col gap-1.5">
+                    <Label className="text-[15px] font-semibold">Veículo *</Label>
+                    <Select
+                      modal={false}
+                      value={idVeiculoForm ?? ''}
+                      onValueChange={(v) => {
+                        setIdVeiculoForm(v);
+                        setIdMotorista('');
+                        limparHorariosMotorista();
+                      }}
+                      disabled={!idEmpresaForm}
+                    >
+                      <SelectTrigger className="h-12 bg-white text-base">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent position="popper" className="z-[400]">
+                        {veiculosFiltrados.length === 0 ? (
+                          <SelectItem value="__empty_veiculo" disabled>
+                            Nenhum veículo disponível
+                          </SelectItem>
+                        ) : (
+                          veiculosFiltrados.map((v) => (
+                            <SelectItem key={v.id_veiculo} value={String(v.id_veiculo)}>
+                              {v.numero_frota}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
 
               <div className="flex w-full flex-col gap-1.5">
                 <Label className="text-[15px] font-semibold">Motorista *</Label>
                 <Select
                   modal={false}
-                  value={idMotorista}
-                  onValueChange={setIdMotorista}
+                  value={idMotorista ?? ''}
+                  onValueChange={(v) => {
+                    setIdMotorista(v);
+                    if (motoristaDialogMode === 'novo') limparHorariosMotorista();
+                  }}
                 >
                   <SelectTrigger className="h-12 bg-white text-base">
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent position="popper" className="z-[400]">
-                    {(cadastros?.motoristas ?? []).length === 0 ? (
+                    {motoristas.length === 0 ? (
                       <SelectItem value="__empty_motorista" disabled>
                         Nenhum motorista cadastrado
                       </SelectItem>
                     ) : (
-                      (cadastros?.motoristas ?? []).map((m) => (
+                      motoristas.map((m) => (
                         <SelectItem key={m.id_motorista} value={String(m.id_motorista)}>
                           {m.matricula} — {m.nome}
                         </SelectItem>
@@ -758,25 +850,25 @@ export function MapaDetalheScreen() {
               </div>
 
               <FormField
+                label="Chegada ao ponto"
+                requiredMark
+                type="datetime-local"
+                value={chegada ?? ''}
+                onChange={(e) => setChegada(e.target.value)}
+              />
+              <FormField
                 label="Início jornada"
                 requiredMark
                 type="datetime-local"
-                value={horIni}
+                value={horIni ?? ''}
                 onChange={(e) => setHorIni(e.target.value)}
               />
               <FormField
                 label="Fim jornada"
                 requiredMark
                 type="datetime-local"
-                value={horFim}
+                value={horFim ?? ''}
                 onChange={(e) => setHorFim(e.target.value)}
-              />
-              <FormField
-                label="Chegada ao ponto"
-                requiredMark
-                type="datetime-local"
-                value={chegada}
-                onChange={(e) => setChegada(e.target.value)}
               />
 
               <DialogFooter className="grid grid-cols-2 gap-3">
@@ -787,7 +879,7 @@ export function MapaDetalheScreen() {
                   type="button"
                   variant="outline"
                   disabled={busy}
-                  onClick={() => setItemDialog(false)}
+                  onClick={closeMotoristaDialog}
                 >
                   Cancelar
                 </Button>

@@ -4,8 +4,8 @@ export interface MapaListaItem {
   id_registro: number;
   cod_map: number;
   data: string;
-  empresa: string;
-  linha: string;
+  empresa?: string | null;
+  linha?: string | null;
   turno: string;
   despachante?: string;
 }
@@ -25,11 +25,16 @@ export interface MapaViagem {
 export interface MapaItem {
   id_item: number;
   idmap: number;
+  id_linha: number;
   id_veiculo: number;
-  id_motorista: number;
+  id_motorista: number | null;
   hor_ini_jor: string | null;
   hor_fim_jor: string | null;
   chegada_ponto: string | null;
+  id_empresa?: number;
+  empresa?: string;
+  linha?: string;
+  codigo_linha?: number | string;
   numero_frota?: string;
   placa?: string;
   motorista?: string;
@@ -41,28 +46,24 @@ export interface MapaCompleto {
   id_registro: number;
   cod_map: number;
   id_usuario: number;
-  id_linha: number;
+  /** Legado — novos MAPAs podem vir null. */
+  id_linha?: number | null;
   id_turno: number;
   data: string;
   inicio_jornada_des: string;
   fim_jornada_des: string | null;
   observacao?: string | null;
-  linha: string;
-  /** PK tb_empresa da linha do MAPA — fonte para filtrar frota no detalhe. */
+  linha?: string | null;
   id_empresa?: number | null;
-  empresa: string;
+  empresa?: string | null;
   turno: string;
   despachante: string;
   matricula_despachante?: string;
   itens: MapaItem[];
 }
 
+/** Cabeçalho: empresa/linha/veículo deixam de ser obrigatórios (fase API). */
 export interface MapaHeaderPayload {
-  id_linha?: number | null;
-  codigo_linha?: string | number | null;
-  id_empresa?: number | null;
-  /** Rótulo do combo (Futuro/Redentor/Barra) — backend resolve/cria em tb_empresa. */
-  empresa?: string | null;
   id_turno: number;
   codigo_turno?: number | null;
   turno?: string | null;
@@ -70,11 +71,16 @@ export interface MapaHeaderPayload {
   inicio_jornada_des: string;
   fim_jornada_des?: string | null;
   observacao?: string | null;
-  /** Frota (ex.: C30000) — obrigatória no create/update do cabeçalho. */
-  numero_frota: string;
+  /** @deprecated — mover para item; UI ainda envia até fase de tela. */
+  id_linha?: number | null;
+  codigo_linha?: string | number | null;
+  id_empresa?: number | null;
+  empresa?: string | null;
+  numero_frota?: string;
 }
 
 export interface ItemMapPayload {
+  id_linha?: number;
   id_veiculo?: number;
   id_motorista?: number;
   /** Número do carro em tb_veiculo.numero_frota */

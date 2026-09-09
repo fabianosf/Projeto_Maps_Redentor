@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import contextmanager
 from datetime import date
 from typing import Any, Optional
 
@@ -58,7 +59,8 @@ CREATE TABLE tb_veiculo (
     codigo_veiculo INTEGER NOT NULL UNIQUE,
     numero_frota TEXT NOT NULL UNIQUE,
     placa TEXT NOT NULL,
-    ativo INTEGER NOT NULL DEFAULT 1
+    ativo INTEGER NOT NULL DEFAULT 1,
+    id_empresa INTEGER
 );
 
 CREATE TABLE tb_motorista (
@@ -79,6 +81,22 @@ CREATE TABLE tb_usuario (
     id_local INTEGER,
     ativo INTEGER NOT NULL DEFAULT 1,
     trocar_senha INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE tb_designacao_operacional (
+    id_designacao INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_usuario INTEGER NOT NULL,
+    id_empresa INTEGER NOT NULL,
+    id_turno INTEGER NOT NULL,
+    id_linha INTEGER,
+    id_veiculo INTEGER,
+    data TEXT NOT NULL,
+    inicio TEXT NOT NULL,
+    fim TEXT,
+    status TEXT NOT NULL DEFAULT 'ATIVA',
+    criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    encerrado_em TEXT,
+    id_admin INTEGER
 );
 
 CREATE TABLE tb_configuracao (
@@ -118,6 +136,41 @@ CREATE TABLE tb_chegada_saida (
     linha_destino INTEGER,
     destino INTEGER
 );
+
+CREATE TABLE tb_map (
+    id_registro INTEGER PRIMARY KEY AUTOINCREMENT,
+    cod_map INTEGER NOT NULL UNIQUE,
+    id_usuario INTEGER NOT NULL,
+    id_linha INTEGER,
+    id_turno INTEGER NOT NULL,
+    data TEXT NOT NULL,
+    inicio_jornada_des TEXT NOT NULL,
+    fim_jornada_des TEXT,
+    observacao TEXT
+);
+
+CREATE TABLE tb_item_map (
+    id_item INTEGER PRIMARY KEY AUTOINCREMENT,
+    idmap INTEGER NOT NULL,
+    id_linha INTEGER NOT NULL,
+    id_veiculo INTEGER NOT NULL,
+    id_motorista INTEGER,
+    hor_ini_jor TEXT,
+    hor_fim_jor TEXT,
+    chegada_ponto TEXT,
+    UNIQUE (idmap, id_veiculo)
+);
+
+CREATE TABLE tb_viagem (
+    id_viagem INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_item_registro INTEGER NOT NULL,
+    horario_chegada TEXT NOT NULL,
+    placa TEXT,
+    horario_saida TEXT NOT NULL,
+    intervalo INTEGER,
+    qtd_pas_ida INTEGER,
+    qtd_pas_volta INTEGER
+);
 """
 
 
@@ -131,6 +184,7 @@ class SqliteTestDal:
             "CURDATE", 0, lambda: date.today().isoformat()
         )
         self._conn.executescript(SCHEMA_SQL)
+        self._in_transaction = False
         self._seed()
 
     def test_connection(self) -> bool:
@@ -162,11 +216,28 @@ class SqliteTestDal:
     def _mutate(self, sql: str, values: Optional[tuple]) -> bool:
         try:
             self._conn.execute(sql, values or ())
-            self._conn.commit()
+            if not self._in_transaction:
+                self._conn.commit()
             return True
         except sqlite3.Error:
-            self._conn.rollback()
+            if not self._in_transaction:
+                self._conn.rollback()
             return False
+
+    @contextmanager
+    def transaction(self):
+        if self._in_transaction:
+            yield
+            return
+        self._in_transaction = True
+        try:
+            yield
+            self._conn.commit()
+        except Exception:
+            self._conn.rollback()
+            raise
+        finally:
+            self._in_transaction = False
 
     def _seed(self) -> None:
         c = self._conn
@@ -181,6 +252,10 @@ class SqliteTestDal:
         c.execute(
             "INSERT INTO tb_empresa (id_empresa, codigo_empresa, descricao, ativo) "
             "VALUES (1, 1, 'Futuro', 1)"
+        )
+        c.execute(
+            "INSERT INTO tb_empresa (id_empresa, codigo_empresa, descricao, ativo) "
+            "VALUES (2, 2, 'Redentor', 1)"
         )
         c.execute(
             "INSERT INTO tb_turno (id_turno, codigo_turno, descricao, ativo) "
@@ -207,8 +282,20 @@ class SqliteTestDal:
             """
         )
         c.execute(
-            "INSERT INTO tb_veiculo (id_veiculo, codigo_veiculo, numero_frota, placa, ativo) "
-            "VALUES (1, 1, '100', 'ABC1D23', 1)"
+            """
+            INSERT INTO tb_linha (
+                id_linha, codigo_linha, id_empresa, descricao,
+                id_local_origem, id_local_destino, ativo
+            ) VALUES (3, 401, 2, 'Linha Redentor', 1, 2, 1)
+            """
+        )
+        c.execute(
+            "INSERT INTO tb_veiculo (id_veiculo, codigo_veiculo, numero_frota, placa, ativo, id_empresa) "
+            "VALUES (1, 1, '100', 'ABC1D23', 1, 1)"
+        )
+        c.execute(
+            "INSERT INTO tb_veiculo (id_veiculo, codigo_veiculo, numero_frota, placa, ativo, id_empresa) "
+            "VALUES (2, 2, 'C40000', 'XYZ9Z99', 1, 2)"
         )
         c.execute(
             "INSERT INTO tb_motorista (id_motorista, matricula, nome, ativo) "
@@ -271,8 +358,10 @@ def build_test_app(dal: Any):
     from flask import Flask
 
     from BackEnd.auth_routes import auth_bp, init_auth_routes
+    from BackEnd.designacao_routes import designacoes_bp
     from BackEnd.entrada_saida_routes import entrada_saida_bp
     from BackEnd.guia_routes import guia_bp
+    from BackEnd.mapa_routes import mapa_bp
     from BackEnd.security import init_security
     from BackEnd.users_routes import users_bp
 
@@ -285,4 +374,6 @@ def build_test_app(dal: Any):
     app.register_blueprint(users_bp)
     app.register_blueprint(guia_bp)
     app.register_blueprint(entrada_saida_bp)
+    app.register_blueprint(designacoes_bp)
+    app.register_blueprint(mapa_bp)
     return app

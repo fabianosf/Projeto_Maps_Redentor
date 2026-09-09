@@ -126,7 +126,7 @@ export function MapasListScreen() {
                         {formatCodMap(row.cod_map)}
                       </td>
                       <td className="max-w-[140px] truncate px-2 py-3.5 text-center font-semibold">
-                        {row.linha}
+                        {row.linha ?? '—'}
                       </td>
                       <td className="px-2 py-3.5 text-center font-semibold">{row.turno}</td>
                     </tr>

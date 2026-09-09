@@ -281,15 +281,20 @@ def listar_mapas(dal) -> list[dict[str, Any]]:
     df = dal.read(
         """
         SELECT m.id_registro, m.cod_map, m.data,
-               e.descricao AS empresa,
-               LPAD(CAST(l.codigo_linha AS CHAR), 3, '0') AS linha,
+               COALESCE(e_hdr.descricao, e_item.descricao) AS empresa,
+               CAST(COALESCE(l_hdr.codigo_linha, l_item.codigo_linha) AS CHAR) AS linha,
                t.descricao AS turno,
                u.nome AS despachante
         FROM tb_map m
-        INNER JOIN tb_linha l ON l.id_linha = m.id_linha
-        INNER JOIN tb_empresa e ON e.id_empresa = l.id_empresa
         INNER JOIN tb_turno t ON t.id_turno = m.id_turno
         INNER JOIN tb_usuario u ON u.id_usuario = m.id_usuario
+        LEFT JOIN tb_linha l_hdr ON l_hdr.id_linha = m.id_linha
+        LEFT JOIN tb_empresa e_hdr ON e_hdr.id_empresa = l_hdr.id_empresa
+        LEFT JOIN tb_item_map i0 ON i0.id_item = (
+            SELECT MIN(i2.id_item) FROM tb_item_map i2 WHERE i2.idmap = m.id_registro
+        )
+        LEFT JOIN tb_linha l_item ON l_item.id_linha = i0.id_linha
+        LEFT JOIN tb_empresa e_item ON e_item.id_empresa = l_item.id_empresa
         ORDER BY m.data DESC, m.cod_map DESC
         """
     )
@@ -342,7 +347,7 @@ def obter_indicadores(
         FROM tb_map m
         INNER JOIN tb_item_map i ON i.idmap = m.id_registro
         INNER JOIN tb_viagem v ON v.id_item_registro = i.id_item
-        WHERE m.id_linha = ?
+        WHERE i.id_linha = ?
           AND m.data = CURDATE()
         """,
         (id_linha_int,),
@@ -364,13 +369,18 @@ def obter_indicadores(
 def obter_mapa_completo(dal, id_registro: int) -> dict[str, Any] | MapaError:
     cab = dal.read(
         """
-        SELECT m.*, l.id_empresa, l.descricao AS linha, e.descricao AS empresa, t.descricao AS turno,
-               u.nome AS despachante, u.matricula AS matricula_despachante
+        SELECT m.*,
+               l_hdr.id_empresa AS id_empresa,
+               l_hdr.descricao AS linha,
+               e_hdr.descricao AS empresa,
+               t.descricao AS turno,
+               u.nome AS despachante,
+               u.matricula AS matricula_despachante
         FROM tb_map m
-        INNER JOIN tb_linha l ON l.id_linha = m.id_linha
-        INNER JOIN tb_empresa e ON e.id_empresa = l.id_empresa
         INNER JOIN tb_turno t ON t.id_turno = m.id_turno
         INNER JOIN tb_usuario u ON u.id_usuario = m.id_usuario
+        LEFT JOIN tb_linha l_hdr ON l_hdr.id_linha = m.id_linha
+        LEFT JOIN tb_empresa e_hdr ON e_hdr.id_empresa = l_hdr.id_empresa
         WHERE m.id_registro = ?
         """,
         (id_registro,),
@@ -380,9 +390,18 @@ def obter_mapa_completo(dal, id_registro: int) -> dict[str, Any] | MapaError:
 
     itens_df = dal.read(
         """
-        SELECT i.*, v.numero_frota, v.placa, mot.nome AS motorista, mot.matricula AS matricula_motorista
+        SELECT i.*,
+               v.numero_frota, v.placa, v.id_empresa AS id_empresa_veiculo,
+               l.id_linha AS id_linha,
+               l.codigo_linha,
+               l.descricao AS linha,
+               e.id_empresa AS id_empresa,
+               e.descricao AS empresa,
+               mot.nome AS motorista, mot.matricula AS matricula_motorista
         FROM tb_item_map i
         INNER JOIN tb_veiculo v ON v.id_veiculo = i.id_veiculo
+        INNER JOIN tb_linha l ON l.id_linha = i.id_linha
+        INNER JOIN tb_empresa e ON e.id_empresa = l.id_empresa
         LEFT JOIN tb_motorista mot ON mot.id_motorista = i.id_motorista
         WHERE i.idmap = ?
         ORDER BY i.id_item
@@ -408,7 +427,6 @@ def obter_mapa_completo(dal, id_registro: int) -> dict[str, Any] | MapaError:
         itens.append(item)
 
     resultado = cab.iloc[0].to_dict()
-    # Garante data em YYYY-MM-DD (evita Timestamp/serialização ambígua no front)
     data_ok = _coerce_mapa_date(resultado.get("data"))
     if data_ok is not None:
         resultado["data"] = data_ok.strftime("%Y-%m-%d")
@@ -455,20 +473,10 @@ def _resolver_ou_criar_veiculo_mapa(
 
 
 def criar_mapa(dal, id_usuario: int, payload: dict[str, Any]) -> dict[str, Any] | MapaError:
-    id_linha = _resolver_id_linha(dal, payload)
-    if isinstance(id_linha, MapaError):
-        return id_linha
+    """Cria cabeçalho do MAPA (turno/data/plantão). Sem empresa/linha/veículo/item."""
     id_turno = _resolver_id_turno(dal, payload)
     if isinstance(id_turno, MapaError):
         return id_turno
-
-    id_empresa_ok = _resolver_id_empresa(dal, payload)
-    if id_empresa_ok is None:
-        return MapaError("Empresa é obrigatória.", "validacao")
-
-    id_veiculo = _resolver_ou_criar_veiculo_mapa(dal, payload, int(id_empresa_ok))
-    if isinstance(id_veiculo, MapaError):
-        return id_veiculo
 
     data_parsed = _parse_date(payload.get("data"))
     if isinstance(data_parsed, MapaError):
@@ -486,7 +494,6 @@ def criar_mapa(dal, id_usuario: int, payload: dict[str, Any]) -> dict[str, Any] 
     observacao = payload.get("observacao")
     fim_sql = fim.strftime("%Y-%m-%d %H:%M:%S") if fim is not None else None
 
-    # Retry sob concorrência: UNIQUE(cod_map). Map + 1º item na mesma transação.
     last_error: MapaError | None = None
     for _ in range(COD_MAP_INSERT_RETRIES):
         cod_map = _gerar_proximo_cod_map(dal)
@@ -494,48 +501,37 @@ def criar_mapa(dal, id_usuario: int, payload: dict[str, Any]) -> dict[str, Any] 
             return cod_map
 
         try:
-            with dal.transaction():
-                ok_map = dal.create(
-                    """
-                    INSERT INTO tb_map (
-                        cod_map, id_usuario, id_linha, id_turno, data,
-                        inicio_jornada_des, fim_jornada_des, observacao
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        cod_map,
-                        id_usuario,
-                        int(id_linha),
-                        int(id_turno),
-                        data_parsed.isoformat(),
-                        inicio.strftime("%Y-%m-%d %H:%M:%S"),
-                        fim_sql,
-                        observacao,
-                    ),
+            ok_map = dal.create(
+                """
+                INSERT INTO tb_map (
+                    cod_map, id_usuario, id_linha, id_turno, data,
+                    inicio_jornada_des, fim_jornada_des, observacao
+                ) VALUES (?, ?, NULL, ?, ?, ?, ?, ?)
+                """,
+                (
+                    cod_map,
+                    id_usuario,
+                    int(id_turno),
+                    data_parsed.isoformat(),
+                    inicio.strftime("%Y-%m-%d %H:%M:%S"),
+                    fim_sql,
+                    observacao,
+                ),
+            )
+            if not ok_map:
+                last_error = MapaError(
+                    "Conflito ao gerar cod_map. Tente novamente.",
+                    "cod_map_conflito",
                 )
-                if not ok_map:
-                    raise RuntimeError("falha_insert_map")
+                continue
 
-                row = dal.read(
-                    "SELECT id_registro FROM tb_map WHERE cod_map = ?",
-                    (cod_map,),
-                )
-                if row.empty:
-                    raise RuntimeError("falha_ler_map")
-                id_registro = int(row.iloc[0]["id_registro"])
-
-                ok_item = dal.create(
-                    """
-                    INSERT INTO tb_item_map (
-                        idmap, id_veiculo, id_motorista,
-                        hor_ini_jor, hor_fim_jor, chegada_ponto
-                    ) VALUES (?, ?, NULL, NULL, NULL, NULL)
-                    """,
-                    (id_registro, int(id_veiculo)),
-                )
-                if not ok_item:
-                    raise RuntimeError("falha_insert_item")
-
+            row = dal.read(
+                "SELECT id_registro FROM tb_map WHERE cod_map = ?",
+                (cod_map,),
+            )
+            if row.empty:
+                return MapaError("Falha ao criar MAPA.", "persistencia")
+            id_registro = int(row.iloc[0]["id_registro"])
             completo = obter_mapa_completo(dal, id_registro)
             assert not isinstance(completo, MapaError)
             return completo
@@ -549,53 +545,6 @@ def criar_mapa(dal, id_usuario: int, payload: dict[str, Any]) -> dict[str, Any] 
     return last_error or MapaError("Falha ao criar MAPA.", "persistencia")
 
 
-def _sincronizar_primeiro_item_veiculo(
-    dal, id_registro: int, id_veiculo: int
-) -> MapaError | None:
-    itens = dal.read(
-        """
-        SELECT id_item FROM tb_item_map
-        WHERE idmap = ?
-        ORDER BY id_item
-        LIMIT 1
-        """,
-        (id_registro,),
-    )
-    if itens.empty:
-        ok = dal.create(
-            """
-            INSERT INTO tb_item_map (
-                idmap, id_veiculo, id_motorista,
-                hor_ini_jor, hor_fim_jor, chegada_ponto
-            ) VALUES (?, ?, NULL, NULL, NULL, NULL)
-            """,
-            (id_registro, int(id_veiculo)),
-        )
-        if not ok:
-            return MapaError("Falha ao incluir veículo no MAPA.", "persistencia")
-        return None
-
-    id_item = int(itens.iloc[0]["id_item"])
-    conflito = _erro_veiculo_ja_alocado(
-        dal, id_registro, int(id_veiculo), id_item_excluir=id_item
-    )
-    if conflito is not None:
-        return conflito
-
-    ok = dal.update(
-        "UPDATE tb_item_map SET id_veiculo = ? WHERE id_item = ?",
-        (int(id_veiculo), id_item),
-    )
-    if not ok:
-        conflito = _erro_veiculo_ja_alocado(
-            dal, id_registro, int(id_veiculo), id_item_excluir=id_item
-        )
-        if conflito is not None:
-            return conflito
-        return MapaError("Falha ao atualizar veículo do MAPA.", "persistencia")
-    return None
-
-
 def atualizar_mapa(
     dal, id_registro: int, payload: dict[str, Any]
 ) -> dict[str, Any] | MapaError:
@@ -606,20 +555,9 @@ def atualizar_mapa(
     if existe.empty:
         return MapaError("MAPA não encontrado.", "nao_encontrado")
 
-    id_linha = _resolver_id_linha(dal, payload)
-    if isinstance(id_linha, MapaError):
-        return id_linha
     id_turno = _resolver_id_turno(dal, payload)
     if isinstance(id_turno, MapaError):
         return id_turno
-
-    id_empresa_ok = _resolver_id_empresa(dal, payload)
-    if id_empresa_ok is None:
-        return MapaError("Empresa é obrigatória.", "validacao")
-
-    id_veiculo = _resolver_ou_criar_veiculo_mapa(dal, payload, int(id_empresa_ok))
-    if isinstance(id_veiculo, MapaError):
-        return id_veiculo
 
     data_parsed = _parse_date(payload.get("data"))
     if isinstance(data_parsed, MapaError):
@@ -636,15 +574,15 @@ def atualizar_mapa(
 
     observacao = payload.get("observacao")
     fim_sql = fim.strftime("%Y-%m-%d %H:%M:%S") if fim is not None else None
+
     ok = dal.update(
         """
         UPDATE tb_map
-        SET id_linha = ?, id_turno = ?, data = ?,
+        SET id_turno = ?, data = ?,
             inicio_jornada_des = ?, fim_jornada_des = ?, observacao = ?
         WHERE id_registro = ?
         """,
         (
-            int(id_linha),
             int(id_turno),
             data_parsed.isoformat(),
             inicio.strftime("%Y-%m-%d %H:%M:%S"),
@@ -656,12 +594,9 @@ def atualizar_mapa(
     if not ok:
         return MapaError("Falha ao atualizar MAPA.", "persistencia")
 
-    sync_err = _sincronizar_primeiro_item_veiculo(dal, id_registro, int(id_veiculo))
-    if sync_err is not None:
-        return sync_err
-
     completo = obter_mapa_completo(dal, id_registro)
-    assert not isinstance(completo, MapaError)
+    if isinstance(completo, MapaError):
+        return completo
     return completo
 
 
@@ -799,6 +734,80 @@ def _erro_veiculo_ja_alocado(
     return None
 
 
+
+def _resolver_id_linha_item(dal, payload: dict[str, Any]) -> int | MapaError:
+    """Linha obrigatória no item (PK ativa)."""
+    raw = payload.get("id_linha")
+    if raw is None or str(raw).strip() == "":
+        return MapaError("Linha é obrigatória.", "validacao")
+    try:
+        id_linha = int(raw)
+    except (TypeError, ValueError):
+        return MapaError("Linha inválida.", "validacao")
+    df = dal.read(
+        "SELECT id_linha, id_empresa FROM tb_linha WHERE id_linha = ? AND ativo = 1",
+        (id_linha,),
+    )
+    if df.empty:
+        return MapaError("Linha não encontrada.", "nao_encontrado")
+    return int(df.iloc[0]["id_linha"])
+
+
+def _validar_veiculo_empresa_da_linha(
+    dal, id_veiculo: int, id_linha: int
+) -> MapaError | None:
+    lin = dal.read(
+        "SELECT id_empresa FROM tb_linha WHERE id_linha = ?",
+        (int(id_linha),),
+    )
+    if lin.empty:
+        return MapaError("Linha não encontrada.", "nao_encontrado")
+    id_emp_linha = int(lin.iloc[0]["id_empresa"])
+
+    vei = dal.read(
+        "SELECT id_veiculo, id_empresa, ativo FROM tb_veiculo WHERE id_veiculo = ?",
+        (int(id_veiculo),),
+    )
+    if vei.empty:
+        return MapaError("Veículo não encontrado.", "validacao")
+    if int(vei.iloc[0].get("ativo") or 0) not in (1, True):
+        return MapaError("Veículo está inativo.", "validacao")
+    id_emp_vei = vei.iloc[0]["id_empresa"]
+    if id_emp_vei is not None and str(id_emp_vei) not in ("", "None", "nan"):
+        if int(id_emp_vei) != id_emp_linha:
+            return MapaError(
+                "Veículo não pertence à empresa da linha.",
+                "validacao",
+            )
+    return None
+
+
+def _exigir_horarios_item(
+    payload: dict[str, Any], data_mapa: Any
+) -> tuple[Any, Any, Any] | MapaError:
+    """Início, fim e chegada obrigatórios no item."""
+    for key, label in (
+        ("hor_ini_jor", "Início de jornada"),
+        ("hor_fim_jor", "Fim de jornada"),
+        ("chegada_ponto", "Chegada no ponto"),
+    ):
+        raw = payload.get(key)
+        if raw is None or str(raw).strip() == "":
+            return MapaError(f"{label} é obrigatório.", "validacao")
+    horarios = _normalizar_horarios_item(payload, data_mapa)
+    if isinstance(horarios, MapaError):
+        return horarios
+    hor_ini, hor_fim, chegada = horarios
+    if hor_ini is None or hor_fim is None or chegada is None:
+        return MapaError(
+            "Início, fim de jornada e chegada ao ponto são obrigatórios.",
+            "validacao",
+        )
+    if hor_ini >= hor_fim:
+        return MapaError("Início da jornada deve ser anterior ao fim.", "validacao")
+    return hor_ini, hor_fim, chegada
+
+
 def criar_item_map(
     dal, id_registro: int, payload: dict[str, Any]
 ) -> dict[str, Any] | MapaError:
@@ -809,9 +818,18 @@ def criar_item_map(
     if mapa.empty:
         return MapaError("MAPA não encontrado.", "nao_encontrado")
 
+    id_linha = _resolver_id_linha_item(dal, payload)
+    if isinstance(id_linha, MapaError):
+        return id_linha
+
     id_veiculo = _resolver_id_veiculo(dal, payload)
     if isinstance(id_veiculo, MapaError):
         return id_veiculo
+
+    err_emp = _validar_veiculo_empresa_da_linha(dal, int(id_veiculo), int(id_linha))
+    if err_emp is not None:
+        return err_emp
+
     id_motorista = _resolver_id_motorista(dal, payload)
     if isinstance(id_motorista, MapaError):
         return id_motorista
@@ -821,7 +839,7 @@ def criar_item_map(
         return conflito
 
     data_mapa = mapa.iloc[0]["data"]
-    horarios = _normalizar_horarios_item(payload, data_mapa)
+    horarios = _exigir_horarios_item(payload, data_mapa)
     if isinstance(horarios, MapaError):
         return horarios
     hor_ini, hor_fim, chegada = horarios
@@ -829,11 +847,13 @@ def criar_item_map(
     ok = dal.create(
         """
         INSERT INTO tb_item_map (
-            idmap, id_veiculo, id_motorista, hor_ini_jor, hor_fim_jor, chegada_ponto
-        ) VALUES (?, ?, ?, ?, ?, ?)
+            idmap, id_linha, id_veiculo, id_motorista,
+            hor_ini_jor, hor_fim_jor, chegada_ponto
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (
             id_registro,
+            int(id_linha),
             int(id_veiculo),
             int(id_motorista),
             hor_ini,
@@ -842,7 +862,6 @@ def criar_item_map(
         ),
     )
     if not ok:
-        # Corrida / UNIQUE: DAL engole IntegrityError e devolve False
         conflito = _erro_veiculo_ja_alocado(dal, id_registro, int(id_veiculo))
         if conflito is not None:
             return conflito
@@ -858,7 +877,82 @@ def criar_item_map(
     id_item = int(row.iloc[0]["id_item"])
     item = _item_map_detalhe(dal, id_item)
     if item is None:
-        return MapaError("Falha ao ler item criado.", "persistencia")
+        return MapaError("Item não encontrado.", "nao_encontrado")
+    return item
+
+
+def atualizar_item_map(
+    dal, id_item: int, payload: dict[str, Any]
+) -> dict[str, Any] | MapaError:
+    atual = dal.read(
+        """
+        SELECT i.id_item, i.idmap, m.data AS data_mapa
+        FROM tb_item_map i
+        INNER JOIN tb_map m ON m.id_registro = i.idmap
+        WHERE i.id_item = ?
+        """,
+        (id_item,),
+    )
+    if atual.empty:
+        return MapaError("Item não encontrado.", "nao_encontrado")
+
+    idmap = int(atual.iloc[0]["idmap"])
+
+    id_linha = _resolver_id_linha_item(dal, payload)
+    if isinstance(id_linha, MapaError):
+        return id_linha
+
+    id_veiculo = _resolver_id_veiculo(dal, payload)
+    if isinstance(id_veiculo, MapaError):
+        return id_veiculo
+
+    err_emp = _validar_veiculo_empresa_da_linha(dal, int(id_veiculo), int(id_linha))
+    if err_emp is not None:
+        return err_emp
+
+    id_motorista = _resolver_id_motorista(dal, payload)
+    if isinstance(id_motorista, MapaError):
+        return id_motorista
+
+    conflito = _erro_veiculo_ja_alocado(
+        dal, idmap, int(id_veiculo), id_item_excluir=id_item
+    )
+    if conflito is not None:
+        return conflito
+
+    horarios = _exigir_horarios_item(payload, atual.iloc[0]["data_mapa"])
+    if isinstance(horarios, MapaError):
+        return horarios
+    hor_ini, hor_fim, chegada = horarios
+
+    ok = dal.update(
+        """
+        UPDATE tb_item_map
+        SET id_linha = ?, id_veiculo = ?, id_motorista = ?,
+            hor_ini_jor = ?, hor_fim_jor = ?, chegada_ponto = ?
+        WHERE id_item = ?
+        """,
+        (
+            int(id_linha),
+            int(id_veiculo),
+            int(id_motorista),
+            hor_ini,
+            hor_fim,
+            chegada,
+            id_item,
+        ),
+    )
+    if not ok:
+        conflito = _erro_veiculo_ja_alocado(
+            dal, idmap, int(id_veiculo), id_item_excluir=id_item
+        )
+        if conflito is not None:
+            return conflito
+        return MapaError("Falha ao atualizar item.", "persistencia")
+
+    item = _item_map_detalhe(dal, id_item)
+    if item is None:
+        return MapaError("Item não encontrado.", "nao_encontrado")
     return item
 
 
@@ -889,7 +983,6 @@ def _parse_horario_item(
     if not isinstance(parsed, MapaError):
         return parsed
 
-    # Somente hora: HH:MM ou HH:MM:SS → combina com data de tb_map.data
     m = re.fullmatch(r"(\d{2}):(\d{2})(?::(\d{2}))?", texto)
     if m:
         base = _coerce_mapa_date(data_mapa)
@@ -926,10 +1019,15 @@ def _normalizar_horarios_item(
 def _item_map_detalhe(dal, id_item: int) -> dict[str, Any] | None:
     item_df = dal.read(
         """
-        SELECT i.*, v.numero_frota, v.placa, mot.nome AS motorista,
-               mot.matricula AS matricula_motorista
+        SELECT i.*,
+               v.numero_frota, v.placa,
+               l.codigo_linha, l.descricao AS linha,
+               e.id_empresa, e.descricao AS empresa,
+               mot.nome AS motorista, mot.matricula AS matricula_motorista
         FROM tb_item_map i
         INNER JOIN tb_veiculo v ON v.id_veiculo = i.id_veiculo
+        INNER JOIN tb_linha l ON l.id_linha = i.id_linha
+        INNER JOIN tb_empresa e ON e.id_empresa = l.id_empresa
         LEFT JOIN tb_motorista mot ON mot.id_motorista = i.id_motorista
         WHERE i.id_item = ?
         """,
@@ -939,70 +1037,6 @@ def _item_map_detalhe(dal, id_item: int) -> dict[str, Any] | None:
         return None
     item = item_df.iloc[0].to_dict()
     item["viagens"] = []
-    return item
-
-
-def atualizar_item_map(
-    dal, id_item: int, payload: dict[str, Any]
-) -> dict[str, Any] | MapaError:
-    atual = dal.read(
-        """
-        SELECT i.id_item, i.idmap, m.data AS data_mapa
-        FROM tb_item_map i
-        INNER JOIN tb_map m ON m.id_registro = i.idmap
-        WHERE i.id_item = ?
-        """,
-        (id_item,),
-    )
-    if atual.empty:
-        return MapaError("Item não encontrado.", "nao_encontrado")
-
-    idmap = int(atual.iloc[0]["idmap"])
-    id_veiculo = _resolver_id_veiculo(dal, payload)
-    if isinstance(id_veiculo, MapaError):
-        return id_veiculo
-    id_motorista = _resolver_id_motorista(dal, payload)
-    if isinstance(id_motorista, MapaError):
-        return id_motorista
-
-    conflito = _erro_veiculo_ja_alocado(
-        dal, idmap, int(id_veiculo), id_item_excluir=id_item
-    )
-    if conflito is not None:
-        return conflito
-
-    horarios = _normalizar_horarios_item(payload, atual.iloc[0]["data_mapa"])
-    if isinstance(horarios, MapaError):
-        return horarios
-    hor_ini, hor_fim, chegada = horarios
-
-    ok = dal.update(
-        """
-        UPDATE tb_item_map
-        SET id_veiculo = ?, id_motorista = ?, hor_ini_jor = ?,
-            hor_fim_jor = ?, chegada_ponto = ?
-        WHERE id_item = ?
-        """,
-        (
-            int(id_veiculo),
-            int(id_motorista),
-            hor_ini,
-            hor_fim,
-            chegada,
-            id_item,
-        ),
-    )
-    if not ok:
-        conflito = _erro_veiculo_ja_alocado(
-            dal, idmap, int(id_veiculo), id_item_excluir=id_item
-        )
-        if conflito is not None:
-            return conflito
-        return MapaError("Falha ao atualizar item.", "persistencia")
-
-    item = _item_map_detalhe(dal, id_item)
-    if item is None:
-        return MapaError("Item não encontrado.", "nao_encontrado")
     return item
 
 

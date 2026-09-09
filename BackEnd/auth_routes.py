@@ -155,11 +155,20 @@ def me():
         response = jsonify({"ok": True, "autenticado": False, "usuario": None})
         return _apply_cookie(response, build_session_clear_cookie()), 200
 
+    from .designacao_service import obter_ativa
+
+    designacao_ativa = None
+    try:
+        designacao_ativa = obter_ativa(g.dal, usuario.id_usuario)
+    except Exception:
+        designacao_ativa = None
+
     return jsonify(
         {
             "ok": True,
             "autenticado": True,
             "usuario": usuario_publico(usuario),
+            "designacao_ativa": designacao_ativa,
             "sessao": {
                 "matricula": session.matricula,
                 "codigo_perfil": session.codigo_perfil,

@@ -208,7 +208,7 @@ CREATE TABLE IF NOT EXISTS tb_map (
     id_registro         INT          NOT NULL AUTO_INCREMENT,
     cod_map             INT          NOT NULL COMMENT 'Código de negócio (1..99999)',
     id_usuario          INT          NOT NULL COMMENT 'FK tb_usuario.id_usuario (quem lançou)',
-    id_linha            INT          NOT NULL COMMENT 'FK tb_linha.id_linha',
+    id_linha            INT          NULL     COMMENT 'Legado — preferir tb_item_map.id_linha',
     id_turno            INT          NOT NULL COMMENT 'FK tb_turno.id_turno',
     data                DATE         NOT NULL,
     inicio_jornada_des  DATETIME     NOT NULL,
@@ -232,18 +232,22 @@ CREATE TABLE IF NOT EXISTS tb_map (
 CREATE TABLE IF NOT EXISTS tb_item_map (
     id_item        INT      NOT NULL AUTO_INCREMENT,
     idmap          INT      NOT NULL COMMENT 'FK tb_map.id_registro',
+    id_linha       INT      NOT NULL COMMENT 'FK tb_linha — empresa via linha',
     id_veiculo     INT      NOT NULL COMMENT 'FK tb_veiculo.id_veiculo',
-    id_motorista   INT      DEFAULT NULL COMMENT 'FK tb_motorista — opcional no cadastro inicial',
+    id_motorista   INT      DEFAULT NULL COMMENT 'FK tb_motorista',
     hor_ini_jor    DATETIME DEFAULT NULL,
     hor_fim_jor    DATETIME DEFAULT NULL,
     chegada_ponto  DATETIME DEFAULT NULL,
     PRIMARY KEY (id_item),
     UNIQUE KEY uq_tb_item_map_idmap_veiculo (idmap, id_veiculo),
     KEY idx_tb_item_map_idmap (idmap),
+    KEY idx_tb_item_map_id_linha (id_linha),
     KEY idx_tb_item_map_veiculo (id_veiculo),
     KEY idx_tb_item_map_motorista (id_motorista),
     CONSTRAINT fk_tb_item_map_map
         FOREIGN KEY (idmap) REFERENCES tb_map (id_registro),
+    CONSTRAINT fk_tb_item_map_linha
+        FOREIGN KEY (id_linha) REFERENCES tb_linha (id_linha),
     CONSTRAINT fk_tb_item_map_veiculo
         FOREIGN KEY (id_veiculo) REFERENCES tb_veiculo (id_veiculo),
     CONSTRAINT fk_tb_item_map_motorista
@@ -263,4 +267,41 @@ CREATE TABLE IF NOT EXISTS tb_viagem (
     KEY idx_tb_viagem_id_item_registro (id_item_registro),
     CONSTRAINT fk_tb_viagem_item_map
         FOREIGN KEY (id_item_registro) REFERENCES tb_item_map (id_item)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- DesignacaoOperacional: histórico volátil (empresa/turno obrigatórios; linha/veículo opcionais).
+-- Uma ATIVA por usuário: garantida na aplicação/transação (MariaDB sem índice parcial).
+CREATE TABLE IF NOT EXISTS tb_designacao_operacional (
+    id_designacao   INT          NOT NULL AUTO_INCREMENT,
+    id_usuario      INT          NOT NULL COMMENT 'FK tb_usuario — despachante',
+    id_empresa      INT          NOT NULL COMMENT 'FK tb_empresa',
+    id_turno        INT          NOT NULL COMMENT 'FK tb_turno',
+    id_linha        INT          NULL     COMMENT 'FK tb_linha — opcional',
+    id_veiculo      INT          NULL     COMMENT 'FK tb_veiculo — opcional',
+    data            DATE         NOT NULL COMMENT 'Data da designação',
+    inicio          DATETIME     NOT NULL COMMENT 'Início da vigência',
+    fim             DATETIME     NULL     COMMENT 'Fim da vigência — NULL se ATIVA',
+    status          VARCHAR(20)  NOT NULL DEFAULT 'ATIVA' COMMENT 'ATIVA | ENCERRADA',
+    criado_em       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    encerrado_em    DATETIME     NULL,
+    id_admin        INT          NULL     COMMENT 'FK tb_usuario — quem criou/transferiu',
+    PRIMARY KEY (id_designacao),
+    KEY idx_desig_id_usuario (id_usuario),
+    KEY idx_desig_usuario_status (id_usuario, status),
+    KEY idx_desig_empresa (id_empresa),
+    KEY idx_desig_turno (id_turno),
+    KEY idx_desig_linha (id_linha),
+    KEY idx_desig_veiculo (id_veiculo),
+    CONSTRAINT fk_desig_usuario
+        FOREIGN KEY (id_usuario) REFERENCES tb_usuario (id_usuario),
+    CONSTRAINT fk_desig_empresa
+        FOREIGN KEY (id_empresa) REFERENCES tb_empresa (id_empresa),
+    CONSTRAINT fk_desig_turno
+        FOREIGN KEY (id_turno) REFERENCES tb_turno (id_turno),
+    CONSTRAINT fk_desig_linha
+        FOREIGN KEY (id_linha) REFERENCES tb_linha (id_linha),
+    CONSTRAINT fk_desig_veiculo
+        FOREIGN KEY (id_veiculo) REFERENCES tb_veiculo (id_veiculo),
+    CONSTRAINT fk_desig_admin
+        FOREIGN KEY (id_admin) REFERENCES tb_usuario (id_usuario)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
