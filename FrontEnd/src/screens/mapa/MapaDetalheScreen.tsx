@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Pencil, Plus, Trash2, UserPlus } from 'lucide-react';
+import { Pencil, Plus, Trash2, UserPlus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { getCadastros } from '@/api/cadastros';
 import { ApiRequestError } from '@/api/client';
@@ -22,11 +22,13 @@ import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -45,7 +47,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useScreenBg } from '@/hooks/useScreenBg';
-import type { CadastrosMestres } from '@/types/cadastro';
+import type { CadastrosMestres, VeiculoCadastro } from '@/types/cadastro';
 import type { MapaCompleto } from '@/types/mapa';
 import {
   combineDateAndTime,
@@ -82,6 +84,10 @@ export function MapaDetalheScreen() {
   const [idEmpresaForm, setIdEmpresaForm] = useState('');
   const [idLinhaForm, setIdLinhaForm] = useState('');
   const [idVeiculoForm, setIdVeiculoForm] = useState('');
+  /** Texto digitado no autocomplete de frota (não é o valor persistido). */
+  const [frotaQuery, setFrotaQuery] = useState('');
+  const [frotaListaAberta, setFrotaListaAberta] = useState(false);
+  const frotaBoxRef = useRef<HTMLDivElement | null>(null);
   const [idMotorista, setIdMotorista] = useState('');
   const [editItemId, setEditItemId] = useState<number | null>(null);
   const [horIni, setHorIni] = useState('');
@@ -151,8 +157,14 @@ export function MapaDetalheScreen() {
     );
   }, [cadastros, idEmpresaForm]);
 
-  const veiculosFiltrados = useMemo(() => {
-    if (!idEmpresaForm) return [];
+  /** Veículos da empresa da linha, excluindo os já no MAPA (exceto o item em edição). */
+  const veiculosDaLinha = useMemo(() => {
+    if (!idLinhaForm) return [] as VeiculoCadastro[];
+    const linha = (cadastros?.linhas ?? []).find(
+      (l) => String(l.id_linha) === idLinhaForm,
+    );
+    if (!linha) return [] as VeiculoCadastro[];
+    const idEmpLinha = String(linha.id_empresa);
     const idsNoMapa = new Set(
       (mapa?.itens ?? [])
         .filter((i) => editItemId == null || i.id_item !== editItemId)
@@ -160,21 +172,64 @@ export function MapaDetalheScreen() {
     );
     return (cadastros?.veiculos ?? []).filter((v) => {
       if (!isAtivo(v.ativo)) return false;
-      if (String(v.id_empresa ?? '') !== idEmpresaForm) return false;
+      if (String(v.id_empresa ?? '') !== idEmpLinha) return false;
       if (idsNoMapa.has(Number(v.id_veiculo))) return false;
       return true;
     });
-  }, [cadastros, idEmpresaForm, mapa, editItemId]);
+  }, [cadastros, idLinhaForm, mapa, editItemId]);
 
-  const motoristas = useMemo(
-    () => cadastros?.motoristas ?? [],
-    [cadastros],
-  );
+  const veiculosSugestoes = useMemo(() => {
+    const q = frotaQuery.trim().toUpperCase();
+    if (!q) return veiculosDaLinha.slice(0, 12);
+    return veiculosDaLinha
+      .filter((v) => String(v.numero_frota ?? '').toUpperCase().includes(q))
+      .slice(0, 12);
+  }, [veiculosDaLinha, frotaQuery]);
+
+  const motoristas = useMemo(() => {
+    if (!idVeiculoForm) return [];
+    return (cadastros?.motoristas ?? []).filter((m) => isAtivo(m.ativo));
+  }, [cadastros, idVeiculoForm]);
+
+  useEffect(() => {
+    if (!frotaListaAberta) return;
+    const onDoc = (ev: MouseEvent) => {
+      const el = frotaBoxRef.current;
+      if (el && !el.contains(ev.target as Node)) setFrotaListaAberta(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [frotaListaAberta]);
+
+  const limparHorariosMotorista = () => {
+    setHorIni('');
+    setHorFim('');
+    setChegada('');
+  };
+
+  const limparMotoristaEHorarios = () => {
+    setIdMotorista('');
+    limparHorariosMotorista();
+  };
+
+  const limparVeiculoEAbaixo = () => {
+    setIdVeiculoForm('');
+    setFrotaQuery('');
+    setFrotaListaAberta(false);
+    limparMotoristaEHorarios();
+  };
+
+  const limparLinhaEAbaixo = () => {
+    setIdLinhaForm('');
+    limparVeiculoEAbaixo();
+  };
 
   const resetMotoristaForm = () => {
     setIdEmpresaForm('');
     setIdLinhaForm('');
     setIdVeiculoForm('');
+    setFrotaQuery('');
+    setFrotaListaAberta(false);
     setIdMotorista('');
     setEditItemId(null);
     setHorIni('');
@@ -189,28 +244,45 @@ export function MapaDetalheScreen() {
   const closeMotoristaDialog = () => {
     setMotoristaDialog(false);
     resetMotoristaForm();
+    setMotoristaFormKey((k) => k + 1);
   };
 
-  const limparHorariosMotorista = () => {
-    setHorIni('');
-    setHorFim('');
-    setChegada('');
+  const selecionarVeiculo = (v: VeiculoCadastro) => {
+    setIdVeiculoForm(String(v.id_veiculo));
+    setFrotaQuery(String(v.numero_frota ?? ''));
+    setFrotaListaAberta(false);
+    limparMotoristaEHorarios();
+  };
+
+  const onFrotaQueryChange = (texto: string) => {
+    setFrotaQuery(texto);
+    setIdVeiculoForm('');
+    setFrotaListaAberta(true);
+    limparMotoristaEHorarios();
+  };
+
+  const resolverFrotaDigitada = (): VeiculoCadastro | null => {
+    const q = frotaQuery.trim().toUpperCase();
+    if (!q) return null;
+    if (idVeiculoForm) {
+      const byId = veiculosDaLinha.find(
+        (v) => String(v.id_veiculo) === idVeiculoForm,
+      );
+      if (byId) return byId;
+    }
+    return (
+      veiculosDaLinha.find(
+        (v) => String(v.numero_frota ?? '').toUpperCase() === q,
+      ) ?? null
+    );
   };
 
   const openMotoristaNovo = () => {
+    // Independente de itemSelecionado / carros no MAPA.
     if (!mapa) return;
-    setIdEmpresaForm('');
-    setIdLinhaForm('');
-    setIdVeiculoForm('');
-    setIdMotorista('');
-    setEditItemId(null);
-    setHorIni('');
-    setHorFim('');
-    setChegada('');
-    setFrotaContextoMotorista('');
-    setEmpresaContextoMotorista('');
-    setLinhaContextoMotorista('');
+    resetMotoristaForm();
     setMotoristaDialogMode('novo');
+    setEditItemId(null);
     setMotoristaFormKey((k) => k + 1);
     setMotoristaDialog(true);
   };
@@ -259,6 +331,8 @@ export function MapaDetalheScreen() {
     setIdVeiculoForm(
       itemAlvo.id_veiculo != null ? String(itemAlvo.id_veiculo) : '',
     );
+    setFrotaQuery(String(itemAlvo.numero_frota ?? itemAlvo.id_veiculo ?? ''));
+    setFrotaListaAberta(false);
     setIdMotorista(
       itemAlvo.id_motorista != null ? String(itemAlvo.id_motorista) : '',
     );
@@ -291,10 +365,26 @@ export function MapaDetalheScreen() {
       toast.error('Selecione a linha.');
       return;
     }
-    if (!idVeiculoForm.trim()) {
-      toast.error('Selecione o veículo.');
+
+    let idVeiculoNum = Number(idVeiculoForm);
+    if (motoristaDialogMode === 'novo') {
+      const veiculo = resolverFrotaDigitada();
+      if (!veiculo) {
+        toast.error(
+          frotaQuery.trim()
+            ? 'Veículo inexistente ou já vinculado neste MAPA.'
+            : 'Selecione o veículo.',
+        );
+        return;
+      }
+      idVeiculoNum = Number(veiculo.id_veiculo);
+      setIdVeiculoForm(String(veiculo.id_veiculo));
+      setFrotaQuery(String(veiculo.numero_frota ?? ''));
+    } else if (!Number.isFinite(idVeiculoNum) || idVeiculoNum <= 0) {
+      toast.error('Veículo inválido.');
       return;
     }
+
     if (!idMotorista.trim()) {
       toast.error('Selecione o motorista.');
       return;
@@ -303,10 +393,24 @@ export function MapaDetalheScreen() {
       toast.error('Preencha chegada ao ponto, início e fim de jornada.');
       return;
     }
+    if (!(chegada <= horIni && horIni < horFim)) {
+      toast.error('Horários inválidos: chegada ≤ início < fim.');
+      return;
+    }
+
+    const duplicado = (mapa.itens ?? []).some(
+      (i) =>
+        Number(i.id_veiculo) === idVeiculoNum &&
+        (editItemId == null || i.id_item !== editItemId),
+    );
+    if (duplicado) {
+      toast.error('Este veículo já está vinculado neste MAPA.');
+      return;
+    }
 
     const payload = {
       id_linha: Number(idLinhaForm),
-      id_veiculo: Number(idVeiculoForm),
+      id_veiculo: idVeiculoNum,
       id_motorista: Number(idMotorista),
       hor_ini_jor: fromDateTimeLocal(horIni),
       hor_fim_jor: fromDateTimeLocal(horFim),
@@ -491,9 +595,8 @@ export function MapaDetalheScreen() {
                   type="button"
                   size="icon"
                   className="h-10 w-10 rounded-full"
-                  aria-label="Incluir vínculo"
-                  disabled={false}
-                  onClick={openMotoristaNovo}
+                  aria-label="Vincular motorista"
+                  onClick={() => openMotoristaNovo()}
                 >
                   <UserPlus className="h-5 w-5" />
                 </Button>
@@ -683,21 +786,30 @@ export function MapaDetalheScreen() {
         <Dialog
           open={motoristaDialog}
           onOpenChange={(open) => {
-            if (open) setMotoristaDialog(true);
-            else closeMotoristaDialog();
+            if (!open) closeMotoristaDialog();
           }}
         >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>
-                {isEditar ? 'Editar vínculo' : 'Vincular motorista'}
+          <DialogContent className="max-w-[340px] border-slate-400/50 bg-card p-5">
+            <DialogClose
+              type="button"
+              className="absolute right-3 top-3 z-10 rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+              aria-label="Fechar"
+            >
+              <X className="h-5 w-5" strokeWidth={2.25} />
+            </DialogClose>
+            <DialogHeader className="shrink-0 pr-6">
+              <DialogTitle className="text-center text-[16px] uppercase tracking-wide text-slate-900">
+                {motoristaDialogMode === 'editar'
+                  ? 'Editar vínculo'
+                  : 'Vincular motorista'}
               </DialogTitle>
             </DialogHeader>
             <form
               key={motoristaFormKey}
-              className="field-stack"
+              className="mt-3 flex min-h-0 flex-1 flex-col"
               onSubmit={(e) => void onSalvarMotorista(e)}
             >
+              <div className="field-stack min-h-0 flex-1 gap-3 overflow-y-auto overscroll-contain pe-0.5">
               {isEditar ? (
                 <>
                   <p className="text-sm text-muted-foreground">
@@ -721,20 +833,18 @@ export function MapaDetalheScreen() {
                 </>
               ) : (
                 <>
-                  <div className="flex w-full flex-col gap-1.5">
-                    <Label className="text-[15px] font-semibold">Empresa *</Label>
+                  <div className="flex w-full flex-col gap-1">
+                    <Label className="text-[13px] font-semibold uppercase text-slate-900">
+                      Empresa <span className="req">*</span>
+                    </Label>
                     <Select
-                      modal={false}
                       value={idEmpresaForm ?? ''}
                       onValueChange={(v) => {
-                        setIdEmpresaForm(v);
-                        setIdLinhaForm('');
-                        setIdVeiculoForm('');
-                        setIdMotorista('');
-                        limparHorariosMotorista();
+                        setIdEmpresaForm(v ?? '');
+                        limparLinhaEAbaixo();
                       }}
                     >
-                      <SelectTrigger className="h-12 bg-white text-base">
+                      <SelectTrigger className="h-10 bg-white text-base">
                         <SelectValue placeholder="Selecione" />
                       </SelectTrigger>
                       <SelectContent position="popper" className="z-[400]">
@@ -753,20 +863,19 @@ export function MapaDetalheScreen() {
                     </Select>
                   </div>
 
-                  <div className="flex w-full flex-col gap-1.5">
-                    <Label className="text-[15px] font-semibold">Linha *</Label>
+                  <div className="flex w-full flex-col gap-1">
+                    <Label className="text-[13px] font-semibold uppercase text-slate-900">
+                      Linha <span className="req">*</span>
+                    </Label>
                     <Select
-                      modal={false}
                       value={idLinhaForm ?? ''}
                       onValueChange={(v) => {
-                        setIdLinhaForm(v);
-                        setIdVeiculoForm('');
-                        setIdMotorista('');
-                        limparHorariosMotorista();
+                        setIdLinhaForm(v ?? '');
+                        limparVeiculoEAbaixo();
                       }}
                       disabled={!idEmpresaForm}
                     >
-                      <SelectTrigger className="h-12 bg-white text-base">
+                      <SelectTrigger className="h-10 bg-white text-base">
                         <SelectValue placeholder="Selecione" />
                       </SelectTrigger>
                       <SelectContent position="popper" className="z-[400]">
@@ -787,56 +896,97 @@ export function MapaDetalheScreen() {
                     </Select>
                   </div>
 
-                  <div className="flex w-full flex-col gap-1.5">
-                    <Label className="text-[15px] font-semibold">Veículo *</Label>
-                    <Select
-                      modal={false}
-                      value={idVeiculoForm ?? ''}
-                      onValueChange={(v) => {
-                        setIdVeiculoForm(v);
-                        setIdMotorista('');
-                        limparHorariosMotorista();
-                      }}
-                      disabled={!idEmpresaForm}
-                    >
-                      <SelectTrigger className="h-12 bg-white text-base">
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                      <SelectContent position="popper" className="z-[400]">
-                        {veiculosFiltrados.length === 0 ? (
-                          <SelectItem value="__empty_veiculo" disabled>
-                            Nenhum veículo disponível
-                          </SelectItem>
-                        ) : (
-                          veiculosFiltrados.map((v) => (
-                            <SelectItem key={v.id_veiculo} value={String(v.id_veiculo)}>
-                              {v.numero_frota}
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
+                  <div className="flex w-full flex-col gap-1" ref={frotaBoxRef}>
+                    <Label className="text-[13px] font-semibold uppercase text-slate-900">
+                      Veículo <span className="req">*</span>
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        className="h-10 rounded-lg border-slate-400 bg-white text-base text-slate-900"
+                        placeholder={
+                          idLinhaForm
+                            ? 'Digite a frota (ex.: C40000)'
+                            : 'Selecione a linha antes'
+                        }
+                        value={frotaQuery}
+                        disabled={!idLinhaForm}
+                        autoComplete="off"
+                        onChange={(e) => onFrotaQueryChange(e.target.value)}
+                        onFocus={() => {
+                          if (idLinhaForm) setFrotaListaAberta(true);
+                        }}
+                        onBlur={() => {
+                          window.setTimeout(() => {
+                            const match = resolverFrotaDigitada();
+                            if (match) {
+                              setIdVeiculoForm(String(match.id_veiculo));
+                              setFrotaQuery(String(match.numero_frota ?? ''));
+                            } else if (frotaQuery.trim()) {
+                              setIdVeiculoForm('');
+                            }
+                          }, 120);
+                        }}
+                      />
+                      {frotaListaAberta && idLinhaForm ? (
+                        <ul
+                          className="absolute z-[420] mt-1 max-h-36 w-full overflow-auto rounded-lg border border-slate-300 bg-white shadow-lg"
+                          role="listbox"
+                        >
+                          {veiculosSugestoes.length === 0 ? (
+                            <li className="px-3 py-2 text-sm text-muted-foreground">
+                              Nenhum veículo disponível
+                            </li>
+                          ) : (
+                            veiculosSugestoes.map((v) => (
+                              <li key={v.id_veiculo}>
+                                <button
+                                  type="button"
+                                  className="flex w-full px-3 py-2 text-left text-base hover:bg-slate-100"
+                                  onMouseDown={(ev) => {
+                                    ev.preventDefault();
+                                    selecionarVeiculo(v);
+                                  }}
+                                >
+                                  {v.numero_frota}
+                                  {v.placa ? (
+                                    <span className="ml-2 text-sm text-muted-foreground">
+                                      {v.placa}
+                                    </span>
+                                  ) : null}
+                                </button>
+                              </li>
+                            ))
+                          )}
+                        </ul>
+                      ) : null}
+                    </div>
                   </div>
                 </>
               )}
 
-              <div className="flex w-full flex-col gap-1.5">
-                <Label className="text-[15px] font-semibold">Motorista *</Label>
+              <div className="flex w-full flex-col gap-1">
+                <Label className="text-[13px] font-semibold uppercase text-slate-900">
+                  Motorista <span className="req">*</span>
+                </Label>
                 <Select
-                  modal={false}
                   value={idMotorista ?? ''}
                   onValueChange={(v) => {
-                    setIdMotorista(v);
-                    if (motoristaDialogMode === 'novo') limparHorariosMotorista();
+                    setIdMotorista(v ?? '');
+                    limparHorariosMotorista();
                   }}
+                  disabled={!idVeiculoForm}
                 >
-                  <SelectTrigger className="h-12 bg-white text-base">
-                    <SelectValue placeholder="Selecione" />
+                  <SelectTrigger className="h-10 bg-white text-base">
+                    <SelectValue
+                      placeholder={
+                        idVeiculoForm ? 'Selecione' : 'Selecione o veículo antes'
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent position="popper" className="z-[400]">
                     {motoristas.length === 0 ? (
                       <SelectItem value="__empty_motorista" disabled>
-                        Nenhum motorista cadastrado
+                        Nenhum motorista disponível
                       </SelectItem>
                     ) : (
                       motoristas.map((m) => (
@@ -855,6 +1005,8 @@ export function MapaDetalheScreen() {
                 type="datetime-local"
                 value={chegada ?? ''}
                 onChange={(e) => setChegada(e.target.value)}
+                disabled={!idMotorista}
+                className="h-10"
               />
               <FormField
                 label="Início jornada"
@@ -862,6 +1014,8 @@ export function MapaDetalheScreen() {
                 type="datetime-local"
                 value={horIni ?? ''}
                 onChange={(e) => setHorIni(e.target.value)}
+                disabled={!idMotorista}
+                className="h-10"
               />
               <FormField
                 label="Fim jornada"
@@ -869,9 +1023,12 @@ export function MapaDetalheScreen() {
                 type="datetime-local"
                 value={horFim ?? ''}
                 onChange={(e) => setHorFim(e.target.value)}
+                disabled={!idMotorista}
+                className="h-10"
               />
+              </div>
 
-              <DialogFooter className="grid grid-cols-2 gap-3">
+              <DialogFooter className="mt-4 shrink-0 grid grid-cols-2 gap-3">
                 <Button type="submit" disabled={busy}>
                   Confirmar
                 </Button>
