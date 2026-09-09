@@ -158,7 +158,15 @@ CREATE TABLE tb_item_map (
     hor_ini_jor TEXT,
     hor_fim_jor TEXT,
     chegada_ponto TEXT,
-    UNIQUE (idmap, id_veiculo)
+    inicio_real TEXT,
+    fim_real TEXT,
+    status_escala TEXT NOT NULL DEFAULT 'EM_ANDAMENTO',
+    baixa_em TEXT,
+    data_baixa TEXT,
+    hora_baixa TEXT,
+    motivo_baixa TEXT,
+    observacao_baixa TEXT,
+    duracao_trabalhada_minutos INTEGER
 );
 
 CREATE TABLE tb_viagem (
@@ -291,11 +299,16 @@ class SqliteTestDal:
         )
         c.execute(
             "INSERT INTO tb_veiculo (id_veiculo, codigo_veiculo, numero_frota, placa, ativo, id_empresa) "
-            "VALUES (1, 1, '100', 'ABC1D23', 1, 1)"
+            "VALUES (1, 1, 'C30001', 'ABC1D23', 1, 1)"
+        )
+        # Frota só dígitos — usada por testes de Guia / Entrada-Saída
+        c.execute(
+            "INSERT INTO tb_veiculo (id_veiculo, codigo_veiculo, numero_frota, placa, ativo, id_empresa) "
+            "VALUES (3, 3, '100', 'PLA0100', 1, 1)"
         )
         c.execute(
             "INSERT INTO tb_veiculo (id_veiculo, codigo_veiculo, numero_frota, placa, ativo, id_empresa) "
-            "VALUES (2, 2, 'C40000', 'XYZ9Z99', 1, 2)"
+            "VALUES (2, 2, 'C47000', 'XYZ9Z99', 1, 2)"
         )
         c.execute(
             "INSERT INTO tb_motorista (id_motorista, matricula, nome, ativo) "
@@ -358,10 +371,12 @@ def build_test_app(dal: Any):
     from flask import Flask
 
     from BackEnd.auth_routes import auth_bp, init_auth_routes
+    from BackEnd.cadastros_routes import cadastros_bp
     from BackEnd.designacao_routes import designacoes_bp
     from BackEnd.entrada_saida_routes import entrada_saida_bp
     from BackEnd.guia_routes import guia_bp
     from BackEnd.mapa_routes import mapa_bp
+    from BackEnd.motoristas_routes import motoristas_bp
     from BackEnd.security import init_security
     from BackEnd.users_routes import users_bp
 
@@ -372,8 +387,10 @@ def build_test_app(dal: Any):
     init_auth_routes(app, lambda: dal)
     app.register_blueprint(auth_bp)
     app.register_blueprint(users_bp)
+    app.register_blueprint(cadastros_bp)
     app.register_blueprint(guia_bp)
     app.register_blueprint(entrada_saida_bp)
     app.register_blueprint(designacoes_bp)
     app.register_blueprint(mapa_bp)
+    app.register_blueprint(motoristas_bp)
     return app

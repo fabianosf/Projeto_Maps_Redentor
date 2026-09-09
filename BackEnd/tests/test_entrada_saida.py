@@ -54,7 +54,7 @@ def test_registrar_chegada_evento_c(client, dal):
     rows = dal.read("SELECT evento, carro FROM tb_chegada_saida ORDER BY id_cs DESC LIMIT 1")
     assert not rows.empty
     assert rows.iloc[0]["evento"] == "C"
-    assert int(rows.iloc[0]["carro"]) == 1  # id_veiculo
+    assert int(rows.iloc[0]["carro"]) == 3  # id_veiculo frota 100
 
 
 def test_registrar_saida_evento_s(client, dal):

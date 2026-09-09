@@ -2,6 +2,7 @@ import { useCallback, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BarChart3,
+  Clock3,
   Cog,
   LogOut,
   Map,
@@ -15,7 +16,11 @@ import { useAuth } from '@/context/AuthContext';
 import { useScreenBg } from '@/hooks/useScreenBg';
 import { actionBtn3dBase } from '@/lib/actionBtn3d';
 import { cn } from '@/lib/utils';
-import { canAccessConfiguracao, canAccessMapas } from '@/utils/perfilAccess';
+import {
+  canAccessBancoHoras,
+  canAccessConfiguracao,
+  canAccessMapas,
+} from '@/utils/perfilAccess';
 
 const BG = '#B0C4DE';
 
@@ -40,6 +45,7 @@ export function TelaPrincipalScreen() {
 
   const podeConfiguracao = canAccessConfiguracao(user?.codigo_perfil);
   const podeMapas = canAccessMapas(user?.codigo_perfil);
+  const podeBancoHoras = canAccessBancoHoras(user?.codigo_perfil);
 
   const handleSair = useCallback(() => {
     void logout();
@@ -54,6 +60,16 @@ export function TelaPrincipalScreen() {
       ariaLabel: 'Mapas',
       icon: <MapPinned className="h-5 w-5 shrink-0" strokeWidth={2.25} aria-hidden />,
       onClick: () => navigate('/mapas'),
+    });
+  }
+
+  if (podeBancoHoras) {
+    cards.push({
+      id: 'banco-horas',
+      label: 'Banco de horas',
+      ariaLabel: 'Banco de horas operacional',
+      icon: <Clock3 className="h-5 w-5 shrink-0" strokeWidth={2.25} aria-hidden />,
+      onClick: () => navigate('/banco-horas'),
     });
   }
 

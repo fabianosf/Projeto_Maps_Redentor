@@ -12,7 +12,10 @@ export interface MapaListaItem {
 
 export interface MapaViagem {
   id_viagem: number;
+  /** FK tb_item_map.id_item — viagens pertencem ao item (escala), não só ao veículo. */
   id_item_registro: number;
+  /** Alias explícito do item (mesmo valor de id_item_registro). */
+  id_mapa_item?: number;
   horario_saida: string;
   horario_chegada: string;
   /** HH:MM — coluna tb_viagem.placa (campo Placa da UI) */
@@ -24,6 +27,8 @@ export interface MapaViagem {
 
 export interface MapaItem {
   id_item: number;
+  /** Alias de id_item para deixá-lo explícito na UI/API. */
+  id_mapa_item?: number;
   idmap: number;
   id_linha: number;
   id_veiculo: number;
@@ -31,6 +36,18 @@ export interface MapaItem {
   hor_ini_jor: string | null;
   hor_fim_jor: string | null;
   chegada_ponto: string | null;
+  /** EM_ANDAMENTO | ENCERRADA */
+  status_escala?: 'EM_ANDAMENTO' | 'ENCERRADA' | string;
+  baixa_em?: string | null;
+  /** Planejado (aliases de hor_ini_jor / hor_fim_jor). */
+  inicio_jornada_planejado?: string | null;
+  fim_jornada_planejado?: string | null;
+  inicio_real?: string | null;
+  fim_real?: string | null;
+  motivo_baixa?: string | null;
+  observacao_baixa?: string | null;
+  duracao_trabalhada_minutos?: number | null;
+  duracao_trabalhada_hhmm?: string | null;
   id_empresa?: number;
   empresa?: string;
   linha?: string;
@@ -41,6 +58,48 @@ export interface MapaItem {
   matricula_motorista?: string;
   viagens: MapaViagem[];
 }
+
+export interface MapaOcupacaoVeiculo {
+  id_veiculo: number;
+  prefixo?: string;
+  numero_frota?: string;
+  id_mapa_item?: number;
+  id_item?: number;
+  id_mapa?: number;
+  idmap?: number;
+  cod_map?: number | null;
+  id_motorista?: number | null;
+  matricula_motorista?: string | null;
+  nome_motorista?: string | null;
+  inicio_real?: string | null;
+  status?: string;
+  status_escala?: string;
+}
+
+export interface MapaOcupacaoMotorista {
+  id_motorista: number;
+  matricula?: string | null;
+  nome?: string | null;
+  id_mapa_item?: number;
+  id_item?: number;
+  id_mapa?: number;
+  idmap?: number;
+  cod_map?: number | null;
+  id_veiculo?: number;
+  prefixo_veiculo?: string;
+  numero_frota?: string;
+  inicio_real?: string | null;
+  status?: string;
+  status_escala?: string;
+}
+
+export type MapaOcupacaoResponse = ApiSuccess<{
+  veiculos_ocupados: MapaOcupacaoVeiculo[];
+  motoristas_ocupados: MapaOcupacaoMotorista[];
+  /** Aliases legados */
+  veiculos?: MapaOcupacaoVeiculo[];
+  motoristas?: MapaOcupacaoMotorista[];
+}>;
 
 export interface MapaCompleto {
   id_registro: number;
@@ -95,6 +154,9 @@ export interface ItemMapPayload {
 export interface ViagemPayload {
   horario_saida: string;
   horario_chegada: string;
+  /** Obrigatório ao criar viagem (POST); vínculo ao item/escala, não à frota. */
+  id_mapa_item?: number;
+  id_item?: number;
   /** HH:MM — coluna tb_viagem.placa */
   placa?: string | null;
   intervalo?: number | null;

@@ -71,6 +71,10 @@ def create_app() -> Flask:
 
     app.register_blueprint(mapa_bp)
 
+    from .motoristas_routes import motoristas_bp
+
+    app.register_blueprint(motoristas_bp)
+
     from .designacao_routes import designacoes_bp
 
     app.register_blueprint(designacoes_bp)

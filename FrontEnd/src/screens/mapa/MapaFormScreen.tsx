@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useRef,
   useState,
   type FormEvent,
 } from 'react';
@@ -36,6 +37,7 @@ import {
   toDateBR,
   todayBR,
 } from '@/utils/mapaFormat';
+import { cancelIdleCallbackSafe, clearTimerSafe } from '@/utils/safeTiming';
 
 const MAPA_BG = '#B9C8D4';
 
@@ -79,6 +81,11 @@ export function MapaFormScreen() {
   const { user } = useAuth();
   useScreenBg(MAPA_BG);
 
+  const mountedRef = useRef(true);
+  const loadAliveRef = useRef(true);
+  const idleIdsRef = useRef<number[]>([]);
+  const timerIdsRef = useRef<number[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [cadastros, setCadastros] = useState<CadastrosMestres | null>(null);
@@ -87,6 +94,34 @@ export function MapaFormScreen() {
   const [inicioHHMM, setInicioHHMM] = useState('');
   const [fimHHMM, setFimHHMM] = useState('');
   const [turno, setTurno] = useState<string>(TURNO_OPCOES[0]);
+
+  const stillMounted = () => mountedRef.current && loadAliveRef.current;
+
+  const limparAgendamentos = () => {
+    for (const id of idleIdsRef.current) {
+      cancelIdleCallbackSafe(id);
+    }
+    idleIdsRef.current = [];
+    for (const id of timerIdsRef.current) {
+      clearTimerSafe(id);
+    }
+    timerIdsRef.current = [];
+  };
+
+  useEffect(() => {
+    mountedRef.current = true;
+    loadAliveRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      loadAliveRef.current = false;
+      limparAgendamentos();
+      try {
+        toast.dismiss();
+      } catch {
+        /* ignore */
+      }
+    };
+  }, []);
 
   const resolveTurnoId = (label: string): number | null => {
     const nome = normalizeTurnoLabel(label);
@@ -101,54 +136,72 @@ export function MapaFormScreen() {
     return codigo > 0 ? codigo : null;
   };
 
-  const goLista = () => navigate('/mapas', { replace: true });
+  /** Cancelar: limpa pendências e volta à lista sem salvar/criar. */
+  const onCancelar = () => {
+    if (busy) return;
+    loadAliveRef.current = false;
+    limparAgendamentos();
+    try {
+      toast.dismiss();
+    } catch {
+      /* ignore */
+    }
+    navigate('/mapas', { replace: true });
+  };
 
   useEffect(() => {
-    if (user?.matricula) setMatricula(String(user.matricula));
+    if (user?.matricula && mountedRef.current) {
+      setMatricula(String(user.matricula));
+    }
   }, [user?.matricula]);
 
   useEffect(() => {
+    loadAliveRef.current = true;
     let cancelled = false;
     (async () => {
-      setLoading(true);
+      if (mountedRef.current) setLoading(true);
       try {
         const cadRes = await getCadastros();
-        if (cancelled) return;
+        if (cancelled || !stillMounted()) return;
         setCadastros(cadRes.cadastros);
 
         if (isEdit && idRegistro != null) {
           const mapRes = await getMapa(idRegistro);
-          if (cancelled) return;
+          if (cancelled || !stillMounted()) return;
           const m = mapRes.mapa;
           setDataBR(toDateBR(m.data) || todayBR());
           setInicioHHMM(formatHora(m.inicio_jornada_des).replace('—', ''));
           setFimHHMM(formatHora(m.fim_jornada_des).replace('—', ''));
           setTurno(normalizeTurnoLabel(String(m.turno ?? TURNO_OPCOES[0])));
-        } else {
+        } else if (stillMounted()) {
           setDataBR(todayBR());
           setTurno(TURNO_OPCOES[0]);
         }
       } catch (e) {
-        if (!cancelled) {
+        if (!cancelled && stillMounted()) {
           const msg =
             e instanceof ApiRequestError
               ? e.message
               : 'Falha de comunicação com a API.';
           toast.error(msg);
-          if (isEdit) goLista();
+          if (isEdit) navigate('/mapas', { replace: true });
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && stillMounted()) setLoading(false);
       }
     })();
     return () => {
       cancelled = true;
+      loadAliveRef.current = false;
+      limparAgendamentos();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- carga inicial
   }, [idRegistro, isEdit]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!mountedRef.current || busy) return;
+
     const dataOk = parseDateBR(dataBR);
     if (!dataOk) {
       toast.error('Data inválida. Use o formato dd/mm/aaaa.');
@@ -194,21 +247,24 @@ export function MapaFormScreen() {
     try {
       if (isEdit && idRegistro != null) {
         await updateMapa(idRegistro, payload);
+        if (!mountedRef.current) return;
         toast.success('MAPA atualizado com sucesso.');
         navigate(`/mapas/${idRegistro}`, { replace: true });
       } else {
         const res = await createMapa(payload);
+        if (!mountedRef.current) return;
         toast.success('MAPA cadastrado com sucesso.');
         navigate(`/mapas/${res.mapa.id_registro}`, { replace: true });
       }
     } catch (err) {
+      if (!mountedRef.current) return;
       const msg =
         err instanceof ApiRequestError
           ? err.message
           : 'Falha de comunicação com a API.';
       toast.error(msg);
     } finally {
-      setBusy(false);
+      if (mountedRef.current) setBusy(false);
     }
   };
 
@@ -216,7 +272,7 @@ export function MapaFormScreen() {
     return (
       <AppShell className="bg-[#B9C8D4]">
         <div className="page min-h-dvh bg-[#B9C8D4] text-slate-900">
-          <PageHeader title="MAPA" onBack={goLista} />
+          <PageHeader title="MAPA" onBack={onCancelar} />
           <LoadingState />
         </div>
       </AppShell>
@@ -228,7 +284,7 @@ export function MapaFormScreen() {
       <div className="page flex min-h-dvh flex-col bg-[#B9C8D4] text-slate-900">
         <PageHeader
           title="MAPA"
-          onBack={goLista}
+          onBack={onCancelar}
           rightSlot={
             <Button
               type="button"
@@ -259,19 +315,26 @@ export function MapaFormScreen() {
               <FormField
                 label="MATRÍCULA"
                 name="matricula"
-                value={matricula}
+                value={matricula ?? ''}
                 readOnly
                 disabled
                 className="bg-white"
               />
-              <DatePickerField label="DATA" value={dataBR} onChange={setDataBR} />
+              <DatePickerField
+                label="DATA"
+                value={dataBR ?? ''}
+                onChange={setDataBR}
+              />
             </div>
 
             <div className="flex w-full flex-col gap-1.5">
               <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900">
                 Turno <span className="req">*</span>
               </Label>
-              <Select value={turno || TURNO_OPCOES[0]} onValueChange={setTurno}>
+              <Select
+                value={turno ?? ''}
+                onValueChange={(v) => setTurno(v ?? '')}
+              >
                 <SelectTrigger className="h-12 w-full rounded-lg border-slate-400 bg-white text-base text-slate-900">
                   <SelectValue placeholder="TURNO 01" />
                 </SelectTrigger>
@@ -293,7 +356,7 @@ export function MapaFormScreen() {
                 inputMode="numeric"
                 placeholder="HH:MM"
                 maxLength={5}
-                value={inicioHHMM}
+                value={inicioHHMM ?? ''}
                 onChange={(e) => setInicioHHMM(maskHHMM(e.target.value))}
                 className="bg-white"
               />
@@ -304,7 +367,7 @@ export function MapaFormScreen() {
                 inputMode="numeric"
                 placeholder="HH:MM"
                 maxLength={5}
-                value={fimHHMM}
+                value={fimHHMM ?? ''}
                 onChange={(e) => setFimHHMM(maskHHMM(e.target.value))}
                 className="bg-white"
               />
@@ -318,7 +381,7 @@ export function MapaFormScreen() {
             <Button
               type="button"
               disabled={busy}
-              onClick={goLista}
+              onClick={onCancelar}
               className="h-12 text-base font-bold uppercase"
             >
               Cancelar

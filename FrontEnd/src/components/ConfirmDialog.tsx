@@ -29,16 +29,29 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: Props) {
-  return (
-    <RadixAlertDialog open={open} onOpenChange={(v) => !v && onCancel()}>
-      <AlertDialogContent>
+    return (
+    <RadixAlertDialog
+      open={open}
+      onOpenChange={(v) => {
+        // Só cancela ao fechar por overlay/ESC/Cancelar — não no Action de confirmar.
+        if (!v) onCancel();
+      }}
+    >
+      <AlertDialogContent className="z-[90]">
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{message}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel onClick={onCancel}>{cancelLabel}</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm}>{confirmLabel}</AlertDialogAction>
+          <AlertDialogAction
+            onClick={(e) => {
+              e.preventDefault();
+              onConfirm();
+            }}
+          >
+            {confirmLabel}
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </RadixAlertDialog>

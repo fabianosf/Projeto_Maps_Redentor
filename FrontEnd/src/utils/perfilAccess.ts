@@ -22,3 +22,12 @@ export function canResetSenhaUsuario(codigoPerfil: number | null | undefined): b
 export function canAccessMapas(codigoPerfil: number | null | undefined): boolean {
   return codigoPerfil === PERFIL_ADMIN || codigoPerfil === PERFIL_DESPACHANTE;
 }
+
+/** Banco de horas operacional — Admin, Despachante ou Inspetor. */
+export function canAccessBancoHoras(codigoPerfil: number | null | undefined): boolean {
+  return (
+    codigoPerfil === PERFIL_ADMIN ||
+    codigoPerfil === PERFIL_DESPACHANTE ||
+    codigoPerfil === PERFIL_INSPETOR
+  );
+}

@@ -2,15 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { useNavigate, useParams } from 'react-router-dom';
 import { Pencil, Plus, Trash2, UserPlus, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { getCadastros } from '@/api/cadastros';
+import { getCadastros, createVeiculo } from '@/api/cadastros';
 import { ApiRequestError } from '@/api/client';
 import {
   createItem,
   createViagem,
+  darBaixaItem,
   deleteItem,
   deleteMapa,
   deleteViagem,
   getMapa,
+  listOcupacaoEscalas,
   updateItem,
 } from '@/api/mapa';
 import { AppShell } from '@/components/AppShell';
@@ -19,6 +21,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { FormField } from '@/components/FormField';
 import { LoadingState } from '@/components/LoadingState';
 import { PageHeader } from '@/components/PageHeader';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -48,7 +51,11 @@ import {
 } from '@/components/ui/table';
 import { useScreenBg } from '@/hooks/useScreenBg';
 import type { CadastrosMestres, VeiculoCadastro } from '@/types/cadastro';
-import type { MapaCompleto } from '@/types/mapa';
+import type {
+  MapaCompleto,
+  MapaOcupacaoMotorista,
+  MapaOcupacaoVeiculo,
+} from '@/types/mapa';
 import {
   combineDateAndTime,
   formatCodMap,
@@ -57,10 +64,58 @@ import {
   toDateInput,
   toDateTimeLocal,
 } from '@/utils/mapaFormat';
+import {
+  normalizarFrotaDigitada,
+  placeholderFrotaEmpresa,
+  mascaraGuiaFrotaEmpresa,
+  erroFrotaDuranteDigitacao,
+  validarFrotaParaEmpresa,
+} from '@/utils/frotaVeiculo';
 
 const MAPA_BG = '#B9C8D4';
 
 const isAtivo = (ativo?: number) => ativo == null || Number(ativo) === 1;
+
+const statusEscala = (item: { status_escala?: string | null }) =>
+  String(item.status_escala ?? 'EM_ANDAMENTO').trim().toUpperCase() ||
+  'EM_ANDAMENTO';
+
+const escalaEmAndamento = (item: { status_escala?: string | null }) =>
+  statusEscala(item) === 'EM_ANDAMENTO';
+
+function nowDateTimeLocal(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function inicioRealItem(item: {
+  inicio_real?: string | null;
+  chegada_ponto?: string | null;
+  hor_ini_jor?: string | null;
+}): string | null {
+  return item.inicio_real || item.chegada_ponto || item.hor_ini_jor || null;
+}
+
+function minutosEntreDateTimeLocal(
+  inicioSqlOuLocal: string | null | undefined,
+  fimLocal: string,
+): number | null {
+  if (!inicioSqlOuLocal || !fimLocal) return null;
+  const a = toDateTimeLocal(inicioSqlOuLocal);
+  if (!a) return null;
+  const t0 = Date.parse(a);
+  const t1 = Date.parse(fimLocal);
+  if (Number.isNaN(t0) || Number.isNaN(t1) || t1 < t0) return null;
+  return Math.floor((t1 - t0) / 60000);
+}
+
+function formatDuracaoHhMm(minutos: number | null | undefined): string {
+  if (minutos == null || !Number.isFinite(minutos) || minutos < 0) return '—';
+  const h = Math.floor(minutos / 60);
+  const m = Math.floor(minutos % 60);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
 
 /** Detalhe do MAPA — carros + viagens. Rota: `/mapas/:id` */
 export function MapaDetalheScreen() {
@@ -79,15 +134,28 @@ export function MapaDetalheScreen() {
   const [confirmDeleteMap, setConfirmDeleteMap] = useState(false);
   const [confirmDeleteItem, setConfirmDeleteItem] = useState(false);
   const [confirmDeleteViagem, setConfirmDeleteViagem] = useState<number | null>(null);
+  const [confirmBaixaItem, setConfirmBaixaItem] = useState(false);
+  const [fimRealBaixa, setFimRealBaixa] = useState('');
   const [busy, setBusy] = useState(false);
+  const [vinculoSaving, setVinculoSaving] = useState(false);
+  const [erroVinculo, setErroVinculo] = useState('');
+  const [ocupacaoVeiculos, setOcupacaoVeiculos] = useState<MapaOcupacaoVeiculo[]>(
+    [],
+  );
+  const [ocupacaoMotoristas, setOcupacaoMotoristas] = useState<
+    MapaOcupacaoMotorista[]
+  >([]);
+  const [ocupacaoLoading, setOcupacaoLoading] = useState(false);
+  const [ocupacaoErro, setOcupacaoErro] = useState(false);
 
   const [idEmpresaForm, setIdEmpresaForm] = useState('');
   const [idLinhaForm, setIdLinhaForm] = useState('');
   const [idVeiculoForm, setIdVeiculoForm] = useState('');
-  /** Texto digitado no autocomplete de frota (não é o valor persistido). */
+  /** Frota digitada manualmente (sempre maiúscula). */
   const [frotaQuery, setFrotaQuery] = useState('');
-  const [frotaListaAberta, setFrotaListaAberta] = useState(false);
-  const frotaBoxRef = useRef<HTMLDivElement | null>(null);
+  const [frotaErro, setFrotaErro] = useState('');
+  const veiculoInputRef = useRef<HTMLInputElement | null>(null);
+  const [confirmCriarVeiculo, setConfirmCriarVeiculo] = useState(false);
   const [idMotorista, setIdMotorista] = useState('');
   const [editItemId, setEditItemId] = useState<number | null>(null);
   const [horIni, setHorIni] = useState('');
@@ -104,6 +172,7 @@ export function MapaDetalheScreen() {
   const [chegadaHora, setChegadaHora] = useState('');
   const [qtdIda, setQtdIda] = useState('0');
   const [qtdVolta, setQtdVolta] = useState('0');
+  const [erroViagem, setErroViagem] = useState('');
 
   const goLista = () => navigate('/mapas', { replace: true });
 
@@ -122,7 +191,8 @@ export function MapaDetalheScreen() {
       setMapa(m);
       setSelectedItemId((prev) => {
         if (prev != null && m.itens.some((i) => i.id_item === prev)) return prev;
-        return m.itens[0]?.id_item ?? null;
+        // Exige seleção explícita na lista CARROS (viagens pertencem ao item).
+        return null;
       });
       setCadastros(cadRes.cadastros);
     } catch (e) {
@@ -145,6 +215,129 @@ export function MapaDetalheScreen() {
     [mapa, selectedItemId],
   );
 
+  /** Viagens apenas do item/escala selecionado (não por frota). */
+  const viagensDoItem = useMemo(() => {
+    if (!itemSelecionado) return [];
+    const idItem = Number(itemSelecionado.id_item);
+    return (itemSelecionado.viagens ?? []).filter(
+      (v) =>
+        Number(v.id_item_registro ?? v.id_mapa_item ?? 0) === idItem,
+    );
+  }, [itemSelecionado]);
+
+  const itemProntoParaViagens = useMemo(() => {
+    if (!itemSelecionado) return false;
+    if (!escalaEmAndamento(itemSelecionado)) return false;
+    const temVeiculo =
+      itemSelecionado.id_veiculo != null &&
+      Number(itemSelecionado.id_veiculo) > 0;
+    const temMotorista =
+      itemSelecionado.id_motorista != null &&
+      Number(itemSelecionado.id_motorista) > 0;
+    return temVeiculo && temMotorista;
+  }, [itemSelecionado]);
+
+  /** Última viagem do item (maior chegada) — base para sequência. */
+  const ultimaViagemItem = useMemo(() => {
+    if (viagensDoItem.length === 0) return null;
+    const ranked = [...viagensDoItem].sort((a, b) => {
+      const ta = Date.parse(String(a.horario_chegada).replace(' ', 'T')) || 0;
+      const tb = Date.parse(String(b.horario_chegada).replace(' ', 'T')) || 0;
+      return tb - ta;
+    });
+    return ranked[0] ?? null;
+  }, [viagensDoItem]);
+
+  const saidaMinimaViagem = useMemo(() => {
+    if (!ultimaViagemItem) return null;
+    const h = formatHora(ultimaViagemItem.horario_chegada);
+    return h === '—' ? null : h;
+  }, [ultimaViagemItem]);
+
+  const conflitoViagemLocal = useMemo(() => {
+    if (!saidaHora || !chegadaHora) return null;
+    if (chegadaHora <= saidaHora) {
+      return 'A chegada deve ser posterior à saída da viagem.';
+    }
+    if (saidaMinimaViagem && saidaHora < saidaMinimaViagem) {
+      return `Informe uma saída a partir de ${saidaMinimaViagem}.`;
+    }
+    return null;
+  }, [chegadaHora, saidaHora, saidaMinimaViagem]);
+
+  const itemPodeDarBaixa = useMemo(
+    () =>
+      Boolean(
+        itemSelecionado &&
+          escalaEmAndamento(itemSelecionado) &&
+          itemSelecionado.id_motorista != null &&
+          Number(itemSelecionado.id_motorista) > 0,
+      ),
+    [itemSelecionado],
+  );
+
+  const resumoViagens = useMemo(() => {
+    if (!itemSelecionado) return null;
+    const frota = String(
+      itemSelecionado.numero_frota ?? itemSelecionado.id_veiculo ?? '—',
+    );
+    const mat = String(itemSelecionado.matricula_motorista ?? '').trim();
+    const nome = String(itemSelecionado.motorista ?? '').trim();
+    const motoristaTxt =
+      mat || nome
+        ? [mat, nome].filter(Boolean).join(' — ')
+        : '—';
+    const linhaTxt = String(
+      itemSelecionado.codigo_linha ??
+        itemSelecionado.linha ??
+        itemSelecionado.id_linha ??
+        '—',
+    );
+    const empresaTxt = String(itemSelecionado.empresa ?? '—');
+    const ini = formatHora(itemSelecionado.hor_ini_jor);
+    const fim = formatHora(itemSelecionado.hor_fim_jor);
+    const jornadaTxt =
+      ini !== '—' || fim !== '—' ? `${ini}–${fim}` : null;
+    const inicioRealTxt = formatHora(inicioRealItem(itemSelecionado));
+    const fimRealTxt = formatHora(
+      itemSelecionado.fim_real ?? itemSelecionado.baixa_em,
+    );
+    const trabalhadoTxt =
+      itemSelecionado.duracao_trabalhada_hhmm ??
+      formatDuracaoHhMm(itemSelecionado.duracao_trabalhada_minutos);
+    return {
+      frota,
+      motoristaTxt,
+      linhaTxt,
+      empresaTxt,
+      jornadaTxt,
+      inicioRealTxt,
+      fimRealTxt,
+      trabalhadoTxt,
+      encerrada: !escalaEmAndamento(itemSelecionado),
+    };
+  }, [itemSelecionado]);
+
+  const previewBaixa = useMemo(() => {
+    if (!itemSelecionado || !fimRealBaixa) {
+      return { inicioHora: '—', fimHora: '—', duracao: '—', minutos: null as number | null };
+    }
+    const ini = inicioRealItem(itemSelecionado);
+    const minutos = minutosEntreDateTimeLocal(ini, fimRealBaixa);
+    return {
+      inicioHora: formatHora(ini),
+      fimHora: formatHora(fromDateTimeLocal(fimRealBaixa)),
+      duracao: formatDuracaoHhMm(minutos),
+      minutos,
+    };
+  }, [fimRealBaixa, itemSelecionado]);
+
+  const abrirDialogBaixa = () => {
+    setFimRealBaixa(nowDateTimeLocal());
+    setConfirmBaixaItem(true);
+  };
+
+
   const empresas = useMemo(
     () => (cadastros?.empresas ?? []).filter((e) => isAtivo(e.ativo)),
     [cadastros],
@@ -157,54 +350,161 @@ export function MapaDetalheScreen() {
     );
   }, [cadastros, idEmpresaForm]);
 
-  /** Veículos da empresa da linha, excluindo os já no MAPA (exceto o item em edição). */
-  const veiculosDaLinha = useMemo(() => {
-    if (!idLinhaForm) return [] as VeiculoCadastro[];
-    const linha = (cadastros?.linhas ?? []).find(
-      (l) => String(l.id_linha) === idLinhaForm,
+  const empresaSelecionada = useMemo(() => {
+    if (!idEmpresaForm) return null;
+    return (
+      (cadastros?.empresas ?? []).find(
+        (e) => String(e.id_empresa) === idEmpresaForm,
+      ) ?? null
     );
-    if (!linha) return [] as VeiculoCadastro[];
-    const idEmpLinha = String(linha.id_empresa);
-    const idsNoMapa = new Set(
-      (mapa?.itens ?? [])
-        .filter((i) => editItemId == null || i.id_item !== editItemId)
-        .map((i) => Number(i.id_veiculo)),
-    );
-    return (cadastros?.veiculos ?? []).filter((v) => {
-      if (!isAtivo(v.ativo)) return false;
-      if (String(v.id_empresa ?? '') !== idEmpLinha) return false;
-      if (idsNoMapa.has(Number(v.id_veiculo))) return false;
-      return true;
-    });
-  }, [cadastros, idLinhaForm, mapa, editItemId]);
+  }, [cadastros, idEmpresaForm]);
 
-  const veiculosSugestoes = useMemo(() => {
-    const q = frotaQuery.trim().toUpperCase();
-    if (!q) return veiculosDaLinha.slice(0, 12);
-    return veiculosDaLinha
-      .filter((v) => String(v.numero_frota ?? '').toUpperCase().includes(q))
-      .slice(0, 12);
-  }, [veiculosDaLinha, frotaQuery]);
+  const nomeEmpresaForm = empresaSelecionada?.descricao ?? '';
+
+  const idsVeiculosOcupados = useMemo(() => {
+    const set = new Set<number>();
+    for (const o of ocupacaoVeiculos) {
+      const idItem = Number(o.id_mapa_item ?? o.id_item);
+      if (editItemId != null && idItem === Number(editItemId)) continue;
+      set.add(Number(o.id_veiculo));
+    }
+    return set;
+  }, [ocupacaoVeiculos, editItemId]);
+
+  const idsMotoristasOcupados = useMemo(() => {
+    const set = new Set<number>();
+    for (const o of ocupacaoMotoristas) {
+      const idItem = Number(o.id_mapa_item ?? o.id_item);
+      if (editItemId != null && idItem === Number(editItemId)) continue;
+      set.add(Number(o.id_motorista));
+    }
+    return set;
+  }, [ocupacaoMotoristas, editItemId]);
+
+  const motivoVeiculoOcupado = useMemo(() => {
+    if (motoristaDialogMode === 'editar' && idVeiculoForm) {
+      const id = Number(idVeiculoForm);
+      if (id > 0 && idsVeiculosOcupados.has(id)) {
+        const frota = frotaQuery.trim().toUpperCase() || String(id);
+        const occ = ocupacaoVeiculos.find((o) => Number(o.id_veiculo) === id);
+        const mapaRef = occ?.cod_map ?? occ?.id_mapa ?? occ?.idmap;
+        return mapaRef != null
+          ? `O veículo ${frota} está em operação no MAPA ${String(mapaRef).padStart(5, '0')}. Dê baixa antes de vinculá-lo novamente.`
+          : `O veículo ${frota} está em operação. Dê baixa antes de vinculá-lo novamente.`;
+      }
+      return null;
+    }
+    if (!frotaQuery.trim() || validarFrotaParaEmpresa(frotaQuery, nomeEmpresaForm)) {
+      return null;
+    }
+    const existente = (cadastros?.veiculos ?? []).find((v) => {
+      if (!isAtivo(v.ativo)) return false;
+      if (String(v.id_empresa ?? '') !== idEmpresaForm) return false;
+      return String(v.numero_frota ?? '').toUpperCase() === frotaQuery.trim().toUpperCase();
+    });
+    if (!existente) return null;
+    if (!idsVeiculosOcupados.has(Number(existente.id_veiculo))) return null;
+    const frota = frotaQuery.trim().toUpperCase();
+    const occ = ocupacaoVeiculos.find(
+      (o) => Number(o.id_veiculo) === Number(existente.id_veiculo),
+    );
+    const mapaRef = occ?.cod_map ?? occ?.id_mapa ?? occ?.idmap;
+    return mapaRef != null
+      ? `O veículo ${frota} está em operação no MAPA ${String(mapaRef).padStart(5, '0')}. Dê baixa antes de vinculá-lo novamente.`
+      : `O veículo ${frota} está em operação. Dê baixa antes de vinculá-lo novamente.`;
+  }, [
+    cadastros,
+    frotaQuery,
+    idEmpresaForm,
+    idVeiculoForm,
+    idsVeiculosOcupados,
+    motoristaDialogMode,
+    nomeEmpresaForm,
+    ocupacaoVeiculos,
+  ]);
+
+  const frotaValida =
+    motoristaDialogMode === 'editar'
+      ? Boolean(idVeiculoForm) && !motivoVeiculoOcupado
+      : validarFrotaParaEmpresa(frotaQuery, nomeEmpresaForm) == null &&
+        frotaQuery.trim().length > 0 &&
+        !motivoVeiculoOcupado;
 
   const motoristas = useMemo(() => {
-    if (!idVeiculoForm) return [];
-    return (cadastros?.motoristas ?? []).filter((m) => isAtivo(m.ativo));
-  }, [cadastros, idVeiculoForm]);
+    if (motoristaDialogMode === 'novo' && !frotaValida) return [];
+    if (motoristaDialogMode === 'editar' && !idVeiculoForm) return [];
+    return (cadastros?.motoristas ?? [])
+      .filter((m) => isAtivo(m.ativo))
+      .map((m) => ({
+        ...m,
+        emOperacao: idsMotoristasOcupados.has(Number(m.id_motorista)),
+      }));
+  }, [
+    cadastros,
+    frotaValida,
+    idVeiculoForm,
+    idsMotoristasOcupados,
+    motoristaDialogMode,
+  ]);
+
+  const carregarOcupacao = useCallback(async (): Promise<{
+    ok: boolean;
+    veiculos: MapaOcupacaoVeiculo[];
+    motoristas: MapaOcupacaoMotorista[];
+  }> => {
+    setOcupacaoLoading(true);
+    setOcupacaoErro(false);
+    try {
+      const res = await listOcupacaoEscalas();
+      const veiculos = res.veiculos_ocupados ?? res.veiculos ?? [];
+      const motoristasList = res.motoristas_ocupados ?? res.motoristas ?? [];
+      setOcupacaoVeiculos(veiculos);
+      setOcupacaoMotoristas(motoristasList);
+      setOcupacaoErro(false);
+      return { ok: true, veiculos, motoristas: motoristasList };
+    } catch {
+      setOcupacaoErro(true);
+      toast.error(
+        'Não foi possível verificar a disponibilidade de veículo e motorista. Verifique a conexão e tente novamente.',
+      );
+      return { ok: false, veiculos: [], motoristas: [] };
+    } finally {
+      setOcupacaoLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    if (!frotaListaAberta) return;
-    const onDoc = (ev: MouseEvent) => {
-      const el = frotaBoxRef.current;
-      if (el && !el.contains(ev.target as Node)) setFrotaListaAberta(false);
-    };
-    document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
-  }, [frotaListaAberta]);
+    if (
+      !motoristaDialog ||
+      motoristaDialogMode !== 'novo' ||
+      !idEmpresaForm ||
+      !idLinhaForm
+    ) {
+      return;
+    }
+    const t = window.setTimeout(() => veiculoInputRef.current?.focus(), 50);
+    return () => window.clearTimeout(t);
+  }, [
+    motoristaDialog,
+    motoristaDialogMode,
+    idEmpresaForm,
+    idLinhaForm,
+    motoristaFormKey,
+  ]);
 
   const limparHorariosMotorista = () => {
-    setHorIni('');
-    setHorFim('');
-    setChegada('');
+    // Mantém jornada do MAPA (não zera) — troca de motorista não apaga horários.
+    if (!mapa) {
+      setHorIni('');
+      setHorFim('');
+      setChegada('');
+      return;
+    }
+    const iniMapa = toDateTimeLocal(mapa.inicio_jornada_des) ?? '';
+    const fimMapa = toDateTimeLocal(mapa.fim_jornada_des) ?? '';
+    setHorIni(iniMapa);
+    setHorFim(fimMapa);
+    setChegada(iniMapa);
   };
 
   const limparMotoristaEHorarios = () => {
@@ -215,7 +515,8 @@ export function MapaDetalheScreen() {
   const limparVeiculoEAbaixo = () => {
     setIdVeiculoForm('');
     setFrotaQuery('');
-    setFrotaListaAberta(false);
+    setFrotaErro('');
+    setConfirmCriarVeiculo(false);
     limparMotoristaEHorarios();
   };
 
@@ -229,7 +530,8 @@ export function MapaDetalheScreen() {
     setIdLinhaForm('');
     setIdVeiculoForm('');
     setFrotaQuery('');
-    setFrotaListaAberta(false);
+    setFrotaErro('');
+    setConfirmCriarVeiculo(false);
     setIdMotorista('');
     setEditItemId(null);
     setHorIni('');
@@ -243,48 +545,50 @@ export function MapaDetalheScreen() {
 
   const closeMotoristaDialog = () => {
     setMotoristaDialog(false);
+    setConfirmCriarVeiculo(false);
+    setErroVinculo('');
+    setVinculoSaving(false);
     resetMotoristaForm();
     setMotoristaFormKey((k) => k + 1);
   };
 
-  const selecionarVeiculo = (v: VeiculoCadastro) => {
-    setIdVeiculoForm(String(v.id_veiculo));
-    setFrotaQuery(String(v.numero_frota ?? ''));
-    setFrotaListaAberta(false);
-    limparMotoristaEHorarios();
-  };
-
   const onFrotaQueryChange = (texto: string) => {
-    setFrotaQuery(texto);
+    const norm = normalizarFrotaDigitada(texto);
+    setFrotaQuery(norm);
     setIdVeiculoForm('');
-    setFrotaListaAberta(true);
+    setFrotaErro(erroFrotaDuranteDigitacao(norm, nomeEmpresaForm) ?? '');
     limparMotoristaEHorarios();
   };
 
-  const resolverFrotaDigitada = (): VeiculoCadastro | null => {
-    const q = frotaQuery.trim().toUpperCase();
-    if (!q) return null;
-    if (idVeiculoForm) {
-      const byId = veiculosDaLinha.find(
-        (v) => String(v.id_veiculo) === idVeiculoForm,
-      );
-      if (byId) return byId;
-    }
+  const buscarVeiculoPorFrota = (frota: string): VeiculoCadastro | null => {
+    const q = frota.trim().toUpperCase();
+    if (!q || !idEmpresaForm) return null;
     return (
-      veiculosDaLinha.find(
-        (v) => String(v.numero_frota ?? '').toUpperCase() === q,
-      ) ?? null
+      (cadastros?.veiculos ?? []).find((v) => {
+        if (!isAtivo(v.ativo)) return false;
+        if (String(v.id_empresa ?? '') !== idEmpresaForm) return false;
+        return String(v.numero_frota ?? '').toUpperCase() === q;
+      }) ?? null
     );
   };
 
   const openMotoristaNovo = () => {
-    // Independente de itemSelecionado / carros no MAPA.
     if (!mapa) return;
     resetMotoristaForm();
+    setErroVinculo('');
+    setOcupacaoErro(false);
+    setVinculoSaving(false);
     setMotoristaDialogMode('novo');
     setEditItemId(null);
+    // Pré-preenche jornada do MAPA para o usuário só ajustar se precisar.
+    const iniMapa = toDateTimeLocal(mapa.inicio_jornada_des) ?? '';
+    const fimMapa = toDateTimeLocal(mapa.fim_jornada_des) ?? '';
+    setHorIni(iniMapa);
+    setHorFim(fimMapa);
+    setChegada(iniMapa);
     setMotoristaFormKey((k) => k + 1);
     setMotoristaDialog(true);
+    void carregarOcupacao();
   };
 
   const openMotoristaEditar = (idItem: number) => {
@@ -294,6 +598,10 @@ export function MapaDetalheScreen() {
     );
     if (!itemAlvo) {
       toast.error('Carro não encontrado neste MAPA.');
+      return;
+    }
+    if (!escalaEmAndamento(itemAlvo)) {
+      toast.error('Esta escala foi encerrada e não pode ser alterada.');
       return;
     }
     const vinculado =
@@ -332,7 +640,8 @@ export function MapaDetalheScreen() {
       itemAlvo.id_veiculo != null ? String(itemAlvo.id_veiculo) : '',
     );
     setFrotaQuery(String(itemAlvo.numero_frota ?? itemAlvo.id_veiculo ?? ''));
-    setFrotaListaAberta(false);
+    setFrotaErro('');
+    setConfirmCriarVeiculo(false);
     setIdMotorista(
       itemAlvo.id_motorista != null ? String(itemAlvo.id_motorista) : '',
     );
@@ -349,112 +658,399 @@ export function MapaDetalheScreen() {
       ),
     );
     setMotoristaDialogMode('editar');
+    setErroVinculo('');
+    setVinculoSaving(false);
     setMotoristaFormKey((k) => k + 1);
     setMotoristaDialog(true);
+    void carregarOcupacao();
   };
 
-  const onSalvarMotorista = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!mapa || busy) return;
+  const mensagemErroApi = (err: unknown, fallback: string): string => {
+    if (err instanceof ApiRequestError) return err.message || fallback;
+    if (err instanceof Error && err.message) return err.message;
+    return fallback;
+  };
 
-    if (!idEmpresaForm.trim()) {
-      toast.error('Selecione a empresa.');
-      return;
-    }
-    if (!idLinhaForm.trim()) {
-      toast.error('Selecione a linha.');
-      return;
-    }
-
-    let idVeiculoNum = Number(idVeiculoForm);
-    if (motoristaDialogMode === 'novo') {
-      const veiculo = resolverFrotaDigitada();
-      if (!veiculo) {
-        toast.error(
-          frotaQuery.trim()
-            ? 'Veículo inexistente ou já vinculado neste MAPA.'
-            : 'Selecione o veículo.',
-        );
-        return;
-      }
-      idVeiculoNum = Number(veiculo.id_veiculo);
-      setIdVeiculoForm(String(veiculo.id_veiculo));
-      setFrotaQuery(String(veiculo.numero_frota ?? ''));
-    } else if (!Number.isFinite(idVeiculoNum) || idVeiculoNum <= 0) {
-      toast.error('Veículo inválido.');
-      return;
+  /** Persiste vínculo; sempre resolve com sucesso/erro — nunca deixa saving preso. */
+  const gravarVinculo = async (idVeiculoNum: number): Promise<boolean> => {
+    if (!mapa) {
+      setErroVinculo('MAPA não carregado.');
+      return false;
     }
 
-    if (!idMotorista.trim()) {
-      toast.error('Selecione o motorista.');
-      return;
-    }
-    if (!horIni.trim() || !horFim.trim() || !chegada.trim()) {
-      toast.error('Preencha chegada ao ponto, início e fim de jornada.');
-      return;
-    }
-    if (!(chegada <= horIni && horIni < horFim)) {
-      toast.error('Horários inválidos: chegada ≤ início < fim.');
-      return;
-    }
-
-    const duplicado = (mapa.itens ?? []).some(
-      (i) =>
-        Number(i.id_veiculo) === idVeiculoNum &&
-        (editItemId == null || i.id_item !== editItemId),
-    );
-    if (duplicado) {
-      toast.error('Este veículo já está vinculado neste MAPA.');
-      return;
-    }
-
+    const chegadaApi = fromDateTimeLocal(chegada);
     const payload = {
       id_linha: Number(idLinhaForm),
       id_veiculo: idVeiculoNum,
       id_motorista: Number(idMotorista),
       hor_ini_jor: fromDateTimeLocal(horIni),
       hor_fim_jor: fromDateTimeLocal(horFim),
-      chegada_ponto: fromDateTimeLocal(chegada),
+      chegada_ponto: chegadaApi,
+      inicio_real: chegadaApi,
     };
 
-    if (motoristaDialogMode === 'editar' && editItemId == null) {
-      toast.error('Item inválido para edição.');
-      return;
+    if (
+      !Number.isFinite(payload.id_linha) ||
+      payload.id_linha <= 0 ||
+      !Number.isFinite(payload.id_veiculo) ||
+      payload.id_veiculo <= 0 ||
+      !Number.isFinite(payload.id_motorista) ||
+      payload.id_motorista <= 0 ||
+      !payload.hor_ini_jor ||
+      !payload.hor_fim_jor ||
+      !payload.chegada_ponto
+    ) {
+      setErroVinculo(
+        'Preencha empresa, linha, veículo, motorista e os horários da jornada.',
+      );
+      return false;
     }
 
-    setBusy(true);
     try {
       if (motoristaDialogMode === 'novo') {
         const res = await createItem(mapa.id_registro, payload);
-        toast.success('Motorista vinculado.');
+        toast.success('Motorista e veículo vinculados com sucesso.');
         setSelectedItemId(res.item.id_item);
       } else {
-        await updateItem(editItemId!, payload);
-        toast.success('Vínculo atualizado.');
+        if (editItemId == null) {
+          setErroVinculo('Item inválido para edição.');
+          return false;
+        }
+        await updateItem(editItemId, payload);
+        toast.success('Motorista e veículo vinculados com sucesso.');
         setSelectedItemId(editItemId);
       }
       closeMotoristaDialog();
       await carregar();
+      void carregarOcupacao();
+      return true;
     } catch (err) {
-      toast.error(
-        err instanceof ApiRequestError ? err.message : 'Falha de comunicação com a API.',
+      const msg = mensagemErroApi(
+        err,
+        'Não foi possível vincular motorista e veículo. Tente novamente.',
       );
+      setErroVinculo(msg);
+      toast.error(msg);
+      return false;
+    }
+  };
+
+  const onSalvarMotorista = async (e: FormEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!mapa) {
+      setErroVinculo('MAPA não carregado.');
+      return;
+    }
+    if (vinculoSaving) return;
+
+    setErroVinculo('');
+
+    if (!idEmpresaForm.trim()) {
+      setErroVinculo('Selecione a empresa.');
+      return;
+    }
+    if (!idLinhaForm.trim()) {
+      setErroVinculo('Selecione a linha.');
+      return;
+    }
+
+    let idVeiculoNum = Number(idVeiculoForm);
+
+    if (motoristaDialogMode === 'novo') {
+      const frota = frotaQuery.trim().toUpperCase();
+      const erroFrota = validarFrotaParaEmpresa(frota, nomeEmpresaForm);
+      if (erroFrota) {
+        setFrotaErro(erroFrota);
+        setErroVinculo(erroFrota);
+        return;
+      }
+      if (motivoVeiculoOcupado) {
+        setFrotaErro(motivoVeiculoOcupado);
+        setErroVinculo(motivoVeiculoOcupado);
+        return;
+      }
+      setFrotaErro('');
+
+      const existente = buscarVeiculoPorFrota(frota);
+      if (!existente) {
+        setConfirmCriarVeiculo(true);
+        return;
+      }
+      if (idsVeiculosOcupados.has(Number(existente.id_veiculo))) {
+        const msg = `O veículo ${frota} está em operação. Dê baixa antes de vinculá-lo novamente.`;
+        setFrotaErro(msg);
+        setErroVinculo(msg);
+        return;
+      }
+      idVeiculoNum = Number(existente.id_veiculo);
+      setIdVeiculoForm(String(existente.id_veiculo));
+    } else if (!Number.isFinite(idVeiculoNum) || idVeiculoNum <= 0) {
+      setErroVinculo('Veículo inválido.');
+      return;
+    }
+
+    if (!idMotorista.trim()) {
+      setErroVinculo('Selecione o motorista.');
+      return;
+    }
+    if (idsMotoristasOcupados.has(Number(idMotorista))) {
+      const mot = (cadastros?.motoristas ?? []).find(
+        (m) => Number(m.id_motorista) === Number(idMotorista),
+      );
+      const rotulo = mot
+        ? `${mot.matricula} — ${mot.nome}`
+        : idMotorista;
+      const msg = `O motorista ${rotulo} está em operação. Dê baixa antes de vinculá-lo novamente.`;
+      setErroVinculo(msg);
+      return;
+    }
+    if (!horIni.trim() || !horFim.trim() || !chegada.trim()) {
+      setErroVinculo('Preencha chegada ao ponto, início e fim de jornada.');
+      return;
+    }
+    if (!(chegada <= horIni && horIni < horFim)) {
+      setErroVinculo('Horários inválidos: chegada ≤ início < fim.');
+      return;
+    }
+
+    const veiculoDuplicado = (mapa.itens ?? []).some(
+      (i) =>
+        escalaEmAndamento(i) &&
+        Number(i.id_veiculo) === idVeiculoNum &&
+        (editItemId == null || i.id_item !== editItemId),
+    );
+    if (veiculoDuplicado) {
+      setErroVinculo(
+        `O veículo ${frotaQuery.trim().toUpperCase() || idVeiculoNum} está em operação. Dê baixa antes de vinculá-lo novamente.`,
+      );
+      return;
+    }
+
+    const motoristaDuplicado = (mapa.itens ?? []).some(
+      (i) =>
+        escalaEmAndamento(i) &&
+        Number(i.id_motorista) === Number(idMotorista) &&
+        (editItemId == null || i.id_item !== editItemId),
+    );
+    if (motoristaDuplicado) {
+      const mot = (cadastros?.motoristas ?? []).find(
+        (m) => Number(m.id_motorista) === Number(idMotorista),
+      );
+      const rotulo = mot
+        ? `${mot.matricula} — ${mot.nome}`
+        : idMotorista;
+      setErroVinculo(
+        `O motorista ${rotulo} está em operação. Dê baixa antes de vinculá-lo novamente.`,
+      );
+      return;
+    }
+
+    if (motoristaDialogMode === 'editar' && editItemId == null) {
+      setErroVinculo('Item inválido para edição.');
+      return;
+    }
+
+    setVinculoSaving(true);
+    try {
+      // Revalida ocupação imediatamente antes de criar (não segue se falhar).
+      const ocup = await carregarOcupacao();
+      if (!ocup.ok) {
+        setErroVinculo(
+          'Não foi possível verificar a disponibilidade de veículo e motorista. Verifique a conexão e tente novamente.',
+        );
+        return;
+      }
+      const veicOcup = ocup.veiculos.some((o) => {
+        const idItem = Number(o.id_mapa_item ?? o.id_item);
+        if (editItemId != null && idItem === Number(editItemId)) return false;
+        return Number(o.id_veiculo) === idVeiculoNum;
+      });
+      if (veicOcup) {
+        const frota = frotaQuery.trim().toUpperCase() || String(idVeiculoNum);
+        setErroVinculo(
+          `O veículo ${frota} está em operação. Dê baixa antes de vinculá-lo novamente.`,
+        );
+        return;
+      }
+      const motOcup = ocup.motoristas.some((o) => {
+        const idItem = Number(o.id_mapa_item ?? o.id_item);
+        if (editItemId != null && idItem === Number(editItemId)) return false;
+        return Number(o.id_motorista) === Number(idMotorista);
+      });
+      if (motOcup) {
+        const mot = (cadastros?.motoristas ?? []).find(
+          (m) => Number(m.id_motorista) === Number(idMotorista),
+        );
+        const rotulo = mot
+          ? `${mot.matricula} — ${mot.nome}`
+          : idMotorista;
+        setErroVinculo(
+          `O motorista ${rotulo} está em operação. Dê baixa antes de vinculá-lo novamente.`,
+        );
+        return;
+      }
+      await gravarVinculo(idVeiculoNum);
+    } catch (err) {
+      const msg = mensagemErroApi(
+        err,
+        'Não foi possível vincular motorista e veículo. Tente novamente.',
+      );
+      setErroVinculo(msg);
+      toast.error(msg);
     } finally {
-      setBusy(false);
+      setVinculoSaving(false);
+    }
+  };
+
+  const confirmarCadastroVeiculo = async () => {
+    if (!mapa || vinculoSaving) return;
+    const frota = frotaQuery.trim().toUpperCase();
+    const erroFrota = validarFrotaParaEmpresa(frota, nomeEmpresaForm);
+    if (erroFrota) {
+      setFrotaErro(erroFrota);
+      setErroVinculo(erroFrota);
+      setConfirmCriarVeiculo(false);
+      return;
+    }
+    if (!idMotorista.trim()) {
+      setErroVinculo('Selecione o motorista.');
+      setConfirmCriarVeiculo(false);
+      return;
+    }
+    if (!horIni.trim() || !horFim.trim() || !chegada.trim()) {
+      setErroVinculo('Preencha chegada ao ponto, início e fim de jornada.');
+      setConfirmCriarVeiculo(false);
+      return;
+    }
+    if (!(chegada <= horIni && horIni < horFim)) {
+      setErroVinculo('Horários inválidos: chegada ≤ início < fim.');
+      setConfirmCriarVeiculo(false);
+      return;
+    }
+
+    const motoristaDuplicado = (mapa.itens ?? []).some(
+      (i) =>
+        escalaEmAndamento(i) &&
+        Number(i.id_motorista) === Number(idMotorista) &&
+        (editItemId == null || i.id_item !== editItemId),
+    );
+    if (motoristaDuplicado) {
+      const mot = (cadastros?.motoristas ?? []).find(
+        (m) => Number(m.id_motorista) === Number(idMotorista),
+      );
+      const rotulo = mot
+        ? `${mot.matricula} — ${mot.nome}`
+        : idMotorista;
+      setErroVinculo(
+        `O motorista ${rotulo} está em operação. Dê baixa antes de vinculá-lo novamente.`,
+      );
+      setConfirmCriarVeiculo(false);
+      return;
+    }
+
+    setVinculoSaving(true);
+    setErroVinculo('');
+    try {
+      const res = await createVeiculo({
+        numero_frota: frota,
+        id_empresa: Number(idEmpresaForm),
+      });
+      const novo = res.veiculo;
+      setIdVeiculoForm(String(novo.id_veiculo));
+      setFrotaQuery(String(novo.numero_frota ?? frota));
+      setConfirmCriarVeiculo(false);
+      setCadastros((prev) =>
+        prev ? { ...prev, veiculos: [...prev.veiculos, novo] } : prev,
+      );
+
+      const veiculoDuplicado = (mapa.itens ?? []).some(
+        (i) =>
+          escalaEmAndamento(i) &&
+          Number(i.id_veiculo) === Number(novo.id_veiculo),
+      );
+      if (veiculoDuplicado) {
+        setErroVinculo(
+          `O veículo ${frota} está em operação. Dê baixa antes de vinculá-lo novamente.`,
+        );
+        return;
+      }
+
+      const ocup = await carregarOcupacao();
+      if (!ocup.ok) {
+        setErroVinculo(
+          'Não foi possível verificar a disponibilidade de veículo e motorista. Verifique a conexão e tente novamente.',
+        );
+        return;
+      }
+      const veicOcup = ocup.veiculos.some(
+        (o) => Number(o.id_veiculo) === Number(novo.id_veiculo),
+      );
+      if (veicOcup) {
+        setErroVinculo(
+          `O veículo ${frota} está em operação. Dê baixa antes de vinculá-lo novamente.`,
+        );
+        return;
+      }
+      const motOcup = ocup.motoristas.some((o) => {
+        const idItem = Number(o.id_mapa_item ?? o.id_item);
+        if (editItemId != null && idItem === Number(editItemId)) return false;
+        return Number(o.id_motorista) === Number(idMotorista);
+      });
+      if (motOcup) {
+        const mot = (cadastros?.motoristas ?? []).find(
+          (m) => Number(m.id_motorista) === Number(idMotorista),
+        );
+        const rotulo = mot
+          ? `${mot.matricula} — ${mot.nome}`
+          : idMotorista;
+        setErroVinculo(
+          `O motorista ${rotulo} está em operação. Dê baixa antes de vinculá-lo novamente.`,
+        );
+        return;
+      }
+      await gravarVinculo(Number(novo.id_veiculo));
+    } catch (err) {
+      setConfirmCriarVeiculo(false);
+      const msg = mensagemErroApi(err, 'Falha ao cadastrar o veículo.');
+      setErroVinculo(msg);
+      toast.error(msg);
+    } finally {
+      setVinculoSaving(false);
     }
   };
 
   const onSalvarViagem = async (e: FormEvent) => {
     e.preventDefault();
     if (!mapa || !itemSelecionado || busy) return;
+    setErroViagem('');
+    if (!escalaEmAndamento(itemSelecionado)) {
+      setErroViagem(
+        'Escala encerrada. Crie uma nova escala para registrar novas viagens.',
+      );
+      return;
+    }
+    if (!itemProntoParaViagens) {
+      setErroViagem(
+        'Selecione um veículo e motorista para visualizar ou registrar viagens.',
+      );
+      return;
+    }
     if (!saidaHora || !chegadaHora) {
-      toast.error('Informe saída e chegada.');
+      setErroViagem('Informe saída e chegada.');
+      return;
+    }
+    if (conflitoViagemLocal) {
+      setErroViagem(conflitoViagemLocal);
       return;
     }
     const dataMapa = toDateInput(mapa.data);
+    const idMapaItem = Number(itemSelecionado.id_item);
     setBusy(true);
     try {
-      await createViagem(itemSelecionado.id_item, {
+      await createViagem(idMapaItem, {
+        id_mapa_item: idMapaItem,
+        id_item: idMapaItem,
         horario_saida: combineDateAndTime(dataMapa, saidaHora),
         horario_chegada: combineDateAndTime(dataMapa, chegadaHora),
         qtd_pas_ida: Number(qtdIda) || 0,
@@ -462,14 +1058,31 @@ export function MapaDetalheScreen() {
       });
       toast.success('Viagem incluída.');
       setViagemDialog(false);
+      setErroViagem('');
       await carregar();
     } catch (err) {
-      toast.error(
-        err instanceof ApiRequestError ? err.message : 'Falha de comunicação com a API.',
-      );
+      const msg =
+        err instanceof ApiRequestError
+          ? err.message
+          : 'Falha de comunicação com a API.';
+      setErroViagem(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
+  };
+
+  const abrirDialogViagem = () => {
+    setErroViagem('');
+    setQtdIda('0');
+    setQtdVolta('0');
+    setChegadaHora('');
+    if (saidaMinimaViagem) {
+      setSaidaHora(saidaMinimaViagem);
+    } else {
+      setSaidaHora('');
+    }
+    setViagemDialog(true);
   };
 
   const confirmarExcluirMapa = async () => {
@@ -498,6 +1111,51 @@ export function MapaDetalheScreen() {
       toast.success('Carro excluído.');
       setSelectedItemId(null);
       await carregar();
+    } catch (err) {
+      toast.error(
+        err instanceof ApiRequestError ? err.message : 'Falha de comunicação com a API.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmarDarBaixa = async () => {
+    if (!itemSelecionado || busy) return;
+    if (!fimRealBaixa.trim()) {
+      toast.error('Informe a data e hora real de baixa.');
+      return;
+    }
+    const idItem = itemSelecionado.id_item;
+    const fimReal = fromDateTimeLocal(fimRealBaixa);
+    setConfirmBaixaItem(false);
+    setBusy(true);
+    try {
+      const res = await darBaixaItem(idItem, { fim_real: fimReal });
+      setMapa((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          itens: prev.itens.map((i) =>
+            i.id_item === idItem
+              ? {
+                  ...i,
+                  ...res.item,
+                  viagens: i.viagens,
+                }
+              : i,
+          ),
+        };
+      });
+      const trabalhado =
+        res.item?.duracao_trabalhada_hhmm ??
+        formatDuracaoHhMm(res.item?.duracao_trabalhada_minutos);
+      toast.success(
+        trabalhado && trabalhado !== '—'
+          ? `Baixa registrada. Trabalhado: ${trabalhado}.`
+          : 'Baixa registrada. Veículo e motorista liberados.',
+      );
+      void carregarOcupacao();
     } catch (err) {
       toast.error(
         err instanceof ApiRequestError ? err.message : 'Falha de comunicação com a API.',
@@ -593,6 +1251,17 @@ export function MapaDetalheScreen() {
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <Button
                   type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-10 rounded-full px-3 text-xs font-bold uppercase"
+                  aria-label="Dar baixa"
+                  disabled={!itemPodeDarBaixa || busy}
+                  onClick={abrirDialogBaixa}
+                >
+                  Dar baixa
+                </Button>
+                <Button
+                  type="button"
                   size="icon"
                   className="h-10 w-10 rounded-full"
                   aria-label="Vincular motorista"
@@ -619,6 +1288,7 @@ export function MapaDetalheScreen() {
                 <TableHeader>
                   <TableRow className="bg-secondary/60 hover:bg-secondary/60">
                     <TableHead className="text-[11px] leading-tight">Carro</TableHead>
+                    <TableHead className="text-[11px] leading-tight">Status</TableHead>
                     <TableHead className="text-[11px] leading-tight">Empresa</TableHead>
                     <TableHead className="text-[11px] leading-tight">Linha</TableHead>
                     <TableHead className="text-[11px] leading-tight">Matrícula</TableHead>
@@ -630,7 +1300,7 @@ export function MapaDetalheScreen() {
                 <TableBody>
                   {mapa.itens.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="py-6 text-muted-foreground">
+                      <TableCell colSpan={8} className="py-6 text-muted-foreground">
                         Nenhum veículo neste MAPA. Use + para incluir.
                       </TableCell>
                     </TableRow>
@@ -638,6 +1308,7 @@ export function MapaDetalheScreen() {
                     mapa.itens.map((item, i) => {
                       const temVinculo =
                         item.id_motorista != null && Number(item.id_motorista) > 0;
+                      const emAndamento = escalaEmAndamento(item);
                       return (
                       <TableRow
                         key={item.id_item}
@@ -654,6 +1325,23 @@ export function MapaDetalheScreen() {
                           {item.numero_frota
                             ? String(item.numero_frota)
                             : String(item.id_veiculo)}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <div className="flex flex-col gap-0.5">
+                            <Badge
+                              variant={emAndamento ? 'default' : 'secondary'}
+                              className="w-fit whitespace-nowrap text-[10px] uppercase"
+                            >
+                              {emAndamento ? 'Em andamento' : 'Encerrada'}
+                            </Badge>
+                            {!emAndamento ? (
+                              <span className="text-[10px] font-medium text-slate-700">
+                                Trabalhado:{' '}
+                                {item.duracao_trabalhada_hhmm ??
+                                  formatDuracaoHhMm(item.duracao_trabalhada_minutos)}
+                              </span>
+                            ) : null}
+                          </div>
                         </TableCell>
                         <TableCell className="text-xs">
                           {item.empresa ?? '—'}
@@ -675,7 +1363,7 @@ export function MapaDetalheScreen() {
                             variant="ghost"
                             className="h-9 w-9"
                             aria-label="Editar vínculo"
-                            disabled={!temVinculo}
+                            disabled={!temVinculo || !emAndamento}
                             onClick={(e) => {
                               e.stopPropagation();
                               openMotoristaEditar(item.id_item);
@@ -696,31 +1384,106 @@ export function MapaDetalheScreen() {
           <Separator />
 
           <section>
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-[13px] font-bold uppercase tracking-wide text-muted-foreground">
-                Viagens {itemSelecionado ? `· ${itemSelecionado.numero_frota ?? ''}` : ''}
-              </h2>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[13px] font-bold uppercase tracking-wide text-muted-foreground">
+                  {resumoViagens
+                    ? `Viagens — ${resumoViagens.frota}`
+                    : 'Viagens'}
+                </h2>
+                {resumoViagens ? (
+                  <div className="mt-1 space-y-0.5 text-[13px] leading-snug text-slate-800">
+                    <p>
+                      <span className="font-semibold">Motorista:</span>{' '}
+                      {resumoViagens.motoristaTxt}
+                    </p>
+                    <p className="text-slate-700">
+                      Linha {resumoViagens.linhaTxt} · {resumoViagens.empresaTxt}
+                      {resumoViagens.jornadaTxt
+                        ? ` · Jornada ${resumoViagens.jornadaTxt}`
+                        : ''}
+                    </p>
+                    {resumoViagens.encerrada ? (
+                      <p className="text-slate-700">
+                        Real {resumoViagens.inicioRealTxt}–
+                        {resumoViagens.fimRealTxt}
+                        {resumoViagens.trabalhadoTxt &&
+                        resumoViagens.trabalhadoTxt !== '—'
+                          ? ` · Trabalhado: ${resumoViagens.trabalhadoTxt}`
+                          : ''}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
               <Button
                 type="button"
                 size="icon"
-                className="h-10 w-10 rounded-full"
+                className="h-10 w-10 shrink-0 rounded-full"
                 aria-label="Nova viagem"
-                disabled={!itemSelecionado}
-                onClick={() => {
-                  setSaidaHora('');
-                  setChegadaHora('');
-                  setQtdIda('0');
-                  setQtdVolta('0');
-                  setViagemDialog(true);
-                }}
+                title={
+                  itemSelecionado && !escalaEmAndamento(itemSelecionado)
+                    ? 'Escala encerrada. Crie uma nova escala para registrar novas viagens.'
+                    : 'Nova viagem'
+                }
+                disabled={!itemProntoParaViagens}
+                onClick={abrirDialogViagem}
               >
                 <Plus className="h-5 w-5" />
               </Button>
             </div>
 
             {!itemSelecionado ? (
-              <p className="text-sm text-muted-foreground">
-                Selecione um carro para ver as viagens.
+              <p className="rounded-xl border border-dashed border-slate-400/50 bg-white/40 px-4 py-6 text-center text-sm text-slate-700">
+                Selecione um veículo e motorista para visualizar ou registrar
+                viagens.
+              </p>
+            ) : !escalaEmAndamento(itemSelecionado) ? (
+              <>
+                <p className="mb-2 rounded-xl border border-dashed border-slate-400/50 bg-white/40 px-4 py-3 text-center text-sm text-slate-700">
+                  Esta escala foi encerrada. Crie uma nova escala para registrar
+                  novas viagens.
+                </p>
+                <div className="overflow-hidden rounded-xl border border-slate-400/40">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-secondary/60 hover:bg-secondary/60">
+                        <TableHead className="text-[11px]">Saída</TableHead>
+                        <TableHead className="text-[11px]">Chegada</TableHead>
+                        <TableHead className="text-[11px]">Qtd ida</TableHead>
+                        <TableHead className="text-[11px]">Qtd volta</TableHead>
+                        <TableHead className="w-10 p-0" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {viagensDoItem.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="py-6 text-muted-foreground">
+                            Nenhuma viagem.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        viagensDoItem.map((v, i) => (
+                          <TableRow
+                            key={v.id_viagem}
+                            className={i % 2 === 0 ? 'bg-white' : 'bg-[hsl(var(--zebra))]'}
+                          >
+                            <TableCell className="text-xs">{formatHora(v.horario_saida)}</TableCell>
+                            <TableCell className="text-xs">{formatHora(v.horario_chegada)}</TableCell>
+                            <TableCell className="text-xs">{v.qtd_pas_ida}</TableCell>
+                            <TableCell className="text-xs">{v.qtd_pas_volta}</TableCell>
+                            <TableCell className="p-1" />
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            ) : !itemProntoParaViagens ? (
+              <p className="rounded-xl border border-dashed border-slate-400/50 bg-white/40 px-4 py-6 text-center text-sm text-slate-700">
+                Este carro ainda não tem motorista vinculado. Use o lápis ou
+                Incluir vínculo antes de registrar viagens.
               </p>
             ) : (
               <div className="overflow-hidden rounded-xl border border-slate-400/40">
@@ -735,14 +1498,14 @@ export function MapaDetalheScreen() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {itemSelecionado.viagens.length === 0 ? (
+                    {viagensDoItem.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={5} className="py-6 text-muted-foreground">
                           Nenhuma viagem.
                         </TableCell>
                       </TableRow>
                     ) : (
-                      itemSelecionado.viagens.map((v, i) => (
+                      viagensDoItem.map((v, i) => (
                         <TableRow
                           key={v.id_viagem}
                           className={i % 2 === 0 ? 'bg-white' : 'bg-[hsl(var(--zebra))]'}
@@ -810,6 +1573,33 @@ export function MapaDetalheScreen() {
               onSubmit={(e) => void onSalvarMotorista(e)}
             >
               <div className="field-stack min-h-0 flex-1 gap-3 overflow-y-auto overscroll-contain pe-0.5">
+              {ocupacaoLoading ? (
+                <p className="text-sm text-slate-700">
+                  Verificando disponibilidade...
+                </p>
+              ) : null}
+              {ocupacaoErro ? (
+                <div className="space-y-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2">
+                  <p className="text-sm text-destructive" role="alert">
+                    Não foi possível verificar a disponibilidade de veículo e
+                    motorista. Verifique a conexão e tente novamente.
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={ocupacaoLoading || vinculoSaving}
+                    onClick={() => void carregarOcupacao()}
+                  >
+                    Tentar novamente
+                  </Button>
+                </div>
+              ) : null}
+              {erroVinculo ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {erroVinculo}
+                </p>
+              ) : null}
               {isEditar ? (
                 <>
                   <p className="text-sm text-muted-foreground">
@@ -896,70 +1686,55 @@ export function MapaDetalheScreen() {
                     </Select>
                   </div>
 
-                  <div className="flex w-full flex-col gap-1" ref={frotaBoxRef}>
-                    <Label className="text-[13px] font-semibold uppercase text-slate-900">
+                  <div className="flex w-full flex-col gap-1">
+                    <Label
+                      htmlFor="veiculo-frota"
+                      className="text-[13px] font-semibold uppercase text-slate-900"
+                    >
                       Veículo <span className="req">*</span>
                     </Label>
-                    <div className="relative">
-                      <Input
-                        className="h-10 rounded-lg border-slate-400 bg-white text-base text-slate-900"
-                        placeholder={
-                          idLinhaForm
-                            ? 'Digite a frota (ex.: C40000)'
-                            : 'Selecione a linha antes'
-                        }
-                        value={frotaQuery}
-                        disabled={!idLinhaForm}
-                        autoComplete="off"
-                        onChange={(e) => onFrotaQueryChange(e.target.value)}
-                        onFocus={() => {
-                          if (idLinhaForm) setFrotaListaAberta(true);
-                        }}
-                        onBlur={() => {
-                          window.setTimeout(() => {
-                            const match = resolverFrotaDigitada();
-                            if (match) {
-                              setIdVeiculoForm(String(match.id_veiculo));
-                              setFrotaQuery(String(match.numero_frota ?? ''));
-                            } else if (frotaQuery.trim()) {
-                              setIdVeiculoForm('');
-                            }
-                          }, 120);
-                        }}
-                      />
-                      {frotaListaAberta && idLinhaForm ? (
-                        <ul
-                          className="absolute z-[420] mt-1 max-h-36 w-full overflow-auto rounded-lg border border-slate-300 bg-white shadow-lg"
-                          role="listbox"
-                        >
-                          {veiculosSugestoes.length === 0 ? (
-                            <li className="px-3 py-2 text-sm text-muted-foreground">
-                              Nenhum veículo disponível
-                            </li>
-                          ) : (
-                            veiculosSugestoes.map((v) => (
-                              <li key={v.id_veiculo}>
-                                <button
-                                  type="button"
-                                  className="flex w-full px-3 py-2 text-left text-base hover:bg-slate-100"
-                                  onMouseDown={(ev) => {
-                                    ev.preventDefault();
-                                    selecionarVeiculo(v);
-                                  }}
-                                >
-                                  {v.numero_frota}
-                                  {v.placa ? (
-                                    <span className="ml-2 text-sm text-muted-foreground">
-                                      {v.placa}
-                                    </span>
-                                  ) : null}
-                                </button>
-                              </li>
-                            ))
-                          )}
-                        </ul>
-                      ) : null}
-                    </div>
+                    <Input
+                      id="veiculo-frota"
+                      ref={veiculoInputRef}
+                      className="h-10 rounded-lg border-slate-400 bg-white font-mono text-base uppercase tracking-wide text-slate-900"
+                      placeholder={
+                        idEmpresaForm && idLinhaForm
+                          ? placeholderFrotaEmpresa(nomeEmpresaForm)
+                          : 'Selecione empresa e linha antes'
+                      }
+                      value={frotaQuery}
+                      disabled={!idEmpresaForm || !idLinhaForm}
+                      autoComplete="off"
+                      maxLength={6}
+                      inputMode="text"
+                      spellCheck={false}
+                      aria-invalid={Boolean(frotaErro)}
+                      aria-describedby={
+                        frotaErro
+                          ? 'veiculo-frota-erro'
+                          : idEmpresaForm && idLinhaForm
+                            ? 'veiculo-frota-mascara'
+                            : undefined
+                      }
+                      onChange={(e) => onFrotaQueryChange(e.target.value)}
+                    />
+                    {idEmpresaForm && idLinhaForm && !frotaErro ? (
+                      <span
+                        id="veiculo-frota-mascara"
+                        className="font-mono text-[12px] tracking-widest text-slate-500"
+                      >
+                        {mascaraGuiaFrotaEmpresa(nomeEmpresaForm)}
+                      </span>
+                    ) : null}
+                    {frotaErro || motivoVeiculoOcupado ? (
+                      <span
+                        id="veiculo-frota-erro"
+                        className="text-[13px] text-destructive"
+                        role="alert"
+                      >
+                        {frotaErro || motivoVeiculoOcupado}
+                      </span>
+                    ) : null}
                   </div>
                 </>
               )}
@@ -974,12 +1749,20 @@ export function MapaDetalheScreen() {
                     setIdMotorista(v ?? '');
                     limparHorariosMotorista();
                   }}
-                  disabled={!idVeiculoForm}
+                  disabled={
+                    motoristaDialogMode === 'novo' ? !frotaValida : !idVeiculoForm
+                  }
                 >
                   <SelectTrigger className="h-10 bg-white text-base">
                     <SelectValue
                       placeholder={
-                        idVeiculoForm ? 'Selecione' : 'Selecione o veículo antes'
+                        motoristaDialogMode === 'novo'
+                          ? frotaValida
+                            ? 'Selecione'
+                            : 'Informe o veículo antes'
+                          : idVeiculoForm
+                            ? 'Selecione'
+                            : 'Selecione o veículo antes'
                       }
                     />
                   </SelectTrigger>
@@ -990,8 +1773,13 @@ export function MapaDetalheScreen() {
                       </SelectItem>
                     ) : (
                       motoristas.map((m) => (
-                        <SelectItem key={m.id_motorista} value={String(m.id_motorista)}>
+                        <SelectItem
+                          key={m.id_motorista}
+                          value={String(m.id_motorista)}
+                          disabled={Boolean(m.emOperacao)}
+                        >
                           {m.matricula} — {m.nome}
+                          {m.emOperacao ? ' (Em operação)' : ''}
                         </SelectItem>
                       ))
                     )}
@@ -1029,13 +1817,24 @@ export function MapaDetalheScreen() {
               </div>
 
               <DialogFooter className="mt-4 shrink-0 grid grid-cols-2 gap-3">
-                <Button type="submit" disabled={busy}>
-                  Confirmar
+                <Button
+                  type="submit"
+                  disabled={
+                    vinculoSaving ||
+                    (motoristaDialogMode === 'novo' &&
+                      (!frotaValida || Boolean(motivoVeiculoOcupado)))
+                  }
+                >
+                  {vinculoSaving
+                    ? 'SALVANDO...'
+                    : ocupacaoLoading
+                      ? 'Verificando...'
+                      : 'Confirmar'}
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={busy}
+                  disabled={vinculoSaving}
                   onClick={closeMotoristaDialog}
                 >
                   Cancelar
@@ -1045,25 +1844,57 @@ export function MapaDetalheScreen() {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={viagemDialog} onOpenChange={setViagemDialog}>
+        <Dialog
+          open={viagemDialog}
+          onOpenChange={(open) => {
+            setViagemDialog(open);
+            if (!open) setErroViagem('');
+          }}
+        >
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Nova viagem</DialogTitle>
             </DialogHeader>
             <form className="field-stack" onSubmit={(e) => void onSalvarViagem(e)}>
+              {ultimaViagemItem && saidaMinimaViagem ? (
+                <p className="rounded-md border border-slate-300/70 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+                  Última viagem: {formatHora(ultimaViagemItem.horario_saida)}–
+                  {formatHora(ultimaViagemItem.horario_chegada)}. Próxima saída
+                  permitida: {saidaMinimaViagem}.
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Primeira viagem desta escala.
+                </p>
+              )}
+              {erroViagem ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {erroViagem}
+                </p>
+              ) : conflitoViagemLocal ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {conflitoViagemLocal}
+                </p>
+              ) : null}
               <FormField
                 label="Saída"
                 requiredMark
                 type="time"
                 value={saidaHora}
-                onChange={(e) => setSaidaHora(e.target.value)}
+                onChange={(e) => {
+                  setSaidaHora(e.target.value);
+                  setErroViagem('');
+                }}
               />
               <FormField
                 label="Chegada"
                 requiredMark
                 type="time"
                 value={chegadaHora}
-                onChange={(e) => setChegadaHora(e.target.value)}
+                onChange={(e) => {
+                  setChegadaHora(e.target.value);
+                  setErroViagem('');
+                }}
               />
               <FormField
                 label="Qtd ida"
@@ -1080,7 +1911,16 @@ export function MapaDetalheScreen() {
                 onChange={(e) => setQtdVolta(e.target.value)}
               />
               <DialogFooter className="grid grid-cols-2 gap-3">
-                <Button type="submit" disabled={busy}>
+                <Button
+                  type="submit"
+                  disabled={
+                    busy ||
+                    !itemProntoParaViagens ||
+                    !saidaHora ||
+                    !chegadaHora ||
+                    Boolean(conflitoViagemLocal)
+                  }
+                >
                   Confirmar
                 </Button>
                 <Button
@@ -1095,6 +1935,16 @@ export function MapaDetalheScreen() {
             </form>
           </DialogContent>
         </Dialog>
+
+        <ConfirmDialog
+          open={confirmCriarVeiculo}
+          title="Cadastrar veículo"
+          message={`Veículo ${frotaQuery.trim().toUpperCase() || '—'} não encontrado para ${nomeEmpresaForm || 'a empresa'}. Deseja cadastrá-lo?`}
+          confirmLabel="Cadastrar"
+          cancelLabel="Cancelar"
+          onConfirm={() => void confirmarCadastroVeiculo()}
+          onCancel={() => setConfirmCriarVeiculo(false)}
+        />
 
         <ConfirmDialog
           open={confirmDeleteMap}
@@ -1113,6 +1963,65 @@ export function MapaDetalheScreen() {
           onConfirm={() => void confirmarExcluirItem()}
           onCancel={() => setConfirmDeleteItem(false)}
         />
+
+        <Dialog
+          open={confirmBaixaItem}
+          onOpenChange={(open) => {
+            if (!open) setConfirmBaixaItem(false);
+          }}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Dar baixa</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 text-sm">
+              <p>
+                {itemSelecionado
+                  ? `Encerrar escala do veículo ${String(itemSelecionado.numero_frota ?? itemSelecionado.id_veiculo)} · motorista ${[itemSelecionado.matricula_motorista, itemSelecionado.motorista].filter(Boolean).join(' — ') || '—'}.`
+                  : 'Encerrar esta escala.'}
+              </p>
+              <p>
+                Início real:{' '}
+                <span className="font-semibold">{previewBaixa.inicioHora}</span>
+              </p>
+              <FormField
+                label="Data e hora real de baixa *"
+                type="datetime-local"
+                value={fimRealBaixa}
+                onChange={(e) => setFimRealBaixa(e.target.value)}
+                required
+              />
+              <p className="rounded-md border border-slate-300/70 bg-slate-50 px-3 py-2 text-slate-800">
+                As horas de {previewBaixa.inicioHora} até {previewBaixa.fimHora}{' '}
+                serão registradas no banco de horas do motorista.
+                {previewBaixa.minutos != null ? (
+                  <>
+                    {' '}
+                    Prévia: <strong>{previewBaixa.duracao}</strong> (
+                    {previewBaixa.minutos} min).
+                  </>
+                ) : null}
+              </p>
+            </div>
+            <DialogFooter className="grid grid-cols-2 gap-3">
+              <Button
+                type="button"
+                disabled={busy || !fimRealBaixa.trim()}
+                onClick={() => void confirmarDarBaixa()}
+              >
+                Dar baixa
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() => setConfirmBaixaItem(false)}
+              >
+                Cancelar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <ConfirmDialog
           open={confirmDeleteViagem != null}

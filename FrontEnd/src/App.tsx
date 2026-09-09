@@ -13,6 +13,7 @@ import { EntradaSaidaScreen } from '@/screens/principal/EntradaSaidaScreen';
 import { GuiaScreen } from '@/screens/principal/GuiaScreen';
 import { IndicadoresConfigScreen } from '@/screens/principal/IndicadoresConfigScreen';
 import { IndicadoresScreen } from '@/screens/principal/IndicadoresScreen';
+import { BancoHorasScreen } from '@/screens/principal/BancoHorasScreen';
 import { TelaPrincipalScreen } from '@/screens/principal/TelaPrincipalScreen';
 
 export default function App() {
@@ -33,6 +34,7 @@ export default function App() {
             element={<IndicadoresConfigScreen />}
           />
           <Route path="/indicadores" element={<IndicadoresScreen />} />
+          <Route path="/banco-horas" element={<BancoHorasScreen />} />
           <Route path="/mapas" element={<MapasListScreen />} />
           <Route path="/mapas/novo" element={<MapaFormScreen />} />
           <Route path="/mapas/:id/editar" element={<MapaFormScreen />} />

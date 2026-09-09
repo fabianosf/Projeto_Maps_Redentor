@@ -4,6 +4,7 @@ import type {
   MapaDeleteResponse,
   MapaHeaderPayload,
   MapaItemResponse,
+  MapaOcupacaoResponse,
   MapaResponse,
   MapaViagemResponse,
   MapasListResponse,
@@ -64,6 +65,37 @@ export async function updateItem(
 export async function deleteItem(idItem: number): Promise<MapaDeleteResponse> {
   return apiFetch<MapaDeleteResponse>(`/mapas/itens/${idItem}`, {
     method: 'DELETE',
+  });
+}
+
+export async function listOcupacaoEscalas(params?: {
+  id_mapa?: number;
+  id_empresa?: number;
+  id_linha?: number;
+  data?: string;
+}): Promise<MapaOcupacaoResponse> {
+  const q = new URLSearchParams();
+  if (params?.id_mapa != null) q.set('id_mapa', String(params.id_mapa));
+  if (params?.id_empresa != null) q.set('id_empresa', String(params.id_empresa));
+  if (params?.id_linha != null) q.set('id_linha', String(params.id_linha));
+  if (params?.data) q.set('data', params.data);
+  const suffix = q.toString() ? `?${q.toString()}` : '';
+  return apiFetch<MapaOcupacaoResponse>(`/mapas/ocupacao${suffix}`, {
+    method: 'GET',
+  });
+}
+
+export async function darBaixaItem(
+  idItem: number,
+  payload: {
+    fim_real: string;
+    motivo_baixa?: string;
+    observacao_baixa?: string;
+  },
+): Promise<MapaItemResponse> {
+  return apiFetch<MapaItemResponse>(`/mapas/itens/${idItem}/baixa`, {
+    method: 'POST',
+    body: payload,
   });
 }
 

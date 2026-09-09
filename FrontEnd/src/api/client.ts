@@ -6,6 +6,9 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ??
   '/api/v1';
 
+/** Timeout padrão das chamadas HTTP (evita Promise pendente / UI congelada). */
+export const API_DEFAULT_TIMEOUT_MS = 30_000;
+
 export class SessionExpiredError extends Error {
   readonly status = 401 as const;
 
@@ -18,12 +21,14 @@ export class SessionExpiredError extends Error {
 export class ApiRequestError extends Error {
   readonly status: number;
   readonly body: ApiError;
+  readonly details?: unknown;
 
-  constructor(status: number, body: ApiError) {
+  constructor(status: number, body: ApiError, details?: unknown) {
     super(body.mensagem);
     this.name = 'ApiRequestError';
     this.status = status;
     this.body = body;
+    this.details = details;
   }
 }
 
@@ -42,10 +47,23 @@ function notifySessionExpired(): void {
 
 function toApiError(data: unknown, fallback: string): ApiError {
   if (isApiError(data)) return data;
+  if (data && typeof data === 'object') {
+    const rec = data as Record<string, unknown>;
+    const msg =
+      (typeof rec.mensagem === 'string' && rec.mensagem) ||
+      (typeof rec.message === 'string' && rec.message) ||
+      (typeof rec.error === 'string' && rec.error) ||
+      fallback;
+    const codigo = typeof rec.codigo === 'string' ? rec.codigo : undefined;
+    return { ok: false, mensagem: msg, codigo };
+  }
+  if (typeof data === 'string' && data.trim()) {
+    return { ok: false, mensagem: data.trim().slice(0, 300) };
+  }
   return { ok: false, mensagem: fallback };
 }
 
-export type ApiFetchOptions = Omit<RequestInit, 'body'> & {
+export type ApiFetchOptions = Omit<RequestInit, 'body' | 'signal'> & {
   /** Corpo JSON (objeto ou já stringificado). */
   body?: BodyInit | object | null;
   /**
@@ -53,6 +71,9 @@ export type ApiFetchOptions = Omit<RequestInit, 'body'> & {
    * Padrão: false.
    */
   skipSessionExpired?: boolean;
+  /** Timeout em ms (padrão API_DEFAULT_TIMEOUT_MS). Use 0 para desabilitar. */
+  timeoutMs?: number;
+  signal?: AbortSignal;
 };
 
 function resolveBody(body: ApiFetchOptions['body']): BodyInit | undefined {
@@ -69,40 +90,134 @@ function resolveBody(body: ApiFetchOptions['body']): BodyInit | undefined {
   return JSON.stringify(body);
 }
 
+function logDev(
+  level: 'info' | 'error',
+  method: string,
+  url: string,
+  extra?: Record<string, unknown>,
+) {
+  // Em DEV só registra falhas — sucesso não polui o console.
+  if (!import.meta.env.DEV || level !== 'error') return;
+  console.error('[API]', { method, url, ...extra });
+}
+
 /**
  * Fetch tipado com cookies de sessão (`credentials: 'include'`).
  * Em sucesso retorna o JSON como `T`. Em 401 (exceto skip) lança SessionExpiredError.
+ * Sempre usa AbortController com timeout para não deixar Promise pendente.
  */
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
-  const { body, headers, skipSessionExpired = false, ...rest } = options;
+  const {
+    body,
+    headers,
+    skipSessionExpired = false,
+    timeoutMs = API_DEFAULT_TIMEOUT_MS,
+    signal: outerSignal,
+    method = 'GET',
+    ...rest
+  } = options;
   const url = `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
   const resolvedBody = resolveBody(body);
+  const httpMethod = String(method).toUpperCase();
 
-  const response = await fetch(url, {
-    ...rest,
-    credentials: 'include',
-    headers: {
-      Accept: 'application/json',
-      ...(resolvedBody != null && !(resolvedBody instanceof FormData)
-        ? { 'Content-Type': 'application/json' }
-        : {}),
-      ...(headers ?? {}),
-    },
-    body: resolvedBody,
+  const controller = new AbortController();
+  const onOuterAbort = () => controller.abort();
+  if (outerSignal) {
+    if (outerSignal.aborted) controller.abort();
+    else outerSignal.addEventListener('abort', onOuterAbort, { once: true });
+  }
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  if (timeoutMs > 0) {
+    timer = setTimeout(() => controller.abort(), timeoutMs);
+  }
+
+  logDev('info', httpMethod, url, {
+    hasBody: resolvedBody != null,
+    // não logar senha/token; payload só com chaves (dev)
+    bodyKeys:
+      resolvedBody && typeof body === 'object' && body != null && !(body instanceof FormData)
+        ? Object.keys(body as object)
+        : undefined,
   });
 
-  const data: unknown = await response.json().catch(() => ({}));
+  try {
+    const response = await fetch(url, {
+      ...rest,
+      method: httpMethod,
+      credentials: 'include',
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json',
+        ...(resolvedBody != null && !(resolvedBody instanceof FormData)
+          ? { 'Content-Type': 'application/json' }
+          : {}),
+        ...(headers ?? {}),
+      },
+      body: resolvedBody,
+    });
 
-  if (response.status === 401 && !skipSessionExpired) {
-    notifySessionExpired();
-    throw new SessionExpiredError(toApiError(data, 'Sessão expirada').mensagem);
+    const rawText = await response.text();
+    let data: unknown = {};
+    if (rawText.trim()) {
+      try {
+        data = JSON.parse(rawText) as unknown;
+      } catch {
+        data = {
+          ok: false,
+          mensagem: `Resposta inválida da API (HTTP ${response.status}).`,
+          codigo: 'resposta_invalida',
+        };
+      }
+    }
+
+    if (response.status === 401 && !skipSessionExpired) {
+      notifySessionExpired();
+      throw new SessionExpiredError(toApiError(data, 'Sessão expirada').mensagem);
+    }
+
+    if (!response.ok) {
+      const errBody = toApiError(data, `Erro HTTP ${response.status}`);
+      logDev('error', httpMethod, url, {
+        status: response.status,
+        codigo: errBody.codigo,
+        mensagem: errBody.mensagem,
+      });
+      throw new ApiRequestError(response.status, errBody, data);
+    }
+
+    return data as T;
+  } catch (err) {
+    if (err instanceof SessionExpiredError || err instanceof ApiRequestError) {
+      throw err;
+    }
+    const aborted =
+      (err instanceof DOMException && err.name === 'AbortError') ||
+      (err instanceof Error && err.name === 'AbortError');
+    if (aborted) {
+      const body: ApiError = {
+        ok: false,
+        mensagem: 'Tempo esgotado na comunicação com a API. Tente novamente.',
+        codigo: 'timeout',
+      };
+      logDev('error', httpMethod, url, { status: 0, codigo: 'timeout' });
+      throw new ApiRequestError(0, body);
+    }
+    const body: ApiError = {
+      ok: false,
+      mensagem: 'Falha de rede. Verifique a conexão e tente novamente.',
+      codigo: 'rede',
+    };
+    logDev('error', httpMethod, url, {
+      status: 0,
+      codigo: 'rede',
+      detail: err instanceof Error ? err.message : String(err),
+    });
+    throw new ApiRequestError(0, body, err);
+  } finally {
+    if (timer != null) clearTimeout(timer);
+    if (outerSignal) outerSignal.removeEventListener('abort', onOuterAbort);
   }
-
-  if (!response.ok) {
-    throw new ApiRequestError(response.status, toApiError(data, `Erro HTTP ${response.status}`));
-  }
-
-  return data as T;
 }
 
 export function getApiBaseUrl(): string {

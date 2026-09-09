@@ -17,21 +17,33 @@ class CadastroError:
     codigo: str = "validacao"
 
 
-# Faixas de frota por empresa (1 letra + exatamente 5 dígitos).
-# Prefixo: Futuro/Redentor = C; Barra = D.
-_FAIXAS_FROTA: dict[str, list[tuple[str, int, int]]] = {
-    "redentor": [("C", 40000, 40999)],
-    "futuro": [("C", 30000, 30999)],
-    "barra": [("D", 13000, 13999)],
+# Padrão oficial de frota por empresa (1 letra + 5 dígitos = 6 caracteres).
+# Redentor: C47NNN | Futuro: C30NNN | Barra: D13NNN
+_REGRAS_FROTA: dict[str, dict[str, str]] = {
+    "redentor": {
+        "codigo": "C47",
+        "regex": r"^C47\d{3}$",
+        "exemplo": "C47654",
+        "mascara": "C47___",
+        "mensagem": "Informe no formato C47 + 3 números. Ex.: C47654.",
+    },
+    "futuro": {
+        "codigo": "C30",
+        "regex": r"^C30\d{3}$",
+        "exemplo": "C30114",
+        "mascara": "C30___",
+        "mensagem": "Informe no formato C30 + 3 números. Ex.: C30114.",
+    },
+    "barra": {
+        "codigo": "D13",
+        "regex": r"^D13\d{3}$",
+        "exemplo": "D13450",
+        "mascara": "D13___",
+        "mensagem": "Informe no formato D13 + 3 números. Ex.: D13450.",
+    },
 }
 
-_RE_FROTA = re.compile(r"^([A-Za-z])(\d{5})$")
-
-_PREFIXO_EMPRESA: dict[str, str] = {
-    "redentor": "C",
-    "futuro": "C",
-    "barra": "D",
-}
+_RE_FROTA_BASICO = re.compile(r"^([A-Za-z])(\d{5})$")
 
 
 def _rows(dal, sql: str, values: Any = None) -> list[dict[str, Any]]:
@@ -112,57 +124,33 @@ def _validar_frota_empresa(
 ) -> CadastroError | tuple[str, int]:
     """Retorna (frota_normalizada, codigo_veiculo) ou CadastroError."""
     frota = (numero_frota or "").strip().upper()
+    chave = (empresa_descricao or "").strip().lower()
+    regra = _REGRAS_FROTA.get(chave)
+
+    if not regra:
+        if empresa_descricao:
+            return CadastroError(
+                f"Empresa '{empresa_descricao}' sem padrão de frota configurado.",
+                "validacao",
+            )
+        return CadastroError("Selecione a empresa.", "validacao")
+
+    mensagem = regra["mensagem"]
     if not frota:
-        return CadastroError("Informe o número de frota.", "validacao")
+        return CadastroError(mensagem, "validacao")
     if len(frota) > 20:
         return CadastroError("Número de frota inválido (máximo 20 caracteres).", "validacao")
 
-    m = _RE_FROTA.fullmatch(frota)
+    if not re.fullmatch(regra["regex"], frota):
+        return CadastroError(mensagem, "frota_fora_faixa")
+
+    m = _RE_FROTA_BASICO.fullmatch(frota)
     if not m:
-        return CadastroError(
-            "Frota inválida. Use 1 letra + 5 números (ex.: C30000).",
-            "validacao",
-        )
-    letra, num_txt = m.group(1).upper(), m.group(2)
+        return CadastroError(mensagem, "validacao")
     try:
-        numero = int(num_txt)
+        numero = int(m.group(2))
     except ValueError:
-        return CadastroError("Frota inválida.", "validacao")
-
-    chave = (empresa_descricao or "").strip().lower()
-    prefixo = _PREFIXO_EMPRESA.get(chave)
-    if prefixo and letra != prefixo:
-        return CadastroError(
-            f"Frota da empresa {empresa_descricao} deve começar com {prefixo}.",
-            "validacao",
-        )
-
-    faixas = _FAIXAS_FROTA.get(chave)
-    if not faixas:
-        return CadastroError(
-            f"Empresa '{empresa_descricao}' sem faixa de frota configurada.",
-            "validacao",
-        )
-
-    ok = False
-    for let_ok, ini, fim in faixas:
-        if letra == let_ok and ini <= numero <= fim:
-            ok = True
-            break
-
-    if not ok:
-        if chave == "redentor":
-            faixa_txt = "C40000–C40999"
-        elif chave == "futuro":
-            faixa_txt = "C30000–C30999"
-        elif chave == "barra":
-            faixa_txt = "D13000–D13999"
-        else:
-            faixa_txt = "faixa da empresa"
-        return CadastroError(
-            f"Frota {frota} fora da faixa permitida para {empresa_descricao} ({faixa_txt}).",
-            "frota_fora_faixa",
-        )
+        return CadastroError(mensagem, "validacao")
 
     return frota, numero
 

@@ -9,7 +9,7 @@ export function makeAuthSession(
   const codigo = overrides.codigo_perfil;
   let permissoes: Permissao[];
   if (overrides.permissoes) {
-    permissoes = [...overrides.permissoes];
+    permissoes = [...overrides.permissoes] as Permissao[];
   } else if (codigo === 1) {
     permissoes = [
       'principal',

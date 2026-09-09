@@ -13,7 +13,7 @@ from flask import Response, g, jsonify, request
 
 from .auth_service import UsuarioAuth, buscar_usuario_por_id
 from .auth_session import build_session_clear_cookie, destroy_session, get_current_session
-from .constants import PERFIL_ADMIN, PERFIS_CONFIG, PERFIS_MAPA
+from .constants import PERFIL_ADMIN, PERFIS_BANCO_HORAS, PERFIS_CONFIG, PERFIS_MAPA
 from .session_store import SessionRecord
 
 
@@ -97,6 +97,20 @@ def require_mapa_access(f: Callable) -> Callable:
     def wrapper(*args, **kwargs):
         usuario: UsuarioAuth = g.auth_usuario
         if usuario.codigo_perfil not in PERFIS_MAPA:
+            return json_error("Operação não autorizada.", 403, "perfil_negado")
+        return f(*args, **kwargs)
+
+    return wrapper
+
+
+def require_banco_horas_access(f: Callable) -> Callable:
+    """Consulta operacional de banco de horas — Admin, Despachante ou Inspetor."""
+
+    @wraps(f)
+    @require_session
+    def wrapper(*args, **kwargs):
+        usuario: UsuarioAuth = g.auth_usuario
+        if usuario.codigo_perfil not in PERFIS_BANCO_HORAS:
             return json_error("Operação não autorizada.", 403, "perfil_negado")
         return f(*args, **kwargs)
 
