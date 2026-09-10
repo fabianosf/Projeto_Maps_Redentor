@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+﻿import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { enviarMensagem, listTiposAvaria, type TipoAvaria } from '@/api/mensagem';
 import { PageHeader } from '@/components/shared/PageHeader';
@@ -18,8 +18,9 @@ import { useScreenBg } from '@/hooks/useScreenBg';
 import { actionBtn3dMd } from '@/lib/actionBtn3d';
 import { cn } from '@/lib/utils';
 import { onlyDigits } from '@/utils/validation';
+import { SCREEN_BG } from '@/theme/tokens';
 
-const BG = '#B9C8D4';
+const BG = SCREEN_BG;
 
 const screenTextClass = 'text-[15px] font-bold text-slate-900';
 
@@ -118,19 +119,19 @@ export function MensagemScreen() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[100dvh] flex-col" style={{ backgroundColor: BG }}>
+      <div className="flex min-h-[100dvh] flex-col bg-screen">
         <PageHeader title="MENSAGEM" onBack={voltar} />
-        <p className="p-6 text-center text-sm font-medium text-slate-700">Carregando…</p>
+        <p className="p-6 text-center text-sm font-medium text-foreground">Carregando…</p>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-[100dvh] flex-col" style={{ backgroundColor: BG }}>
+    <div className="flex min-h-[100dvh] flex-col bg-screen">
       <PageHeader title="MENSAGEM" onBack={voltar} />
 
       <div className="relative flex-1 px-4 pb-4 pt-3">
-        <div className={cn('rounded-xl border-2 border-slate-400/40 bg-white/50 p-3')}>
+        <div className="surface-card p-3">
           <div className="mb-3 flex flex-col gap-3">
             <FormField
               label="Carro:"

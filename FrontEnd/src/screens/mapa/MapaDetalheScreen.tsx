@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Pencil, Plus, Trash2, UserPlus, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -73,8 +73,9 @@ import {
   erroFrotaDuranteDigitacao,
   validarFrotaParaEmpresa,
 } from '@/utils/frotaVeiculo';
+import { SCREEN_BG } from '@/theme/tokens';
 
-const MAPA_BG = '#B9C8D4';
+const MAPA_BG = SCREEN_BG;
 
 const isAtivo = (ativo?: number) => ativo == null || Number(ativo) === 1;
 
@@ -157,13 +158,13 @@ function StatusEscalaBadge({
   return (
     <div className={cn('flex flex-col gap-0.5', className)}>
       <Badge
-        variant={emAndamento ? 'default' : 'secondary'}
+        variant={emAndamento ? 'warning' : 'success'}
         className="w-fit whitespace-nowrap text-[10px] uppercase"
       >
         {emAndamento ? 'Em andamento' : 'Encerrada'}
       </Badge>
       {!emAndamento ? (
-        <span className="text-[10px] font-medium text-slate-700">
+        <span className="helper-text text-[10px] font-medium">
           Trabalhado:{' '}
           {item.duracao_trabalhada_hhmm ??
             formatDuracaoHhMm(item.duracao_trabalhada_minutos)}
@@ -243,7 +244,14 @@ export function MapaDetalheScreen() {
         getMapa(idRegistro),
         getCadastros(),
       ]);
-      const m = mapRes.mapa;
+      const m = mapRes?.mapa;
+      if (!m || m.id_registro == null) {
+        throw new ApiRequestError(404, {
+          ok: false,
+          mensagem: 'MAPA não encontrado.',
+          codigo: 'nao_encontrado',
+        });
+      }
       setMapa(m);
       setSelectedItemId((prev) => {
         if (prev != null && m.itens.some((i) => i.id_item === prev)) return prev;
@@ -1231,8 +1239,8 @@ export function MapaDetalheScreen() {
 
   if (loading) {
     return (
-      <AppShell className="bg-[#B9C8D4]">
-        <div className="page min-h-dvh bg-[#B9C8D4] text-slate-900">
+      <AppShell className="bg-screen">
+        <div className="page min-h-dvh bg-screen text-slate-900">
           <PageHeader title="MAPA" onBack={goLista} />
           <LoadingState label="Carregando MAPA…" className="min-h-[40vh]" />
         </div>
@@ -1242,8 +1250,8 @@ export function MapaDetalheScreen() {
 
   if (!mapa) {
     return (
-      <AppShell className="bg-[#B9C8D4]">
-        <div className="page min-h-dvh bg-[#B9C8D4] text-slate-900">
+      <AppShell className="bg-screen">
+        <div className="page min-h-dvh bg-screen text-slate-900">
           <PageHeader title="MAPA" onBack={goLista} />
           <EmptyState
             title="MAPA não encontrado"
@@ -1258,8 +1266,8 @@ export function MapaDetalheScreen() {
   const isEditar = motoristaDialogMode === 'editar';
 
   return (
-    <AppShell className="bg-[#B9C8D4]">
-      <div className="page flex min-h-dvh flex-col bg-[#B9C8D4] text-slate-900">
+    <AppShell className="bg-screen">
+      <div className="page flex min-h-dvh flex-col bg-screen text-slate-900">
         <PageHeader
           title="MAPA"
           onBack={goLista}

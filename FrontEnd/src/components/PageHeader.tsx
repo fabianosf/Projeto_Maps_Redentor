@@ -25,10 +25,9 @@ export function PageHeader({ title, onBack, rightSlot }: Props) {
       ) : (
         <span className="w-11" />
       )}
-      <h1 className="flex-1 truncate text-center text-[17px] font-bold uppercase tracking-wide">
+      <h1 className="flex-1 truncate text-center text-page-title uppercase tracking-wide">
         {title}
-      </h1>
-      <div className="flex h-11 min-w-11 shrink-0 items-center justify-end">
+      </h1>      <div className="flex h-11 min-w-11 shrink-0 items-center justify-end">
         {rightSlot ?? null}
       </div>
     </header>

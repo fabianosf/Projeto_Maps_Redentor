@@ -1,4 +1,4 @@
-import {
+﻿import {
   useEffect,
   useRef,
   useState,
@@ -38,8 +38,9 @@ import {
   todayBR,
 } from '@/utils/mapaFormat';
 import { cancelIdleCallbackSafe, clearTimerSafe } from '@/utils/safeTiming';
+import { SCREEN_BG } from '@/theme/tokens';
 
-const MAPA_BG = '#B9C8D4';
+const MAPA_BG = SCREEN_BG;
 
 /** Opções fixas do combo Turno (sempre renderizadas). */
 const TURNO_OPCOES = ['TURNO 01', 'TURNO 02', 'TURNO 03'] as const;
@@ -253,8 +254,16 @@ export function MapaFormScreen() {
       } else {
         const res = await createMapa(payload);
         if (!mountedRef.current) return;
+        const novoId = Number(res?.mapa?.id_registro);
+        if (!Number.isFinite(novoId) || novoId <= 0) {
+          toast.error(
+            'MAPA criado, mas a API não retornou o identificador. Atualize a lista.',
+          );
+          navigate('/mapas', { replace: true });
+          return;
+        }
         toast.success('MAPA cadastrado com sucesso.');
-        navigate(`/mapas/${res.mapa.id_registro}`, { replace: true });
+        navigate(`/mapas/${novoId}`, { replace: true });
       }
     } catch (err) {
       if (!mountedRef.current) return;
@@ -270,8 +279,8 @@ export function MapaFormScreen() {
 
   if (loading) {
     return (
-      <AppShell className="bg-[#B9C8D4]">
-        <div className="page min-h-dvh bg-[#B9C8D4] text-slate-900">
+      <AppShell className="bg-screen">
+        <div className="page min-h-dvh bg-screen text-slate-900">
           <PageHeader title="MAPA" onBack={onCancelar} />
           <LoadingState />
         </div>
@@ -280,8 +289,8 @@ export function MapaFormScreen() {
   }
 
   return (
-    <AppShell className="bg-[#B9C8D4]">
-      <div className="page flex min-h-dvh flex-col bg-[#B9C8D4] text-slate-900">
+    <AppShell className="bg-screen">
+      <div className="page flex min-h-dvh flex-col bg-screen text-slate-900">
         <PageHeader
           title="MAPA"
           onBack={onCancelar}
@@ -306,7 +315,7 @@ export function MapaFormScreen() {
         />
 
         <form
-          className="page-body flex min-h-0 flex-1 flex-col bg-[#B9C8D4]"
+          className="page-body flex min-h-0 flex-1 flex-col bg-screen"
           onSubmit={(e) => void onSubmit(e)}
           autoComplete="off"
         >

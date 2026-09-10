@@ -41,7 +41,15 @@ export type {
   VeiculoCadastro,
 } from './cadastro';
 
-export type { Guia, GuiaDeleteResponse, GuiaResponse } from './guia';
+export type {
+  Guia,
+  GuiaDeleteResponse,
+  GuiaListResponse,
+  GuiaResumoDia,
+  GuiaSyncStatus,
+  GuiaViagemCard,
+  GuiaResponse,
+} from './guia';
 
 export type {
   EntradaSaidaContextoResponse,

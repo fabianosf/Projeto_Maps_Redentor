@@ -1,4 +1,4 @@
-import {
+﻿import {
   useCallback,
   useEffect,
   useRef,
@@ -52,6 +52,7 @@ import {
 } from '@/components/ui/select';
 import { useAuth } from '@/context/AuthContext';
 import { useScreenBg } from '@/hooks/useScreenBg';
+import { SCREEN_BG } from '@/theme/tokens';
 import type { CodigoPerfil, PerfilItem, UsuarioLista } from '@/types';
 import type {
   CadastrosMestres,
@@ -92,7 +93,7 @@ const MSG_NOME_INVALIDO =
 const MSG_NOME_TAMANHO = `Nome deve ter no máximo ${NOME_MAX_LENGTH} caracteres.`;
 const MSG_ERP_INDISPONIVEL =
   'Cadastro corporativo indisponível. Tente novamente.';
-const SCREEN_BG = '#b9c8d4';
+
 
 function buildFotoSrc(info: {
   foto_url?: string | null;
@@ -495,11 +496,13 @@ export function UsuariosScreen() {
       setNome(String(u.nome ?? '').slice(0, NOME_MAX_LENGTH));
       setCodigoPerfil(perfil);
       setFotoSrc(buildFotoSrc(u));
+      const origemRh =
+        'origem' in u && u.origem != null ? String(u.origem) : 'rh';
       setConsultaCadastroMsg(
-        `${u.matricula} — ${String(u.nome ?? '').slice(0, NOME_MAX_LENGTH)} (${u.origem ?? 'rh'})`,
+        `${u.matricula} — ${String(u.nome ?? '').slice(0, NOME_MAX_LENGTH)} (${origemRh})`,
       );
       setConsultaCadastroErro(null);
-      setNomeSomenteLeitura(String(u.origem ?? '') === 'oracle');
+      setNomeSomenteLeitura(origemRh === 'oracle');
       sincronizarVinculosPorPerfil(perfil, cad);
       setMode('include');
       setPesquisarOpen(false);
@@ -704,8 +707,8 @@ export function UsuariosScreen() {
 
   if (authLoading || loading) {
     return (
-      <AppShell className="bg-[#b9c8d4]">
-        <div className="page bg-[#b9c8d4]">
+      <AppShell className="bg-screen">
+        <div className="page bg-screen">
           <PageHeader title="Cadastro de Usuário" onBack={() => navigate(-1)} />
           <LoadingState />
         </div>
@@ -715,8 +718,8 @@ export function UsuariosScreen() {
 
   if (!allowed) {
     return (
-      <AppShell className="bg-[#b9c8d4]">
-        <div className="page bg-[#b9c8d4]">
+      <AppShell className="bg-screen">
+        <div className="page bg-screen">
           <PageHeader
             title="Cadastro de Usuário"
             onBack={() => navigate('/configuracao')}
@@ -733,14 +736,14 @@ export function UsuariosScreen() {
   }
 
   return (
-    <AppShell className="bg-[#b9c8d4]">
-      <div className="page bg-[#b9c8d4]">
+    <AppShell className="bg-screen">
+      <div className="page bg-screen">
         <PageHeader
           title="Cadastro de Usuário"
           onBack={() => navigate('/configuracao')}
         />
 
-        <div className="page-body bg-[#b9c8d4]">
+        <div className="page-body bg-screen">
           <div className="field-stack">
             <div className="mb-4 flex items-start gap-3">
               <div className="w-[calc(50%-6px)] shrink-0">
@@ -983,7 +986,7 @@ export function UsuariosScreen() {
         />
 
         <Dialog open={pesquisarOpen} onOpenChange={setPesquisarOpen}>
-          <DialogContent className="max-w-[340px] border-slate-400/50 bg-[#B9C8D4] p-5">
+          <DialogContent className="max-w-[340px] border-slate-400/50 bg-screen p-5">
             <DialogHeader>
               <DialogTitle className="text-center text-[16px] uppercase tracking-wide text-slate-900">
                 Pesquisar usuário

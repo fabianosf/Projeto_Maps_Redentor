@@ -15,9 +15,13 @@ export function LoadingState({ label = 'Carregando…', className }: Props) {
       )}
       role="status"
       aria-live="polite"
+      aria-busy="true"
     >
       <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden />
-      <p className="text-sm font-medium">{label}</p>
+      <p className="text-sm font-semibold text-foreground/80">{label}</p>
+      <p className="helper-text max-w-xs text-center">
+        Aguarde enquanto os dados são carregados.
+      </p>
     </div>
   );
 }

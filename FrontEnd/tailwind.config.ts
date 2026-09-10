@@ -12,6 +12,10 @@ const config: Config = {
         ring: 'hsl(var(--ring))',
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
+        screen: {
+          DEFAULT: 'hsl(var(--screen))',
+          foreground: 'hsl(var(--screen-foreground))',
+        },
         primary: {
           DEFAULT: 'hsl(var(--primary))',
           foreground: 'hsl(var(--primary-foreground))',
@@ -23,6 +27,14 @@ const config: Config = {
         destructive: {
           DEFAULT: 'hsl(var(--destructive))',
           foreground: 'hsl(var(--destructive-foreground))',
+        },
+        success: {
+          DEFAULT: 'hsl(var(--success))',
+          foreground: 'hsl(var(--success-foreground))',
+        },
+        warning: {
+          DEFAULT: 'hsl(var(--warning))',
+          foreground: 'hsl(var(--warning-foreground))',
         },
         muted: {
           DEFAULT: 'hsl(var(--muted))',
@@ -36,6 +48,8 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        'table-head': 'hsl(var(--table-head))',
+        'table-zebra': 'hsl(var(--table-zebra))',
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -43,13 +57,21 @@ const config: Config = {
         sm: 'calc(var(--radius) - 4px)',
       },
       fontFamily: {
-        sans: ['Calibri', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['Calibri', 'Segoe UI', 'system-ui', '-apple-system', 'sans-serif'],
+      },
+      fontSize: {
+        'page-title': ['17px', { lineHeight: '1.25', fontWeight: '700' }],
+        section: ['13px', { lineHeight: '1.3', fontWeight: '700' }],
       },
       maxWidth: {
         phone: '720px',
+        content: '640px',
       },
       minHeight: {
         touch: '44px',
+      },
+      spacing: {
+        section: '1.25rem',
       },
     },
   },

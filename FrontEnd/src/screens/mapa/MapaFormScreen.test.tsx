@@ -118,4 +118,25 @@ describe('MapaFormScreen Cancelar', () => {
       window.removeEventListener('error', onError);
     }
   });
+
+  it('createMapa sem mapa.id_registro não navega para detalhe quebrado', async () => {
+    createMapaMock.mockResolvedValueOnce({ ok: true, mapa: undefined });
+
+    const user = userEvent.setup();
+    renderNovoMapaFlow();
+
+    const inicio = await screen.findByLabelText(/in[ií]cio do plant[aã]o/i);
+    await user.clear(inicio);
+    await user.type(inicio, '0800');
+    await user.click(screen.getByRole('button', { name: /^confirmar$/i }));
+
+    await waitFor(() => {
+      expect(createMapaMock).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /cadastro de mapas/i }),
+      ).toBeInTheDocument();
+    });
+  });
 });

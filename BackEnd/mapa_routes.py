@@ -66,7 +66,11 @@ def indicadores():
 @mapa_bp.get("")
 @require_mapa_access
 def list_maps():
-    return jsonify({"ok": True, "mapas": listar_mapas(_dal())}), 200
+    data = request.args.get("data")
+    resultado = listar_mapas(_dal(), data)
+    if isinstance(resultado, MapaError):
+        return json_error(resultado.mensagem, 400, resultado.codigo)
+    return jsonify({"ok": True, "mapas": resultado}), 200
 
 
 @mapa_bp.get("/ocupacao")

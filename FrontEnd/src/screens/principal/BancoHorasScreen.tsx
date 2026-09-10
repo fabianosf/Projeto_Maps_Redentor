@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getBancoHorasMotorista, type BancoHorasDia } from '@/api/bancoHoras';
@@ -30,8 +30,9 @@ import { useAuth } from '@/context/AuthContext';
 import { useScreenBg } from '@/hooks/useScreenBg';
 import type { MotoristaCadastro } from '@/types/cadastro';
 import { canAccessBancoHoras } from '@/utils/perfilAccess';
+import { SCREEN_BG } from '@/theme/tokens';
 
-const BG = '#B9C8D4';
+const BG = SCREEN_BG;
 
 function hojeISO(): string {
   const d = new Date();
@@ -117,8 +118,8 @@ export function BancoHorasScreen() {
 
   if (loading) {
     return (
-      <AppShell className="bg-[#B9C8D4]">
-        <div className="page min-h-dvh bg-[#B9C8D4] text-slate-900">
+      <AppShell className="bg-screen">
+        <div className="page min-h-dvh bg-screen text-slate-900">
           <PageHeader title="Banco de horas" onBack={() => navigate('/principal')} />
           <LoadingState />
         </div>
@@ -127,8 +128,8 @@ export function BancoHorasScreen() {
   }
 
   return (
-    <AppShell className="bg-[#B9C8D4]">
-      <div className="page flex min-h-dvh flex-col bg-[#B9C8D4] text-slate-900">
+    <AppShell className="bg-screen">
+      <div className="page flex min-h-dvh flex-col bg-screen text-slate-900">
         <PageHeader title="Banco de horas" onBack={() => navigate('/principal')} />
         <div className="page-body flex min-h-0 flex-1 flex-col gap-4">
           <p className="text-sm text-slate-700">

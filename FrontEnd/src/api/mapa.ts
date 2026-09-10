@@ -11,8 +11,13 @@ import type {
   ViagemPayload,
 } from '@/types/mapa';
 
-export async function listMapas(): Promise<MapasListResponse> {
-  return apiFetch<MapasListResponse>('/mapas', { method: 'GET' });
+export async function listMapas(params?: {
+  data?: string;
+}): Promise<MapasListResponse> {
+  const q = new URLSearchParams();
+  if (params?.data?.trim()) q.set('data', params.data.trim());
+  const suffix = q.toString() ? `?${q.toString()}` : '';
+  return apiFetch<MapasListResponse>(`/mapas${suffix}`, { method: 'GET' });
 }
 
 export async function getMapa(idRegistro: number): Promise<MapaResponse> {

@@ -35,10 +35,13 @@ export const FormField = forwardRef<HTMLInputElement, Props>(function FormField(
         <Input
           id={inputId}
           ref={ref}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${inputId}-error` : undefined}
           className={cn(
-            'h-12 rounded-lg border-slate-400 bg-white text-base text-slate-900 shadow-none placeholder:text-muted-foreground/70',
+            'h-12 rounded-lg border-input bg-card text-base text-foreground shadow-none placeholder:text-muted-foreground/70',
             leftIcon && 'pl-12',
             rightSlot && 'pr-12',
+            error && 'border-destructive focus-visible:ring-destructive',
             className,
           )}
           {...rest}
@@ -47,7 +50,11 @@ export const FormField = forwardRef<HTMLInputElement, Props>(function FormField(
           <div className="absolute right-1 z-[1] flex items-center">{rightSlot}</div>
         ) : null}
       </div>
-      {error ? <span className="text-[13px] text-destructive">{error}</span> : null}
+      {error ? (
+        <span id={`${inputId}-error`} className="field-error" role="alert">
+          {error}
+        </span>
+      ) : null}
     </div>
   );
 });

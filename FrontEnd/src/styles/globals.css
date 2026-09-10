@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    /* RedMapa — background branco + primary #004587 */
+    /* RedMapa — corporativo: primary #004587, screen #B9C8D4 */
     --background: 0 0% 100%;
     --foreground: 222 22% 12%;
     --card: 0 0% 100%;
@@ -14,16 +14,26 @@
     --secondary: 210 20% 96%;
     --secondary-foreground: 209 100% 26%;
     --muted: 210 16% 96%;
-    --muted-foreground: 215 12% 42%;
+    --muted-foreground: 215 14% 38%;
     --accent: 210 20% 96%;
     --accent-foreground: 209 100% 26%;
     --destructive: 348 72% 42%;
     --destructive-foreground: 0 0% 100%;
-    --border: 214 14% 84%;
-    --input: 214 14% 84%;
+    --success: 152 55% 32%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 40%;
+    --warning-foreground: 222 22% 12%;
+    --border: 214 14% 72%;
+    --input: 214 14% 72%;
     --ring: 209 100% 26%;
     --radius: 0.5rem;
     --zebra: 210 20% 97%;
+    /* Fundo operacional (legado #B9C8D4) */
+    --screen: 210 28% 76%;
+    --screen-foreground: 222 22% 12%;
+    /* Cabeçalho / zebra de tabela */
+    --table-head: 210 22% 72%;
+    --table-zebra: 210 28% 93%;
   }
 
   * {
@@ -33,9 +43,14 @@
   html,
   body,
   #root {
-    @apply m-0 min-h-full w-full bg-background text-foreground font-sans antialiased;
+    @apply m-0 min-h-full w-full bg-screen text-foreground font-sans antialiased;
     overflow-x: hidden;
     -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Foco visível global (teclado) */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-screen;
   }
 
   button,
@@ -48,11 +63,11 @@
 
 @layer components {
   .app-shell {
-    @apply mx-auto flex min-h-dvh w-full max-w-phone flex-col bg-background;
+    @apply mx-auto flex min-h-dvh w-full max-w-phone flex-col bg-screen;
   }
 
   .page {
-    @apply relative flex min-h-0 flex-1 flex-col bg-background;
+    @apply relative flex min-h-0 flex-1 flex-col bg-screen;
   }
 
   .page-body {
@@ -77,5 +92,33 @@
 
   .screen-label {
     @apply pointer-events-none absolute bottom-3 left-4 z-10 text-[11px] text-muted-foreground/50;
+  }
+
+  .surface-card {
+    @apply rounded-xl border border-border/80 bg-card text-card-foreground shadow-sm;
+  }
+
+  .table-head-row {
+    @apply border-b-2 border-border bg-table-head text-left text-[13px] font-bold uppercase tracking-wide text-foreground;
+  }
+
+  .table-zebra-row {
+    @apply border-b border-border/50 odd:bg-card even:bg-table-zebra;
+  }
+
+  .list-card {
+    @apply flex min-h-[72px] w-full flex-col gap-1 rounded-xl border border-border/70 bg-card/95 px-4 py-3.5 text-left shadow-sm transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:bg-table-zebra;
+  }
+
+  .toolbar-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  .helper-text {
+    @apply text-[13px] leading-snug text-muted-foreground;
+  }
+
+  .field-error {
+    @apply text-[13px] font-medium text-destructive;
   }
 }

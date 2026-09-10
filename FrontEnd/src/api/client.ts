@@ -177,7 +177,46 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     }
 
     if (!response.ok) {
-      const errBody = toApiError(data, `Erro HTTP ${response.status}`);
+      const fallback =
+        response.status === 404
+          ? 'Recurso não encontrado.'
+          : response.status === 405
+            ? 'Consulta não disponível neste endereço (método não permitido). Reinicie a API ou tente novamente.'
+            : `Erro HTTP ${response.status}`;
+      const errBody = toApiError(
+        rawText.trim()
+          ? data
+          : {
+              ok: false,
+              mensagem: fallback,
+              codigo:
+                response.status === 404
+                  ? 'nao_encontrado'
+                  : response.status === 405
+                    ? 'metodo_nao_permitido'
+                    : 'http_error',
+            },
+        fallback,
+      );
+      if (!errBody.codigo && response.status === 404) {
+        errBody.codigo = 'nao_encontrado';
+      }
+      if (!errBody.codigo && response.status === 405) {
+        errBody.codigo = 'metodo_nao_permitido';
+      }
+      // Flask 405 costuma devolver HTML/texto genérico — preferir mensagem amigável.
+      if (response.status === 405) {
+        const generica =
+          !rawText.trim() ||
+          errBody.codigo === 'resposta_invalida' ||
+          /method not allowed|not allowed|resposta inválida|erro http/i.test(
+            errBody.mensagem,
+          );
+        if (generica) {
+          errBody.mensagem = fallback;
+          errBody.codigo = 'metodo_nao_permitido';
+        }
+      }
       logDev('error', httpMethod, url, {
         status: response.status,
         codigo: errBody.codigo,

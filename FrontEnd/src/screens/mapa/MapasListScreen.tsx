@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Plus, Search } from 'lucide-react';
 import { ApiRequestError } from '@/api/client';
@@ -21,8 +21,9 @@ import {
 import { useScreenBg } from '@/hooks/useScreenBg';
 import type { MapaListaItem } from '@/types/mapa';
 import { formatCodMap, toDateBR } from '@/utils/mapaFormat';
+import { SCREEN_BG } from '@/theme/tokens';
 
-const BG = '#B9C8D4';
+const BG = SCREEN_BG;
 const FILTRO_TODOS = '__todos__';
 
 function textoBusca(row: MapaListaItem): string {
@@ -152,7 +153,7 @@ export function MapasListScreen() {
   const novoMapa = () => navigate('/mapas/novo');
 
   return (
-    <AppShell className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-[#B9C8D4] text-slate-900">
+    <AppShell className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-screen text-slate-900">
       <PageHeader
         title="CADASTRO DE MAPAS"
         onBack={() => navigate('/principal')}
@@ -193,12 +194,12 @@ export function MapasListScreen() {
         ) : (
           <>
             <section
-              className="shrink-0 space-y-3 border-b border-slate-400/40 bg-white/55 px-4 py-3"
+              className="toolbar-actions shrink-0 flex-col space-y-3 border-b border-border/60 bg-card/70 px-4 py-3"
               aria-label="Busca e filtros"
             >
-              <div className="relative">
+              <div className="relative w-full">
                 <Search
-                  className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500"
+                  className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground"
                   aria-hidden
                 />
                 <Input
@@ -207,15 +208,15 @@ export function MapasListScreen() {
                   onChange={(e) => setBusca(e.target.value)}
                   placeholder="Buscar nº, linha ou turno"
                   aria-label="Buscar por número, linha ou turno"
-                  className="h-11 min-h-touch border-slate-400 bg-white pl-10 text-base text-slate-900"
+                  className="h-11 min-h-touch border-input bg-card pl-10 text-base"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid w-full grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
                   <Label
                     htmlFor="filtro-turno"
-                    className="text-[12px] font-semibold uppercase text-slate-800"
+                    className="text-section uppercase text-foreground"
                   >
                     Turno
                   </Label>
@@ -227,7 +228,7 @@ export function MapasListScreen() {
                   >
                     <SelectTrigger
                       id="filtro-turno"
-                      className="h-11 min-h-touch border-slate-400 bg-white text-base"
+                      className="h-11 min-h-touch border-input bg-card text-base"
                     >
                       <SelectValue placeholder="Todos" />
                     </SelectTrigger>
@@ -245,7 +246,7 @@ export function MapasListScreen() {
                 <div className="flex flex-col gap-1">
                   <Label
                     htmlFor="filtro-linha"
-                    className="text-[12px] font-semibold uppercase text-slate-800"
+                    className="text-section uppercase text-foreground"
                   >
                     Linha
                   </Label>
@@ -318,7 +319,7 @@ export function MapasListScreen() {
                         <button
                           type="button"
                           onClick={() => abrirMapa(row.id_registro)}
-                          className="flex min-h-[72px] w-full flex-col gap-1 rounded-xl border border-slate-400/50 bg-white/90 px-4 py-3.5 text-left shadow-sm transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:bg-[#E8EEF4]"
+                          className="list-card"
                         >
                           <div className="flex items-baseline justify-between gap-3">
                             <span className="text-lg font-bold tabular-nums text-primary">
@@ -353,7 +354,7 @@ export function MapasListScreen() {
                 <div className="hidden border-y border-slate-400/40 bg-white/70 md:block">
                   <table className="w-full caption-bottom border-collapse text-sm">
                     <thead className="sticky top-0 z-10">
-                      <tr className="border-b-2 border-slate-500/40 bg-[#A8B9C9]">
+                      <tr className="border-b-2 border-slate-500/40 bg-table-head">
                         <th className="px-3 py-3.5 text-left text-[13px] font-bold uppercase tracking-wide text-slate-900">
                           Número
                         </th>
@@ -378,7 +379,7 @@ export function MapasListScreen() {
                             role="link"
                             aria-label={`Abrir MAPA ${formatCodMap(row.cod_map)}`}
                             className={`cursor-pointer border-b border-border/50 text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
-                              i % 2 === 0 ? 'bg-white' : 'bg-[#E8EEF4]'
+                              i % 2 === 0 ? 'bg-white' : 'bg-table-zebra'
                             }`}
                             onClick={() => abrirMapa(row.id_registro)}
                             onKeyDown={(e) => {

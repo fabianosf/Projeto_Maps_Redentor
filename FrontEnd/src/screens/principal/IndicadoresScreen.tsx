@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+﻿import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiRequestError } from '@/api/client';
 import { getIndicadoresPermitidosMe } from '@/api/indicadoresConfig';
@@ -18,8 +18,9 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { useScreenBg } from '@/hooks/useScreenBg';
 import type { IndicadorPermitido } from '@/types/indicador';
+import { SCREEN_BG } from '@/theme/tokens';
 
-const BG = '#B9C8D4';
+const BG = SCREEN_BG;
 
 const tableHeadClass = 'font-sans font-normal uppercase tracking-wide text-slate-700';
 const tableSiglaClass = 'font-sans text-[13px] font-bold text-slate-900';
@@ -66,7 +67,7 @@ export function IndicadoresScreen() {
   }, [authLoading, user, carregar, navigate]);
 
   return (
-    <AppShell className="flex min-h-[100dvh] flex-col bg-[#B9C8D4]">
+    <AppShell className="flex min-h-[100dvh] flex-col bg-screen">
       <PageHeader title="INDICADORES" onBack={() => navigate('/principal')} />
 
       <div className="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-3">
@@ -83,7 +84,7 @@ export function IndicadoresScreen() {
           ) : (
             <Table>
               <TableHeader>
-                <TableRow className="bg-[#A8B9C9] hover:bg-[#A8B9C9]">
+                <TableRow className="bg-table-head hover:bg-table-head">
                   <TableHead className={`w-[28%] pl-2 text-left text-[13px] ${tableHeadClass}`}>
                     Indicador
                   </TableHead>
@@ -96,7 +97,7 @@ export function IndicadoresScreen() {
                 {indicadores.map((ind, i) => (
                   <TableRow
                     key={ind.id_ind}
-                    className={i % 2 === 0 ? 'bg-white' : 'bg-[#E8EEF4]'}
+                    className={i % 2 === 0 ? 'bg-white' : 'bg-table-zebra'}
                   >
                     <TableCell className={`whitespace-nowrap pl-2 ${tableSiglaClass}`}>
                       {ind.descricao}

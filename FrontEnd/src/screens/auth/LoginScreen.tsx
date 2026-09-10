@@ -1,4 +1,4 @@
-import {
+﻿import {
   useCallback,
   useRef,
   useState,
@@ -21,11 +21,12 @@ import { useAuth } from '@/context/AuthContext';
 import { useFocusInput } from '@/hooks/useFocusInput';
 import { useScreenBg } from '@/hooks/useScreenBg';
 import { actionBtn3dMd } from '@/lib/actionBtn3d';
+import { SCREEN_BG } from '@/theme/tokens';
 import {
   isValidMatricula,
 } from '@/utils/validation';
 
-const LOGIN_BG = '#b9c8d4';
+const LOGIN_BG = SCREEN_BG;
 
 const MATRICULA_INVALIDA = 'Matrícula inválida!';
 const SENHA_INVALIDA = 'Senha inválida!';
@@ -171,16 +172,16 @@ export function LoginScreen() {
   if (user) return <Navigate to="/principal" replace />;
 
   return (
-    <AppShell className="bg-[#b9c8d4]">
-      <div className="page flex min-h-dvh flex-col bg-[#b9c8d4]">
+    <AppShell className="bg-screen">
+      <div className="page flex min-h-dvh flex-col bg-screen">
         <PageHeader title="LOGIN" />
 
-        <div className="page-body-center flex-1 bg-[#b9c8d4]">
-          <div className="form-stack bg-transparent">
+        <div className="page-body-center flex-1 bg-screen">
+          <div className="form-stack">
             <Logo />
 
             <form
-              className="field-stack mt-2 bg-transparent"
+              className="field-stack surface-card mt-2 p-4"
               onSubmit={onSubmit}
               autoComplete="off"
               noValidate

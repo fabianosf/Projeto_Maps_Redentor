@@ -1,4 +1,4 @@
-import { useCallback, type ReactNode } from 'react';
+﻿import { useCallback, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BarChart3,
@@ -16,13 +16,14 @@ import { useAuth } from '@/context/AuthContext';
 import { useScreenBg } from '@/hooks/useScreenBg';
 import { actionBtn3dBase } from '@/lib/actionBtn3d';
 import { cn } from '@/lib/utils';
+import { SCREEN_BG } from '@/theme/tokens';
 import {
   canAccessBancoHoras,
   canAccessConfiguracao,
   canAccessMapas,
 } from '@/utils/perfilAccess';
 
-const BG = '#B0C4DE';
+const BG = SCREEN_BG;
 
 /** Cards grandes — área de toque ≥ 44px (WCAG / mobile). */
 const cardBtnClass = cn(
@@ -116,18 +117,16 @@ export function TelaPrincipalScreen() {
   });
 
   return (
-    <AppShell className="bg-[#B0C4DE]">
-      <div className="page box-border flex min-h-dvh flex-col bg-[#B0C4DE] text-slate-900">
+    <AppShell className="bg-screen">
+      <div className="page box-border flex min-h-dvh flex-col bg-screen text-slate-900">
         <PageHeader title="RedMapa" />
 
         <div className="page-body-center flex-1 gap-3 py-6">
           {user ? (
-            <p className="mb-2 max-w-[320px] text-center text-sm text-slate-700">
-              {user.nome}
-              <span className="mt-0.5 block text-xs text-slate-600">
-                Matrícula {user.matricula}
-              </span>
-            </p>
+            <div className="surface-card mb-2 w-full max-w-[320px] px-4 py-3 text-center">
+              <p className="text-sm font-semibold text-foreground">{user.nome}</p>
+              <p className="helper-text mt-0.5">Matrícula {user.matricula}</p>
+            </div>
           ) : null}
 
           <nav

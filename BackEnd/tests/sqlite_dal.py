@@ -113,6 +113,7 @@ CREATE TABLE tb_guia (
     id_turno INTEGER,
     id_veiculo INTEGER,
     id_motorista INTEGER,
+    id_item_map INTEGER,
     hor_ini TEXT,
     hor_fim TEXT,
     roleta01_ini INTEGER,
@@ -178,6 +179,48 @@ CREATE TABLE tb_viagem (
     intervalo INTEGER,
     qtd_pas_ida INTEGER,
     qtd_pas_volta INTEGER
+);
+
+CREATE TABLE tb_guia_roleta_leitura (
+    id_leitura INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_viagem INTEGER,
+    id_guia INTEGER,
+    id_veiculo INTEGER NOT NULL,
+    sentido TEXT NOT NULL,
+    fonte TEXT NOT NULL,
+    leitura_ini INTEGER,
+    leitura_fim INTEGER,
+    passageiros INTEGER,
+    virada INTEGER NOT NULL DEFAULT 0,
+    justificativa_virada TEXT,
+    status_leitura TEXT NOT NULL DEFAULT 'iniciada',
+    id_usuario INTEGER NOT NULL,
+    criado_em TEXT NOT NULL,
+    atualizado_em TEXT NOT NULL
+);
+
+CREATE TABLE tb_guia_roleta_historico (
+    id_historico INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_leitura INTEGER NOT NULL,
+    acao TEXT NOT NULL,
+    leitura_ini INTEGER,
+    leitura_fim INTEGER,
+    passageiros INTEGER,
+    virada INTEGER,
+    justificativa TEXT,
+    id_usuario INTEGER NOT NULL,
+    registrado_em TEXT NOT NULL
+);
+
+CREATE TABLE tb_escala_alteracao (
+    id_alteracao INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_item INTEGER NOT NULL,
+    id_usuario INTEGER NOT NULL,
+    justificativa TEXT NOT NULL,
+    campo TEXT NOT NULL,
+    valor_anterior TEXT,
+    valor_novo TEXT,
+    registrado_em TEXT NOT NULL
 );
 """
 

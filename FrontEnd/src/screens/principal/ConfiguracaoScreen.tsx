@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+﻿import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart3, UserCog } from 'lucide-react';
 import { ApiRequestError } from '@/api/client';
@@ -17,8 +17,9 @@ import { cn } from '@/lib/utils';
 import { validarQtdMaxTentativas } from '@/utils/configValidation';
 import { canAccessConfiguracao } from '@/utils/perfilAccess';
 import { onlyDigits } from '@/utils/validation';
+import { SCREEN_BG } from '@/theme/tokens';
 
-const BG = '#B9C8D4';
+const BG = SCREEN_BG;
 
 const toolbarBtnClass = cn(
   actionBtn3dBase,
@@ -99,7 +100,7 @@ export function ConfiguracaoScreen() {
 
   if (authLoading || (allowed && loading && !infoMsg && qtdT === '')) {
     return (
-      <AppShell className="bg-[#B9C8D4]">
+      <AppShell className="bg-screen">
         <PageHeader title="CONFIGURAÇÃO" onBack={() => navigate('/principal')} />
         <LoadingState label="Carregando…" />
       </AppShell>
@@ -111,7 +112,7 @@ export function ConfiguracaoScreen() {
   }
 
   return (
-    <AppShell className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-[#B9C8D4] text-slate-900">
+    <AppShell className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-screen text-slate-900">
       <PageHeader title="CONFIGURAÇÃO" onBack={() => navigate('/principal')} />
 
       <div className="flex min-h-0 flex-1 flex-col px-4 py-8">

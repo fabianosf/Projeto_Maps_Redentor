@@ -1,4 +1,4 @@
-import {
+﻿import {
   useEffect,
   useRef,
   useState,
@@ -18,8 +18,9 @@ import { actionBtn3dMd } from '@/lib/actionBtn3d';
 import { useFocusInput } from '@/hooks/useFocusInput';
 import { useScreenBg } from '@/hooks/useScreenBg';
 import { isValidMatricula, validatePassword } from '@/utils/validation';
+import { SCREEN_BG } from '@/theme/tokens';
 
-const SCREEN_BG = '#b9c8d4';
+
 
 type LocationState = { changeToken?: string; matricula?: string };
 
@@ -112,13 +113,13 @@ export function CadastroSenhaScreen() {
   if (!changeToken) return null;
 
   return (
-    <div className="page flex min-h-dvh flex-col bg-[#b9c8d4]">
+    <div className="page flex min-h-dvh flex-col bg-screen">
       <PageHeader
         title="CADASTRO DE SENHA"
         onBack={() => void onCancelar()}
       />
 
-      <div className="page-body flex-1 bg-[#b9c8d4]">
+      <div className="page-body flex-1 bg-screen">
         <form
           className="mx-auto mt-2 w-full max-w-[340px] field-stack"
           onSubmit={onSubmit}

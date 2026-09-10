@@ -37,14 +37,24 @@ export function ConfirmDialog({
         if (!v) onCancel();
       }}
     >
-      <AlertDialogContent className="z-[90]">
+      <AlertDialogContent className="z-[90] border-border bg-card shadow-lg">
         <AlertDialogHeader>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
-          <AlertDialogDescription>{message}</AlertDialogDescription>
+          <AlertDialogTitle className="text-base font-bold uppercase tracking-wide text-foreground">
+            {title}
+          </AlertDialogTitle>
+          <AlertDialogDescription className="text-[15px] leading-snug text-muted-foreground">
+            {message}
+          </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel onClick={onCancel}>{cancelLabel}</AlertDialogCancel>
+        <AlertDialogFooter className="gap-2 sm:gap-2">
+          <AlertDialogCancel
+            onClick={onCancel}
+            className="min-h-touch"
+          >
+            {cancelLabel}
+          </AlertDialogCancel>
           <AlertDialogAction
+            className="min-h-touch"
             onClick={(e) => {
               e.preventDefault();
               onConfirm();

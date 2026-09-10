@@ -280,9 +280,19 @@ def _gerar_proximo_cod_map(dal) -> int | MapaError:
     return proximo
 
 
-def listar_mapas(dal) -> list[dict[str, Any]]:
+def listar_mapas(dal, data: str | None = None) -> list[dict[str, Any]] | MapaError:
+    """Lista mapas. Filtro opcional `data` (yyyy-mm-dd ou dd/mm/aaaa) — aditivo."""
+    where = ""
+    params: tuple[Any, ...] | None = None
+    if data is not None and str(data).strip():
+        parsed = _parse_date(str(data).strip())
+        if isinstance(parsed, MapaError):
+            return parsed
+        where = " WHERE m.data = ?"
+        params = (parsed.isoformat(),)
+
     df = dal.read(
-        """
+        f"""
         SELECT m.id_registro, m.cod_map, m.data,
                COALESCE(e_hdr.descricao, e_item.descricao) AS empresa,
                CAST(COALESCE(l_hdr.codigo_linha, l_item.codigo_linha) AS CHAR) AS linha,
@@ -298,8 +308,10 @@ def listar_mapas(dal) -> list[dict[str, Any]]:
         )
         LEFT JOIN tb_linha l_item ON l_item.id_linha = i0.id_linha
         LEFT JOIN tb_empresa e_item ON e_item.id_empresa = l_item.id_empresa
+        {where}
         ORDER BY m.data DESC, m.cod_map DESC
-        """
+        """,
+        params,
     )
     if df.empty:
         return []

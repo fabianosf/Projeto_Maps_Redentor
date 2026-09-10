@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ApiRequestError } from '@/api/client';
 import {
@@ -34,8 +34,9 @@ import { useScreenBg } from '@/hooks/useScreenBg';
 import { actionBtn3dMd } from '@/lib/actionBtn3d';
 import type { IndicadorVinculo } from '@/types/indicador';
 import { canAccessConfiguracao } from '@/utils/perfilAccess';
+import { SCREEN_BG } from '@/theme/tokens';
 
-const BG = '#B9C8D4';
+const BG = SCREEN_BG;
 
 const labelClass =
   'flex h-5 items-center font-sans text-[12px] font-normal uppercase leading-none tracking-wide text-slate-600';
@@ -179,7 +180,7 @@ export function IndicadoresConfigScreen() {
 
   if (authLoading || (allowed && loading && perfis.length === 0 && !infoMsg)) {
     return (
-      <AppShell className="bg-[#B9C8D4]">
+      <AppShell className="bg-screen">
         <PageHeader title="INDICADORES" onBack={voltar} />
         <LoadingState label="Carregando…" />
       </AppShell>
@@ -189,7 +190,7 @@ export function IndicadoresConfigScreen() {
   if (!allowed) return null;
 
   return (
-    <AppShell className="flex min-h-[100dvh] flex-col bg-[#B9C8D4]">
+    <AppShell className="flex min-h-[100dvh] flex-col bg-screen">
       <PageHeader title="INDICADORES" onBack={voltar} />
 
       <div className="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-3">
@@ -223,7 +224,7 @@ export function IndicadoresConfigScreen() {
           ) : (
             <Table>
               <TableHeader>
-                <TableRow className="bg-[#A8B9C9] hover:bg-[#A8B9C9]">
+                <TableRow className="bg-table-head hover:bg-table-head">
                   <TableHead className={`w-12 text-center text-[12px] ${tableHeadClass}`}>
                     {' '}
                   </TableHead>
@@ -241,7 +242,7 @@ export function IndicadoresConfigScreen() {
                 {indicadores.map((ind, i) => (
                   <TableRow
                     key={ind.id_ind}
-                    className={i % 2 === 0 ? 'bg-white' : 'bg-[#E8EEF4]'}
+                    className={i % 2 === 0 ? 'bg-white' : 'bg-table-zebra'}
                   >
                     <TableCell className="text-center">
                       <input

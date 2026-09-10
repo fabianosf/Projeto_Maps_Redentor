@@ -11,6 +11,7 @@ import { MapaFormScreen } from '@/screens/mapa/MapaFormScreen';
 import { ConfiguracaoScreen } from '@/screens/principal/ConfiguracaoScreen';
 import { EntradaSaidaScreen } from '@/screens/principal/EntradaSaidaScreen';
 import { GuiaScreen } from '@/screens/principal/GuiaScreen';
+import { NovaGuiaScreen } from '@/screens/principal/NovaGuiaScreen';
 import { IndicadoresConfigScreen } from '@/screens/principal/IndicadoresConfigScreen';
 import { IndicadoresScreen } from '@/screens/principal/IndicadoresScreen';
 import { BancoHorasScreen } from '@/screens/principal/BancoHorasScreen';
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="/principal" element={<TelaPrincipalScreen />} />
           <Route path="/usuarios" element={<UsuariosScreen />} />
           <Route path="/guia" element={<GuiaScreen />} />
+          <Route path="/guia/nova" element={<NovaGuiaScreen />} />
           <Route path="/entrada-saida" element={<EntradaSaidaScreen />} />
           <Route path="/configuracao" element={<ConfiguracaoScreen />} />
           <Route
