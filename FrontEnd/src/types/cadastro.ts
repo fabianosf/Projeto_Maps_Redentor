@@ -4,6 +4,7 @@ export interface EmpresaCadastro {
   id_empresa: number;
   codigo_empresa?: number;
   descricao: string;
+  prefixo_mapa?: string | null;
   ativo?: number;
 }
 

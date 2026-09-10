@@ -11,6 +11,7 @@ from BackEnd.tests.conftest import auth_client
 def _payload_mapa(**overrides):
     base = {
         "id_turno": 1,
+        "id_empresa": 1,
         "data": "2026-09-08",
         "inicio_jornada_des": "2026-09-08 05:00:00",
         "fim_jornada_des": "2026-09-08 20:00:00",

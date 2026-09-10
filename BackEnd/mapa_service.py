@@ -272,12 +272,191 @@ def _resolver_id_linha(dal, payload: dict[str, Any]) -> int | MapaError:
     return int(criada.iloc[0]["id_linha"])
 
 
+class _AbortMapaTx(Exception):
+    """Aborta transação de MAPA carregando MapaError (rollback no DAL)."""
+
+    def __init__(self, erro: MapaError) -> None:
+        self.erro = erro
+        super().__init__(erro.mensagem)
+
+
 def _gerar_proximo_cod_map(dal) -> int | MapaError:
+    """Sequência interna legada (única global). Exibição usa codigo_mapa."""
     df = dal.read("SELECT COALESCE(MAX(cod_map), 0) AS max_cod FROM tb_map")
     proximo = int(df.iloc[0]["max_cod"]) + 1
     if proximo > COD_MAP_MAX:
         return MapaError("Limite de cod_map esgotado.", "cod_map_esgotado")
     return proximo
+
+
+def _formatar_codigo_mapa(prefixo: str, seq: int) -> str:
+    """Prefixo + número com no mínimo 2 dígitos (Red01 … Red99, Red100…)."""
+    n = int(seq)
+    width = max(2, len(str(n)))
+    return f"{str(prefixo).strip()}{n:0{width}d}"
+
+
+def _parse_seq_codigo_mapa(codigo: Any, prefixo: str) -> int | None:
+    texto = str(codigo or "").strip()
+    pref = str(prefixo or "").strip()
+    if not texto or not pref:
+        return None
+    if not texto.lower().startswith(pref.lower()):
+        return None
+    suf = texto[len(pref) :]
+    if not suf.isdigit():
+        return None
+    return int(suf)
+
+
+def _limpar_codigo_mapa(valor: Any) -> str | None:
+    if valor is None:
+        return None
+    try:
+        import math
+
+        if isinstance(valor, float) and math.isnan(valor):
+            return None
+    except (TypeError, ValueError):
+        pass
+    texto = str(valor).strip()
+    if not texto or texto.lower() in ("none", "null", "nan", "nat"):
+        return None
+    return texto
+
+
+def _rotulo_mapa(codigo_mapa: Any = None, cod_map: Any = None) -> str:
+    """Rótulo de exibição: só codigo_mapa (nunca 00001)."""
+    del cod_map  # id interno — não usar como código de tela
+    texto = _limpar_codigo_mapa(codigo_mapa)
+    return texto or "—"
+
+
+def _max_seq_codigos_empresa(dal, id_empresa: int, prefixo: str) -> int:
+    """Maior sufixo numérico já usado nos mapas da empresa (ainda existentes)."""
+    df = dal.read(
+        """
+        SELECT codigo_mapa
+        FROM tb_map
+        WHERE id_empresa = ?
+          AND codigo_mapa IS NOT NULL
+        """,
+        (int(id_empresa),),
+    )
+    max_seq = 0
+    if df is None or df.empty:
+        return 0
+    for raw in df["codigo_mapa"].tolist():
+        parsed = _parse_seq_codigo_mapa(raw, prefixo)
+        if parsed is not None and parsed > max_seq:
+            max_seq = parsed
+    return max_seq
+
+
+def _resolver_id_empresa_mapa(
+    dal, payload: dict[str, Any], id_usuario: int
+) -> int | MapaError:
+    raw = payload.get("id_empresa")
+    if raw is not None and str(raw).strip() not in ("", "null", "None"):
+        try:
+            id_emp = int(raw)
+        except (TypeError, ValueError):
+            return MapaError("Empresa inválida.", "empresa_invalida")
+        emp = dal.read(
+            """
+            SELECT id_empresa FROM tb_empresa
+            WHERE id_empresa = ? AND ativo = 1
+            """,
+            (id_emp,),
+        )
+        if emp.empty:
+            return MapaError("Empresa não encontrada ou inativa.", "empresa_invalida")
+        return id_emp
+
+    usuario = dal.read(
+        "SELECT id_empresa FROM tb_usuario WHERE id_usuario = ?",
+        (int(id_usuario),),
+    )
+    if not usuario.empty and usuario.iloc[0].get("id_empresa") is not None:
+        try:
+            id_emp = int(usuario.iloc[0]["id_empresa"])
+        except (TypeError, ValueError):
+            id_emp = 0
+        if id_emp > 0:
+            emp = dal.read(
+                """
+                SELECT id_empresa FROM tb_empresa
+                WHERE id_empresa = ? AND ativo = 1
+                """,
+                (id_emp,),
+            )
+            if not emp.empty:
+                return id_emp
+
+    return MapaError(
+        "Empresa é obrigatória para gerar o código do MAPA.",
+        "empresa_obrigatoria",
+    )
+
+
+def _alocar_proximo_codigo_mapa(
+    dal, id_empresa: int
+) -> tuple[str, int] | MapaError:
+    """
+    Próximo código = prefixo + (max(seq persistida, maior código existente) + 1).
+    tb_mapa_seq não regride após exclusão — números nunca são reutilizados.
+    """
+    emp = dal.read(
+        """
+        SELECT prefixo_mapa FROM tb_empresa
+        WHERE id_empresa = ? AND ativo = 1
+        """,
+        (int(id_empresa),),
+    )
+    if emp.empty:
+        return MapaError("Empresa não encontrada ou inativa.", "empresa_invalida")
+    prefixo = str(emp.iloc[0].get("prefixo_mapa") or "").strip()
+    if not prefixo:
+        return MapaError(
+            "Empresa sem prefixo de mapa configurado (prefixo_mapa).",
+            "prefixo_mapa_ausente",
+        )
+
+    locked = dal.read(
+        "SELECT ultimo_seq FROM tb_mapa_seq WHERE id_empresa = ? FOR UPDATE",
+        (int(id_empresa),),
+    )
+    if locked.empty:
+        dal.create(
+            "INSERT INTO tb_mapa_seq (id_empresa, ultimo_seq) VALUES (?, 0)",
+            (int(id_empresa),),
+        )
+        locked = dal.read(
+            "SELECT ultimo_seq FROM tb_mapa_seq WHERE id_empresa = ? FOR UPDATE",
+            (int(id_empresa),),
+        )
+        if locked.empty:
+            return MapaError(
+                "Falha ao inicializar sequência do MAPA.",
+                "persistencia",
+            )
+
+    try:
+        seq_tabela = int(locked.iloc[0]["ultimo_seq"] or 0)
+    except (TypeError, ValueError):
+        return MapaError("Sequência de MAPA inválida.", "persistencia")
+
+    seq_existente = _max_seq_codigos_empresa(dal, int(id_empresa), prefixo)
+    seq = max(seq_tabela, seq_existente) + 1
+
+    ok = dal.update(
+        "UPDATE tb_mapa_seq SET ultimo_seq = ? WHERE id_empresa = ?",
+        (seq, int(id_empresa)),
+    )
+    if not ok:
+        return MapaError("Falha ao atualizar sequência do MAPA.", "persistencia")
+
+    return _formatar_codigo_mapa(prefixo, seq), seq
 
 
 def listar_mapas(dal, data: str | None = None) -> list[dict[str, Any]] | MapaError:
@@ -293,14 +472,16 @@ def listar_mapas(dal, data: str | None = None) -> list[dict[str, Any]] | MapaErr
 
     df = dal.read(
         f"""
-        SELECT m.id_registro, m.cod_map, m.data,
-               COALESCE(e_hdr.descricao, e_item.descricao) AS empresa,
+        SELECT m.id_registro, m.cod_map, m.codigo_mapa, m.id_empresa AS id_empresa_map,
+               m.data,
+               COALESCE(e_map.descricao, e_hdr.descricao, e_item.descricao) AS empresa,
                CAST(COALESCE(l_hdr.codigo_linha, l_item.codigo_linha) AS CHAR) AS linha,
                t.descricao AS turno,
                u.nome AS despachante
         FROM tb_map m
         INNER JOIN tb_turno t ON t.id_turno = m.id_turno
         INNER JOIN tb_usuario u ON u.id_usuario = m.id_usuario
+        LEFT JOIN tb_empresa e_map ON e_map.id_empresa = m.id_empresa
         LEFT JOIN tb_linha l_hdr ON l_hdr.id_linha = m.id_linha
         LEFT JOIN tb_empresa e_hdr ON e_hdr.id_empresa = l_hdr.id_empresa
         LEFT JOIN tb_item_map i0 ON i0.id_item = (
@@ -315,7 +496,10 @@ def listar_mapas(dal, data: str | None = None) -> list[dict[str, Any]] | MapaErr
     )
     if df.empty:
         return []
-    return df.to_dict(orient="records")
+    registros = df.to_dict(orient="records")
+    for row in registros:
+        row["codigo_mapa"] = _limpar_codigo_mapa(row.get("codigo_mapa"))
+    return registros
 
 
 def obter_indicadores(
@@ -381,19 +565,73 @@ def obter_indicadores(
     }
 
 
+def _assegurar_codigo_mapa_registro(dal, id_registro: int) -> str | None:
+    """
+    Garante codigo_mapa em registro legado com id_empresa e sem código.
+    Não reutiliza sequência — aloca o próximo da empresa.
+    """
+    row = dal.read(
+        """
+        SELECT id_registro, id_empresa, codigo_mapa
+        FROM tb_map WHERE id_registro = ?
+        """,
+        (int(id_registro),),
+    )
+    if row is None or row.empty:
+        return None
+    atual = _limpar_codigo_mapa(row.iloc[0].get("codigo_mapa"))
+    if atual:
+        return atual
+    id_emp_raw = row.iloc[0].get("id_empresa")
+    try:
+        if id_emp_raw is None or str(id_emp_raw).strip() in ("", "None", "nan"):
+            return None
+        id_emp = int(id_emp_raw)
+    except (TypeError, ValueError):
+        return None
+
+    try:
+        with dal.transaction():
+            alocado = _alocar_proximo_codigo_mapa(dal, id_emp)
+            if isinstance(alocado, MapaError):
+                raise _AbortMapaTx(alocado)
+            codigo, _seq = alocado
+            ok = dal.update(
+                """
+                UPDATE tb_map
+                SET codigo_mapa = ?
+                WHERE id_registro = ?
+                  AND (codigo_mapa IS NULL OR TRIM(codigo_mapa) = '')
+                """,
+                (codigo, int(id_registro)),
+            )
+            if not ok:
+                raise _AbortMapaTx(
+                    MapaError("Falha ao gravar codigo_mapa legado.", "persistencia")
+                )
+            return codigo
+    except _AbortMapaTx:
+        return None
+    except Exception:
+        return None
+
+
 def obter_mapa_completo(dal, id_registro: int) -> dict[str, Any] | MapaError:
     cab = dal.read(
         """
-        SELECT m.*,
-               l_hdr.id_empresa AS id_empresa,
+        SELECT m.id_registro, m.cod_map, m.codigo_mapa, m.id_usuario, m.id_empresa,
+               m.id_linha, m.id_turno, m.data, m.inicio_jornada_des, m.fim_jornada_des,
+               m.observacao,
+               COALESCE(m.id_empresa, l_hdr.id_empresa) AS id_empresa_resolvido,
                l_hdr.descricao AS linha,
-               e_hdr.descricao AS empresa,
+               COALESCE(e_map.descricao, e_hdr.descricao) AS empresa,
                t.descricao AS turno,
                u.nome AS despachante,
                u.matricula AS matricula_despachante
         FROM tb_map m
         INNER JOIN tb_turno t ON t.id_turno = m.id_turno
         INNER JOIN tb_usuario u ON u.id_usuario = m.id_usuario
+        LEFT JOIN tb_empresa e_map ON e_map.id_empresa = m.id_empresa
         LEFT JOIN tb_linha l_hdr ON l_hdr.id_linha = m.id_linha
         LEFT JOIN tb_empresa e_hdr ON e_hdr.id_empresa = l_hdr.id_empresa
         WHERE m.id_registro = ?
@@ -452,6 +690,19 @@ def obter_mapa_completo(dal, id_registro: int) -> dict[str, Any] | MapaError:
     data_ok = _coerce_mapa_date(resultado.get("data"))
     if data_ok is not None:
         resultado["data"] = data_ok.strftime("%Y-%m-%d")
+
+    # id_empresa canônico (evita coluna duplicada de m.*)
+    id_emp_res = resultado.pop("id_empresa_resolvido", None)
+    if resultado.get("id_empresa") is None and id_emp_res is not None:
+        try:
+            resultado["id_empresa"] = int(id_emp_res)
+        except (TypeError, ValueError):
+            resultado["id_empresa"] = id_emp_res
+
+    codigo = _limpar_codigo_mapa(resultado.get("codigo_mapa"))
+    if not codigo and resultado.get("id_empresa") is not None:
+        codigo = _assegurar_codigo_mapa_registro(dal, int(id_registro))
+    resultado["codigo_mapa"] = codigo
     resultado["itens"] = itens
     return resultado
 
@@ -495,7 +746,11 @@ def _resolver_ou_criar_veiculo_mapa(
 
 
 def criar_mapa(dal, id_usuario: int, payload: dict[str, Any]) -> dict[str, Any] | MapaError:
-    """Cria cabeçalho do MAPA (turno/data/plantão). Sem empresa/linha/veículo/item."""
+    """Cria cabeçalho do MAPA com codigo_mapa sequencial por empresa (ex.: Fut01)."""
+    id_empresa = _resolver_id_empresa_mapa(dal, payload, id_usuario)
+    if isinstance(id_empresa, MapaError):
+        return id_empresa
+
     id_turno = _resolver_id_turno(dal, payload)
     if isinstance(id_turno, MapaError):
         return id_turno
@@ -518,51 +773,73 @@ def criar_mapa(dal, id_usuario: int, payload: dict[str, Any]) -> dict[str, Any] 
 
     last_error: MapaError | None = None
     for _ in range(COD_MAP_INSERT_RETRIES):
-        cod_map = _gerar_proximo_cod_map(dal)
-        if isinstance(cod_map, MapaError):
-            return cod_map
-
+        id_registro: int | None = None
         try:
-            ok_map = dal.create(
-                """
-                INSERT INTO tb_map (
-                    cod_map, id_usuario, id_linha, id_turno, data,
-                    inicio_jornada_des, fim_jornada_des, observacao
-                ) VALUES (?, ?, NULL, ?, ?, ?, ?, ?)
-                """,
-                (
-                    cod_map,
-                    id_usuario,
-                    int(id_turno),
-                    data_parsed.isoformat(),
-                    inicio.strftime("%Y-%m-%d %H:%M:%S"),
-                    fim_sql,
-                    observacao,
-                ),
-            )
-            if not ok_map:
-                last_error = MapaError(
-                    "Conflito ao gerar cod_map. Tente novamente.",
-                    "cod_map_conflito",
-                )
-                continue
+            with dal.transaction():
+                alocado = _alocar_proximo_codigo_mapa(dal, int(id_empresa))
+                if isinstance(alocado, MapaError):
+                    raise _AbortMapaTx(alocado)
+                codigo_mapa, _seq = alocado
 
-            row = dal.read(
-                "SELECT id_registro FROM tb_map WHERE cod_map = ?",
-                (cod_map,),
-            )
-            if row.empty:
-                return MapaError("Falha ao criar MAPA.", "persistencia")
-            id_registro = int(row.iloc[0]["id_registro"])
-            completo = obter_mapa_completo(dal, id_registro)
-            assert not isinstance(completo, MapaError)
-            return completo
+                cod_map = _gerar_proximo_cod_map(dal)
+                if isinstance(cod_map, MapaError):
+                    raise _AbortMapaTx(cod_map)
+
+                ok_map = dal.create(
+                    """
+                    INSERT INTO tb_map (
+                        cod_map, codigo_mapa, id_usuario, id_empresa, id_linha, id_turno,
+                        data, inicio_jornada_des, fim_jornada_des, observacao
+                    ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        cod_map,
+                        codigo_mapa,
+                        id_usuario,
+                        int(id_empresa),
+                        int(id_turno),
+                        data_parsed.isoformat(),
+                        inicio.strftime("%Y-%m-%d %H:%M:%S"),
+                        fim_sql,
+                        observacao,
+                    ),
+                )
+                if not ok_map:
+                    raise _AbortMapaTx(
+                        MapaError(
+                            "Conflito ao gerar código do MAPA. Tente novamente.",
+                            "cod_map_conflito",
+                        )
+                    )
+
+                row = dal.read(
+                    "SELECT id_registro FROM tb_map WHERE codigo_mapa = ?",
+                    (codigo_mapa,),
+                )
+                if row.empty:
+                    raise _AbortMapaTx(
+                        MapaError("Falha ao criar MAPA.", "persistencia")
+                    )
+                id_registro = int(row.iloc[0]["id_registro"])
+        except _AbortMapaTx as abort:
+            if abort.erro.codigo == "cod_map_conflito":
+                last_error = abort.erro
+                continue
+            return abort.erro
         except Exception:
             last_error = MapaError(
-                "Conflito ao gerar cod_map. Tente novamente.",
+                "Conflito ao gerar código do MAPA. Tente novamente.",
                 "cod_map_conflito",
             )
             continue
+
+        if id_registro is None:
+            last_error = MapaError("Falha ao criar MAPA.", "persistencia")
+            continue
+        completo = obter_mapa_completo(dal, id_registro)
+        if isinstance(completo, MapaError):
+            return completo
+        return completo
 
     return last_error or MapaError("Falha ao criar MAPA.", "persistencia")
 
@@ -571,7 +848,10 @@ def atualizar_mapa(
     dal, id_registro: int, payload: dict[str, Any]
 ) -> dict[str, Any] | MapaError:
     existe = dal.read(
-        "SELECT id_registro FROM tb_map WHERE id_registro = ?",
+        """
+        SELECT id_registro, id_empresa, codigo_mapa
+        FROM tb_map WHERE id_registro = ?
+        """,
         (id_registro,),
     )
     if existe.empty:
@@ -615,6 +895,55 @@ def atualizar_mapa(
     )
     if not ok:
         return MapaError("Falha ao atualizar MAPA.", "persistencia")
+
+    # Legado: se ainda não tem empresa/código, permite vincular empresa uma vez.
+    codigo_atual = _limpar_codigo_mapa(existe.iloc[0].get("codigo_mapa"))
+    id_emp_atual = existe.iloc[0].get("id_empresa")
+    sem_empresa = id_emp_atual is None or str(id_emp_atual).strip() in (
+        "",
+        "None",
+        "nan",
+    )
+    if not codigo_atual and sem_empresa:
+        raw_emp = payload.get("id_empresa")
+        if raw_emp is not None and str(raw_emp).strip() not in ("", "null", "None"):
+            try:
+                id_emp = int(raw_emp)
+            except (TypeError, ValueError):
+                return MapaError("Empresa inválida.", "empresa_invalida")
+            emp = dal.read(
+                "SELECT id_empresa FROM tb_empresa WHERE id_empresa = ? AND ativo = 1",
+                (id_emp,),
+            )
+            if emp.empty:
+                return MapaError(
+                    "Empresa não encontrada ou inativa.", "empresa_invalida"
+                )
+            try:
+                with dal.transaction():
+                    alocado = _alocar_proximo_codigo_mapa(dal, int(id_emp))
+                    if isinstance(alocado, MapaError):
+                        raise _AbortMapaTx(alocado)
+                    codigo, _seq = alocado
+                    ok_cod = dal.update(
+                        """
+                        UPDATE tb_map
+                        SET id_empresa = ?, codigo_mapa = ?
+                        WHERE id_registro = ?
+                          AND id_empresa IS NULL
+                          AND (codigo_mapa IS NULL OR TRIM(codigo_mapa) = '')
+                        """,
+                        (int(id_emp), codigo, int(id_registro)),
+                    )
+                    if not ok_cod:
+                        raise _AbortMapaTx(
+                            MapaError(
+                                "Não foi possível atribuir o código do MAPA.",
+                                "persistencia",
+                            )
+                        )
+            except _AbortMapaTx as abort:
+                return abort.erro
 
     completo = obter_mapa_completo(dal, id_registro)
     if isinstance(completo, MapaError):
@@ -741,7 +1070,7 @@ def _erro_veiculo_ja_alocado(
     del idmap  # ocupação é global por status
     params: list[Any] = [int(id_veiculo), STATUS_ESCALA_EM_ANDAMENTO]
     sql = """
-        SELECT i.id_item, v.numero_frota, m.cod_map
+        SELECT i.id_item, v.numero_frota, m.cod_map, m.codigo_mapa
         FROM tb_item_map i
         INNER JOIN tb_veiculo v ON v.id_veiculo = i.id_veiculo
         INNER JOIN tb_map m ON m.id_registro = i.idmap
@@ -756,11 +1085,10 @@ def _erro_veiculo_ja_alocado(
     if existe.empty:
         return None
     frota = str(existe.iloc[0].get("numero_frota") or id_veiculo).strip().upper()
-    try:
-        cod_map = int(existe.iloc[0].get("cod_map") or 0)
-    except (TypeError, ValueError):
-        cod_map = 0
-    num_map = f"{cod_map:05d}" if cod_map else str(existe.iloc[0].get("cod_map") or "—")
+    num_map = _rotulo_mapa(
+        existe.iloc[0].get("codigo_mapa"),
+        existe.iloc[0].get("cod_map"),
+    )
     return MapaError(
         f"O veículo {frota} está em operação no MAPA {num_map}. "
         "Dê baixa antes de vinculá-lo novamente.",
@@ -843,7 +1171,7 @@ def listar_ocupacao_escalas(
                i.inicio_real, i.chegada_ponto, i.hor_ini_jor,
                v.numero_frota,
                mot.matricula AS matricula_motorista, mot.nome AS nome_motorista,
-               m.cod_map, m.data AS data_mapa
+               m.cod_map, m.codigo_mapa, m.data AS data_mapa
         FROM tb_item_map i
         INNER JOIN tb_veiculo v ON v.id_veiculo = i.id_veiculo
         INNER JOIN tb_map m ON m.id_registro = i.idmap
@@ -908,6 +1236,12 @@ def listar_ocupacao_escalas(
                 "id_mapa": id_mapa_val,
                 "idmap": id_mapa_val,
                 "cod_map": int(row["cod_map"]) if row.get("cod_map") is not None else None,
+                "codigo_mapa": (
+                    str(row["codigo_mapa"]).strip()
+                    if row.get("codigo_mapa") is not None
+                    and str(row.get("codigo_mapa")).strip()
+                    else None
+                ),
                 "id_motorista": id_motorista,
                 "matricula_motorista": mat,
                 "nome_motorista": nome,
@@ -927,6 +1261,12 @@ def listar_ocupacao_escalas(
                     "id_mapa": id_mapa_val,
                     "idmap": id_mapa_val,
                     "cod_map": int(row["cod_map"]) if row.get("cod_map") is not None else None,
+                    "codigo_mapa": (
+                        str(row["codigo_mapa"]).strip()
+                        if row.get("codigo_mapa") is not None
+                        and str(row.get("codigo_mapa")).strip()
+                        else None
+                    ),
                     "id_veiculo": id_veiculo,
                     "prefixo_veiculo": prefixo,
                     "numero_frota": prefixo,

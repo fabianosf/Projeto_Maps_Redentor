@@ -5,7 +5,9 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
+import threading
 from contextlib import contextmanager
 from datetime import date
 from typing import Any, Optional
@@ -27,7 +29,13 @@ CREATE TABLE tb_empresa (
     id_empresa INTEGER PRIMARY KEY AUTOINCREMENT,
     codigo_empresa INTEGER NOT NULL UNIQUE,
     descricao TEXT NOT NULL,
+    prefixo_mapa TEXT,
     ativo INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE tb_mapa_seq (
+    id_empresa INTEGER PRIMARY KEY,
+    ultimo_seq INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE tb_turno (
@@ -141,7 +149,9 @@ CREATE TABLE tb_chegada_saida (
 CREATE TABLE tb_map (
     id_registro INTEGER PRIMARY KEY AUTOINCREMENT,
     cod_map INTEGER NOT NULL UNIQUE,
+    codigo_mapa TEXT UNIQUE,
     id_usuario INTEGER NOT NULL,
+    id_empresa INTEGER,
     id_linha INTEGER,
     id_turno INTEGER NOT NULL,
     data TEXT NOT NULL,
@@ -236,19 +246,27 @@ class SqliteTestDal:
         )
         self._conn.executescript(SCHEMA_SQL)
         self._in_transaction = False
+        self._lock = threading.RLock()
         self._seed()
 
     def test_connection(self) -> bool:
         try:
-            self._conn.execute("SELECT 1")
+            with self._lock:
+                self._conn.execute("SELECT 1")
             return True
         except sqlite3.Error:
             return False
 
+    @staticmethod
+    def _sql_sqlite(sql: str) -> str:
+        # MariaDB usa FOR UPDATE; SQLite aceita mas não precisa sob RLock.
+        return re.sub(r"\s+FOR\s+UPDATE\b", "", sql, flags=re.IGNORECASE)
+
     def read(self, sql: str, values: Optional[tuple] = None) -> pd.DataFrame:
         try:
-            cur = self._conn.execute(sql, values or ())
-            rows = cur.fetchall()
+            with self._lock:
+                cur = self._conn.execute(self._sql_sqlite(sql), values or ())
+                rows = cur.fetchall()
             if not rows:
                 return pd.DataFrame()
             return pd.DataFrame([dict(r) for r in rows])
@@ -266,29 +284,32 @@ class SqliteTestDal:
 
     def _mutate(self, sql: str, values: Optional[tuple]) -> bool:
         try:
-            self._conn.execute(sql, values or ())
-            if not self._in_transaction:
-                self._conn.commit()
+            with self._lock:
+                self._conn.execute(self._sql_sqlite(sql), values or ())
+                if not self._in_transaction:
+                    self._conn.commit()
             return True
         except sqlite3.Error:
             if not self._in_transaction:
-                self._conn.rollback()
+                with self._lock:
+                    self._conn.rollback()
             return False
 
     @contextmanager
     def transaction(self):
-        if self._in_transaction:
-            yield
-            return
-        self._in_transaction = True
-        try:
-            yield
-            self._conn.commit()
-        except Exception:
-            self._conn.rollback()
-            raise
-        finally:
-            self._in_transaction = False
+        with self._lock:
+            if self._in_transaction:
+                yield
+                return
+            self._in_transaction = True
+            try:
+                yield
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+            finally:
+                self._in_transaction = False
 
     def _seed(self) -> None:
         c = self._conn
@@ -301,12 +322,16 @@ class SqliteTestDal:
             ],
         )
         c.execute(
-            "INSERT INTO tb_empresa (id_empresa, codigo_empresa, descricao, ativo) "
-            "VALUES (1, 1, 'Futuro', 1)"
+            "INSERT INTO tb_empresa (id_empresa, codigo_empresa, descricao, prefixo_mapa, ativo) "
+            "VALUES (1, 1, 'Futuro', 'Fut', 1)"
         )
         c.execute(
-            "INSERT INTO tb_empresa (id_empresa, codigo_empresa, descricao, ativo) "
-            "VALUES (2, 2, 'Redentor', 1)"
+            "INSERT INTO tb_empresa (id_empresa, codigo_empresa, descricao, prefixo_mapa, ativo) "
+            "VALUES (2, 2, 'Redentor', 'Red', 1)"
+        )
+        c.execute(
+            "INSERT INTO tb_empresa (id_empresa, codigo_empresa, descricao, prefixo_mapa, ativo) "
+            "VALUES (3, 3, 'Barra', 'Bar', 1)"
         )
         c.execute(
             "INSERT INTO tb_turno (id_turno, codigo_turno, descricao, ativo) "

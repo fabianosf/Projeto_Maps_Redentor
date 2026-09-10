@@ -39,6 +39,7 @@ import type {
 } from '@/types/guia';
 import { SCREEN_BG } from '@/theme/tokens';
 import { parseDateBR } from '@/utils/appFormat';
+import { formatCodigoMapa } from '@/utils/mapaFormat';
 import { canAccessMapas } from '@/utils/perfilAccess';
 import { onlyDigits } from '@/utils/validation';
 
@@ -453,6 +454,10 @@ export function NovaGuiaScreen() {
                 Dados da escala (somente leitura)
               </p>
               <div className="grid grid-cols-2 gap-2">
+                <ReadonlyField
+                  label="Mapa"
+                  value={formatCodigoMapa(contextoEscala.codigo_mapa)}
+                />
                 <ReadonlyField label="Empresa" value={contextoEscala.empresa} />
                 <ReadonlyField
                   label="Linha"

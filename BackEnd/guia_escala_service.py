@@ -26,12 +26,12 @@ def listar_escalas_guia(
     mapas_df = dal.read(
         """
         SELECT DISTINCT
-            m.id_registro, m.cod_map, m.id_turno, t.descricao AS turno
+            m.id_registro, m.cod_map, m.codigo_mapa, m.id_turno, t.descricao AS turno
         FROM tb_map m
         INNER JOIN tb_item_map i ON i.idmap = m.id_registro
         LEFT JOIN tb_turno t ON t.id_turno = m.id_turno
         WHERE m.data = ?
-        ORDER BY m.cod_map ASC
+        ORDER BY m.codigo_mapa ASC, m.cod_map ASC
         """,
         (data_sql,),
     )
@@ -43,15 +43,18 @@ def listar_escalas_guia(
             if id_map is None:
                 continue
             cod = _as_int(r.get("cod_map"))
+            codigo_mapa = str(r.get("codigo_mapa") or "").strip() or None
+            rotulo = codigo_mapa or (f"Mapa {cod}" if cod is not None else "Mapa")
             turno = r.get("turno")
             mapas.append(
                 {
                     "id_registro": id_map,
                     "cod_map": cod,
+                    "codigo_mapa": codigo_mapa,
                     "id_turno": _as_int(r.get("id_turno")),
                     "turno": turno,
                     "data": data_br,
-                    "label": f"Mapa {cod} · {turno or '—'}",
+                    "label": f"{rotulo} · {turno or '—'}",
                 }
             )
 
@@ -61,7 +64,7 @@ def listar_escalas_guia(
             """
             SELECT
                 i.id_item, i.idmap AS id_mapa, i.status_escala,
-                m.cod_map, m.id_turno,
+                m.cod_map, m.codigo_mapa, m.id_turno,
                 t.descricao AS turno,
                 l.codigo_linha, l.descricao AS linha_descricao,
                 v.numero_frota,
@@ -86,11 +89,13 @@ def listar_escalas_guia(
                     continue
                 frota = r.get("numero_frota")
                 mat = r.get("matricula_motorista")
+                codigo_mapa = str(r.get("codigo_mapa") or "").strip() or None
                 escalas.append(
                     {
                         "id_item": id_item,
                         "id_mapa": id_map,
                         "cod_map": _as_int(r.get("cod_map")),
+                        "codigo_mapa": codigo_mapa,
                         "id_turno": _as_int(r.get("id_turno")),
                         "turno": r.get("turno"),
                         "numero_frota": frota,
@@ -161,7 +166,7 @@ def obter_contexto_escala(dal, id_item: int) -> dict[str, Any] | GuiaError:
         SELECT
             i.id_item, i.idmap AS id_mapa, i.id_linha, i.id_veiculo, i.id_motorista,
             i.hor_ini_jor, i.hor_fim_jor, i.chegada_ponto, i.status_escala,
-            m.cod_map, m.data AS mapa_data, m.id_turno,
+            m.cod_map, m.codigo_mapa, m.data AS mapa_data, m.id_turno,
             t.descricao AS turno_descricao,
             l.codigo_linha, l.descricao AS linha_descricao, l.id_empresa,
             e.descricao AS empresa_descricao,
@@ -221,6 +226,7 @@ def obter_contexto_escala(dal, id_item: int) -> dict[str, Any] | GuiaError:
         "id_item": _as_int(item.get("id_item")),
         "id_mapa": _as_int(item.get("id_mapa")),
         "cod_map": _as_int(item.get("cod_map")),
+        "codigo_mapa": str(item.get("codigo_mapa") or "").strip() or None,
         "data": data_br,
         "mapa_data": item.get("mapa_data"),
         "id_empresa": _as_int(item.get("id_empresa")),

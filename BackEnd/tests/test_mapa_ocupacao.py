@@ -11,6 +11,7 @@ from BackEnd.tests.conftest import auth_client
 def _payload_mapa(**overrides):
     base = {
         "id_turno": 1,
+        "id_empresa": 1,
         "data": "2026-09-08",
         "inicio_jornada_des": "2026-09-08 05:00:00",
         "fim_jornada_des": "2026-09-08 14:00:00",
@@ -105,6 +106,8 @@ def test_ocupacao_listas_e_baixa(client, dal):
     assert m.status_code == 201
     id_reg = m.get_json()["mapa"]["id_registro"]
     cod_map = m.get_json()["mapa"]["cod_map"]
+    codigo_mapa = m.get_json()["mapa"]["codigo_mapa"]
+    assert codigo_mapa == "Fut01"
 
     i1 = client.post(
         f"/api/v1/mapas/{id_reg}/itens",
@@ -135,9 +138,8 @@ def test_ocupacao_listas_e_baixa(client, dal):
     )
     assert conflito_v.status_code == 409
     assert "C30000" in conflito_v.get_json()["mensagem"]
-    assert str(cod_map).zfill(5) in conflito_v.get_json()["mensagem"] or str(
-        cod_map
-    ) in conflito_v.get_json()["mensagem"]
+    msg_v = conflito_v.get_json()["mensagem"]
+    assert codigo_mapa in msg_v or str(cod_map).zfill(5) in msg_v or str(cod_map) in msg_v
 
     # Conflito motorista
     conflito_m = client.post(

@@ -3,6 +3,7 @@ import type { ApiSuccess } from './api';
 export interface MapaListaItem {
   id_registro: number;
   cod_map: number;
+  codigo_mapa?: string | null;
   data: string;
   empresa?: string | null;
   linha?: string | null;
@@ -68,6 +69,7 @@ export interface MapaOcupacaoVeiculo {
   id_mapa?: number;
   idmap?: number;
   cod_map?: number | null;
+  codigo_mapa?: string | null;
   id_motorista?: number | null;
   matricula_motorista?: string | null;
   nome_motorista?: string | null;
@@ -85,6 +87,7 @@ export interface MapaOcupacaoMotorista {
   id_mapa?: number;
   idmap?: number;
   cod_map?: number | null;
+  codigo_mapa?: string | null;
   id_veiculo?: number;
   prefixo_veiculo?: string;
   numero_frota?: string;
@@ -104,6 +107,7 @@ export type MapaOcupacaoResponse = ApiSuccess<{
 export interface MapaCompleto {
   id_registro: number;
   cod_map: number;
+  codigo_mapa?: string | null;
   id_usuario: number;
   /** Legado — novos MAPAs podem vir null. */
   id_linha?: number | null;
@@ -121,7 +125,7 @@ export interface MapaCompleto {
   itens: MapaItem[];
 }
 
-/** Cabeçalho: empresa/linha/veículo deixam de ser obrigatórios (fase API). */
+/** Cabeçalho: empresa obrigatória na criação (gera codigo_mapa). */
 export interface MapaHeaderPayload {
   id_turno: number;
   codigo_turno?: number | null;
@@ -130,11 +134,12 @@ export interface MapaHeaderPayload {
   inicio_jornada_des: string;
   fim_jornada_des?: string | null;
   observacao?: string | null;
+  /** Obrigatório na criação — define prefixo/sequência do código. */
+  id_empresa?: number | null;
+  empresa?: string | null;
   /** @deprecated — mover para item; UI ainda envia até fase de tela. */
   id_linha?: number | null;
   codigo_linha?: string | number | null;
-  id_empresa?: number | null;
-  empresa?: string | null;
   numero_frota?: string;
 }
 

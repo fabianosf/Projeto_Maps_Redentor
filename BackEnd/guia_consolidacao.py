@@ -171,6 +171,7 @@ def _carregar_viagens_mapa(dal, data_sql: str) -> list[dict[str, Any]]:
             i.status_escala,
             m.id_registro AS id_mapa,
             m.cod_map,
+            m.codigo_mapa,
             m.id_turno,
             m.data AS mapa_data,
             ve.numero_frota,
@@ -461,6 +462,9 @@ def _montar_card(
         veiculo = str(guia.get("numero_frota") or "").strip()
 
     cod_map = _as_int(viagem.get("cod_map")) if viagem else None
+    codigo_mapa = None
+    if viagem is not None:
+        codigo_mapa = str(viagem.get("codigo_mapa") or "").strip() or None
     linha_cod = None
     if viagem is not None:
         linha_cod = viagem.get("linha_codigo")
@@ -487,6 +491,17 @@ def _montar_card(
     if guia and not matricula_mot:
         matricula_mot = guia.get("matricula_motorista")
 
+    if codigo_mapa:
+        mapa_label = codigo_mapa
+    elif cod_map is not None:
+        mapa_label = f"Mapa {str(cod_map).zfill(3)}"
+    elif linha_cod is not None and str(linha_cod).isdigit():
+        mapa_label = f"Mapa {str(linha_cod).zfill(3)}"
+    elif guia:
+        mapa_label = f"Guia {guia.get('numero')}"
+    else:
+        mapa_label = None
+
     return {
         "key": key,
         "viagem_label": f"Viagem {seq:02d}",
@@ -494,16 +509,8 @@ def _montar_card(
         "id_guia": gid,
         "id_mapa": _as_int(viagem.get("id_mapa")) if viagem else None,
         "cod_map": cod_map,
-        "mapa": (
-            f"Mapa {str(cod_map).zfill(3)}"
-            if cod_map is not None
-            else (
-                f"Mapa {str(linha_cod).zfill(3)}"
-                if linha_cod is not None and str(linha_cod).isdigit()
-                else (f"Guia {guia.get('numero')}" if guia else None)
-            )
-        ),
-        "veiculo": veiculo or "—",
+        "codigo_mapa": codigo_mapa,
+        "mapa": mapa_label,        "veiculo": veiculo or "—",
         "numero_frota": veiculo or None,
         "id_veiculo": id_veiculo,
         "motorista": motorista_nome,
@@ -588,6 +595,7 @@ def consultar_guia_consolidada(
                 "titulo_mapa": "Guia do dia",
                 "turno": None,
                 "cod_map": None,
+                "codigo_mapa": None,
                 "id_registro": None,
                 "embarques_ida": 0,
                 "embarques_volta": 0,
@@ -735,6 +743,7 @@ def consultar_guia_consolidada(
             "titulo_mapa": titulo,
             "turno": turno_label,
             "cod_map": (first or {}).get("cod_map"),
+            "codigo_mapa": (first or {}).get("codigo_mapa"),
             "id_registro": (first or {}).get("id_mapa"),
             # Separados — não somar Ja E + RioCard.
             "ida": {"jae": emb_ida_jae, "riocard": emb_ida_rio},

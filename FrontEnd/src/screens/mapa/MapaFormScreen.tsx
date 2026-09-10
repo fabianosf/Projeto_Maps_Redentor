@@ -31,6 +31,7 @@ import type { MapaHeaderPayload } from '@/types/mapa';
 import {
   brToYmd,
   combineDateAndTime,
+  formatCodigoMapa,
   formatHora,
   isValidHHMM,
   parseDateBR,
@@ -44,6 +45,7 @@ const MAPA_BG = SCREEN_BG;
 
 /** Opções fixas do combo Turno (sempre renderizadas). */
 const TURNO_OPCOES = ['TURNO 01', 'TURNO 02', 'TURNO 03'] as const;
+const SELECT_EMPTY_EMP = '__empty_empresa__';
 
 function maskHHMM(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 4);
@@ -72,7 +74,7 @@ function normalizeTurnoLabel(raw: string): string {
 /**
  * Cadastro / edição de cabeçalho do MAPA.
  * Rotas: `/mapas/novo` | `/mapas/:id/editar`
- * Cabeçalho: matrícula, data, turno, início/fim do plantão (sem empresa/linha/veículo).
+ * Criação: empresa obrigatória (gera codigo_mapa). Código não é editável.
  */
 export function MapaFormScreen() {
   const navigate = useNavigate();
@@ -95,6 +97,9 @@ export function MapaFormScreen() {
   const [inicioHHMM, setInicioHHMM] = useState('');
   const [fimHHMM, setFimHHMM] = useState('');
   const [turno, setTurno] = useState<string>(TURNO_OPCOES[0]);
+  const [idEmpresa, setIdEmpresa] = useState('');
+  const [codigoMapa, setCodigoMapa] = useState('');
+  const [empresaLabel, setEmpresaLabel] = useState('');
 
   const stillMounted = () => mountedRef.current && loadAliveRef.current;
 
@@ -174,9 +179,15 @@ export function MapaFormScreen() {
           setInicioHHMM(formatHora(m.inicio_jornada_des).replace('—', ''));
           setFimHHMM(formatHora(m.fim_jornada_des).replace('—', ''));
           setTurno(normalizeTurnoLabel(String(m.turno ?? TURNO_OPCOES[0])));
+          setCodigoMapa(formatCodigoMapa(m.codigo_mapa));
+          setIdEmpresa(m.id_empresa != null ? toId(m.id_empresa) : '');
+          setEmpresaLabel(String(m.empresa ?? '').trim());
         } else if (stillMounted()) {
           setDataBR(todayBR());
           setTurno(TURNO_OPCOES[0]);
+          setCodigoMapa('');
+          setIdEmpresa('');
+          setEmpresaLabel('');
         }
       } catch (e) {
         if (!cancelled && stillMounted()) {
@@ -229,6 +240,20 @@ export function MapaFormScreen() {
       return;
     }
 
+    if (!isEdit) {
+      if (!idEmpresa.trim()) {
+        toast.error('Selecione a empresa do MAPA.');
+        return;
+      }
+    } else if (
+      (!codigoMapa || codigoMapa === '—') &&
+      !idEmpresa.trim() &&
+      !empresaLabel.trim()
+    ) {
+      toast.error('Selecione a empresa para gerar o código do MAPA.');
+      return;
+    }
+
     const codigoTurno =
       TURNO_OPCOES.indexOf(turnoSelecionado as (typeof TURNO_OPCOES)[number]) + 1;
 
@@ -242,6 +267,11 @@ export function MapaFormScreen() {
         ? combineDateAndTime(dataOk, fimHHMM)
         : null,
       observacao: null,
+      ...(!isEdit || (!codigoMapa || codigoMapa === '—')
+        ? idEmpresa.trim()
+          ? { id_empresa: Number(idEmpresa) }
+          : {}
+        : {}),
     };
 
     setBusy(true);
@@ -262,7 +292,8 @@ export function MapaFormScreen() {
           navigate('/mapas', { replace: true });
           return;
         }
-        toast.success('MAPA cadastrado com sucesso.');
+        const codigoGerado = formatCodigoMapa(res?.mapa?.codigo_mapa);
+        toast.success(`MAPA ${codigoGerado} cadastrado com sucesso.`);
         navigate(`/mapas/${novoId}`, { replace: true });
       }
     } catch (err) {
@@ -335,6 +366,56 @@ export function MapaFormScreen() {
                 onChange={setDataBR}
               />
             </div>
+
+            {isEdit && codigoMapa && codigoMapa !== '—' ? (
+              <div className="grid grid-cols-2 items-start gap-3">
+                <FormField
+                  label="CÓDIGO"
+                  name="codigo_mapa"
+                  value={codigoMapa}
+                  readOnly
+                  disabled
+                  className="bg-slate-100"
+                />
+                <FormField
+                  label="EMPRESA"
+                  name="empresa"
+                  value={empresaLabel || idEmpresa}
+                  readOnly
+                  disabled
+                  className="bg-slate-100"
+                />
+              </div>
+            ) : (
+              <div className="flex w-full flex-col gap-1.5">
+                <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900">
+                  Empresa <span className="req">*</span>
+                </Label>
+                <Select
+                  value={idEmpresa || SELECT_EMPTY_EMP}
+                  onValueChange={(v) =>
+                    setIdEmpresa(v === SELECT_EMPTY_EMP ? '' : (v ?? ''))
+                  }
+                >
+                  <SelectTrigger className="h-12 w-full rounded-lg border-slate-400 bg-white text-base text-slate-900">
+                    <SelectValue placeholder="Selecione a empresa" />
+                  </SelectTrigger>
+                  <SelectContent position="popper" className="z-[300]">
+                    {(cadastros?.empresas ?? []).map((emp) => (
+                      <SelectItem
+                        key={String(emp.id_empresa)}
+                        value={toId(emp.id_empresa)}
+                      >
+                        {emp.descricao}
+                        {emp.prefixo_mapa
+                          ? ` (${emp.prefixo_mapa})`
+                          : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="flex w-full flex-col gap-1.5">
               <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900">

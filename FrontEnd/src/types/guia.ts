@@ -62,6 +62,7 @@ export interface GuiaViagemCard {
   id_guia?: number | null;
   id_mapa?: number | null;
   cod_map?: number | null;
+  codigo_mapa?: string | null;
   mapa?: string | null;
   veiculo: string;
   numero_frota?: string | null;
@@ -101,6 +102,7 @@ export interface GuiaResumoDia {
   titulo_mapa: string;
   turno?: string | null;
   cod_map?: number | null;
+  codigo_mapa?: string | null;
   id_registro?: number | null;
   ida: { jae: number; riocard: number };
   volta: { jae: number; riocard: number };
@@ -178,6 +180,7 @@ export type GuiaContextoEscala = {
   id_item: number;
   id_mapa?: number | null;
   cod_map?: number | null;
+  codigo_mapa?: string | null;
   data?: string | null;
   id_empresa?: number | null;
   empresa?: string | null;
@@ -205,6 +208,7 @@ export type GuiaEscalaOpcao = {
   id_item: number;
   id_mapa: number;
   cod_map?: number | null;
+  codigo_mapa?: string | null;
   id_turno?: number | null;
   turno?: string | null;
   numero_frota?: string | null;
@@ -219,6 +223,7 @@ export type GuiaEscalaOpcao = {
 export type GuiaMapaOpcao = {
   id_registro: number;
   cod_map?: number | null;
+  codigo_mapa?: string | null;
   id_turno?: number | null;
   turno?: string | null;
   data?: string | null;

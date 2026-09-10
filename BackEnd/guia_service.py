@@ -222,20 +222,24 @@ def _aplicar_contexto_escala(dal, body: dict[str, Any]) -> dict[str, Any] | Guia
         "carro": ctx.get("numero_frota") or body.get("carro"),
         "motorista": ctx.get("matricula_motorista") or body.get("motorista"),
         "cod_map": ctx.get("cod_map"),
+        "codigo_mapa": ctx.get("codigo_mapa"),
     }
 
 
 def _gerar_numero_guia(dal, body: dict[str, Any]) -> str:
     """
-    Gera NR(Guia) único (máx. 15). Preferência: cod_map + frota da escala;
+    Gera NR(Guia) único (máx. 15). Preferência: codigo_mapa/cod_map + frota;
     fallback temporal. Preserva envio manual quando o cliente informa numero.
     """
+    codigo_mapa = str(body.get("codigo_mapa") or "").strip()
     cod = body.get("cod_map")
     frota = str(body.get("numero_frota") or body.get("carro") or "").strip()
     id_item = _parse_int_opcional(body.get("id_item_map", body.get("id_item")))
 
     partes: list[str] = []
-    if cod is not None and str(cod).strip() != "":
+    if codigo_mapa:
+        partes.append(re.sub(r"[^\w]", "", codigo_mapa)[:8])
+    elif cod is not None and str(cod).strip() != "":
         try:
             partes.append(str(int(cod)))
         except (TypeError, ValueError):

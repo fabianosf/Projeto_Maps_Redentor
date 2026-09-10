@@ -1,8 +1,16 @@
-/** Número do MAPA com 5 dígitos (RF-MAP-UI-005a). */
-export function formatCodMap(cod: number | string | null | undefined): string {
-  const n = Number(cod ?? 0);
-  if (!Number.isFinite(n)) return '00000';
-  return String(Math.trunc(n)).padStart(5, '0');
+/** Código operacional do MAPA (ex.: Red01). Nunca usa id interno / 00001. */
+export function formatCodMap(
+  _cod?: number | string | null | undefined,
+  codigoMapa?: string | null,
+): string {
+  return formatCodigoMapa(codigoMapa);
+}
+
+/** Exibe apenas `codigo_mapa` da API. */
+export function formatCodigoMapa(codigoMapa?: string | null): string {
+  const c = String(codigoMapa ?? '').trim();
+  if (c && /^[A-Za-z]/.test(c)) return c;
+  return '—';
 }
 
 /** Extrai HH:MM de datetime ISO / SQL. */

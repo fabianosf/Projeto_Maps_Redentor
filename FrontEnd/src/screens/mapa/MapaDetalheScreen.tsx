@@ -60,7 +60,7 @@ import type {
 } from '@/types/mapa';
 import {
   combineDateAndTime,
-  formatCodMap,
+  formatCodigoMapa,
   formatHora,
   fromDateTimeLocal,
   toDateInput,
@@ -441,9 +441,12 @@ export function MapaDetalheScreen() {
       if (id > 0 && idsVeiculosOcupados.has(id)) {
         const frota = frotaQuery.trim().toUpperCase() || String(id);
         const occ = ocupacaoVeiculos.find((o) => Number(o.id_veiculo) === id);
-        const mapaRef = occ?.cod_map ?? occ?.id_mapa ?? occ?.idmap;
+        const mapaRef =
+          formatCodigoMapa(occ?.codigo_mapa) !== '—'
+            ? formatCodigoMapa(occ?.codigo_mapa)
+            : null;
         return mapaRef != null
-          ? `O veículo ${frota} está em operação no MAPA ${String(mapaRef).padStart(5, '0')}. Dê baixa antes de vinculá-lo novamente.`
+          ? `O veículo ${frota} está em operação no MAPA ${mapaRef}. Dê baixa antes de vinculá-lo novamente.`
           : `O veículo ${frota} está em operação. Dê baixa antes de vinculá-lo novamente.`;
       }
       return null;
@@ -462,9 +465,12 @@ export function MapaDetalheScreen() {
     const occ = ocupacaoVeiculos.find(
       (o) => Number(o.id_veiculo) === Number(existente.id_veiculo),
     );
-    const mapaRef = occ?.cod_map ?? occ?.id_mapa ?? occ?.idmap;
+    const mapaRef =
+      formatCodigoMapa(occ?.codigo_mapa) !== '—'
+        ? formatCodigoMapa(occ?.codigo_mapa)
+        : null;
     return mapaRef != null
-      ? `O veículo ${frota} está em operação no MAPA ${String(mapaRef).padStart(5, '0')}. Dê baixa antes de vinculá-lo novamente.`
+      ? `O veículo ${frota} está em operação no MAPA ${mapaRef}. Dê baixa antes de vinculá-lo novamente.`
       : `O veículo ${frota} está em operação. Dê baixa antes de vinculá-lo novamente.`;
   }, [
     cadastros,
@@ -1289,7 +1295,7 @@ export function MapaDetalheScreen() {
           <section className="rounded-xl border border-slate-400/40 bg-white/50 p-4">
             <div className="mb-2">
               <p className="text-lg font-bold text-primary">
-                Nº {formatCodMap(mapa.cod_map)}
+                Nº {formatCodigoMapa(mapa.codigo_mapa)}
               </p>
               <p className="text-sm text-muted-foreground">
                 {toDateInput(mapa.data)} · {mapa.turno}

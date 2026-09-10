@@ -61,7 +61,15 @@ describe('MapaFormScreen Cancelar', () => {
     getCadastrosMock.mockResolvedValue({
       ok: true,
       cadastros: {
-        empresas: [],
+        empresas: [
+          {
+            id_empresa: 1,
+            codigo_empresa: 1,
+            descricao: 'Futuro',
+            prefixo_mapa: 'Fut',
+            ativo: 1,
+          },
+        ],
         linhas: [],
         turnos: [
           { id_turno: 1, codigo_turno: 1, descricao: 'TURNO 01', ativo: 1 },

@@ -155,8 +155,14 @@ def create_map():
     resultado = criar_mapa(_dal(), usuario.id_usuario, body)
     if isinstance(resultado, MapaError):
         status = 400
-        if resultado.codigo in ("cod_map_esgotado", "cod_map_conflito"):
+        if resultado.codigo in (
+            "cod_map_esgotado",
+            "cod_map_conflito",
+            "prefixo_mapa_ausente",
+        ):
             status = 409
+        elif resultado.codigo in ("empresa_obrigatoria", "empresa_invalida"):
+            status = 400
         return json_error(resultado.mensagem, status, resultado.codigo)
     return jsonify({"ok": True, "mapa": resultado}), 201
 

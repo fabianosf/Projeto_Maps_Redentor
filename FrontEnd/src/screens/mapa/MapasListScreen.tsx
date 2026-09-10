@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/select';
 import { useScreenBg } from '@/hooks/useScreenBg';
 import type { MapaListaItem } from '@/types/mapa';
-import { formatCodMap, toDateBR } from '@/utils/mapaFormat';
+import { formatCodigoMapa, toDateBR } from '@/utils/mapaFormat';
 import { SCREEN_BG } from '@/theme/tokens';
 
 const BG = SCREEN_BG;
@@ -28,8 +28,8 @@ const FILTRO_TODOS = '__todos__';
 
 function textoBusca(row: MapaListaItem): string {
   return [
-    formatCodMap(row.cod_map),
-    String(row.cod_map ?? ''),
+    formatCodigoMapa(row.codigo_mapa),
+    String(row.codigo_mapa ?? ''),
     row.linha ?? '',
     row.turno ?? '',
   ]
@@ -323,7 +323,7 @@ export function MapasListScreen() {
                         >
                           <div className="flex items-baseline justify-between gap-3">
                             <span className="text-lg font-bold tabular-nums text-primary">
-                              {formatCodMap(row.cod_map)}
+                              {formatCodigoMapa(row.codigo_mapa)}
                             </span>
                             {data ? (
                               <span className="text-sm font-medium text-slate-600">
@@ -377,7 +377,7 @@ export function MapasListScreen() {
                             key={row.id_registro}
                             tabIndex={0}
                             role="link"
-                            aria-label={`Abrir MAPA ${formatCodMap(row.cod_map)}`}
+                            aria-label={`Abrir MAPA ${formatCodigoMapa(row.codigo_mapa)}`}
                             className={`cursor-pointer border-b border-border/50 text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
                               i % 2 === 0 ? 'bg-white' : 'bg-table-zebra'
                             }`}
@@ -390,7 +390,7 @@ export function MapasListScreen() {
                             }}
                           >
                             <td className="px-3 py-3.5 text-left text-base font-semibold tabular-nums">
-                              {formatCodMap(row.cod_map)}
+                              {formatCodigoMapa(row.codigo_mapa)}
                             </td>
                             <td className="max-w-[220px] truncate px-3 py-3.5 text-left text-base font-semibold">
                               {row.linha ?? '—'}
