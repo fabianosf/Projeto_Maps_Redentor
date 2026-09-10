@@ -36,12 +36,10 @@ def dal():
 
 @pytest.fixture
 def app(dal, monkeypatch):
-    # Dev local / testes: ERP desligado (sem erp.dat / Oracle).
+    # Dev local / testes: provider mock explícito.
+    monkeypatch.setenv("ERP_PROVIDER", "mock")
+    monkeypatch.setenv("ERP_ALLOW_MANUAL_USER_CREATE", "1")
     monkeypatch.setenv("REDMAPA_ERP_ENABLED", "0")
-    monkeypatch.setattr(
-        "BackEnd.users_routes.get_erp_dal_instance",
-        lambda: None,
-    )
     application = build_test_app(dal)
     return application
 

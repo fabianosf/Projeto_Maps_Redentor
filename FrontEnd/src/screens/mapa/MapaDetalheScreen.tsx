@@ -50,9 +50,11 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useScreenBg } from '@/hooks/useScreenBg';
+import { cn } from '@/lib/utils';
 import type { CadastrosMestres, VeiculoCadastro } from '@/types/cadastro';
 import type {
   MapaCompleto,
+  MapaItem,
   MapaOcupacaoMotorista,
   MapaOcupacaoVeiculo,
 } from '@/types/mapa';
@@ -115,6 +117,60 @@ function formatDuracaoHhMm(minutos: number | null | undefined): string {
   const h = Math.floor(minutos / 60);
   const m = Math.floor(minutos % 60);
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function frotaItemLabel(item: MapaItem): string {
+  return item.numero_frota
+    ? String(item.numero_frota)
+    : String(item.id_veiculo ?? '—');
+}
+
+function linhaItemLabel(item: MapaItem): string {
+  if (item.codigo_linha != null) return String(item.codigo_linha);
+  if (item.linha) return String(item.linha);
+  if (item.id_linha != null) return String(item.id_linha);
+  return '—';
+}
+
+function motoristaItemLabel(item: MapaItem): string {
+  const mat = String(item.matricula_motorista ?? '').trim();
+  const nome = String(item.motorista ?? '').trim();
+  if (mat || nome) return [mat, nome].filter(Boolean).join(' — ');
+  return '—';
+}
+
+function jornadaItemLabel(item: MapaItem): string {
+  const ini = formatHora(item.hor_ini_jor);
+  const fim = formatHora(item.hor_fim_jor);
+  if (ini === '—' && fim === '—') return '—';
+  return `${ini}–${fim}`;
+}
+
+function StatusEscalaBadge({
+  item,
+  className,
+}: {
+  item: { status_escala?: string | null; duracao_trabalhada_hhmm?: string | null; duracao_trabalhada_minutos?: number | null };
+  className?: string;
+}) {
+  const emAndamento = escalaEmAndamento(item);
+  return (
+    <div className={cn('flex flex-col gap-0.5', className)}>
+      <Badge
+        variant={emAndamento ? 'default' : 'secondary'}
+        className="w-fit whitespace-nowrap text-[10px] uppercase"
+      >
+        {emAndamento ? 'Em andamento' : 'Encerrada'}
+      </Badge>
+      {!emAndamento ? (
+        <span className="text-[10px] font-medium text-slate-700">
+          Trabalhado:{' '}
+          {item.duracao_trabalhada_hhmm ??
+            formatDuracaoHhMm(item.duracao_trabalhada_minutos)}
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
 /** Detalhe do MAPA — carros + viagens. Rota: `/mapas/:id` */
@@ -278,26 +334,14 @@ export function MapaDetalheScreen() {
 
   const resumoViagens = useMemo(() => {
     if (!itemSelecionado) return null;
-    const frota = String(
-      itemSelecionado.numero_frota ?? itemSelecionado.id_veiculo ?? '—',
-    );
-    const mat = String(itemSelecionado.matricula_motorista ?? '').trim();
-    const nome = String(itemSelecionado.motorista ?? '').trim();
-    const motoristaTxt =
-      mat || nome
-        ? [mat, nome].filter(Boolean).join(' — ')
-        : '—';
-    const linhaTxt = String(
-      itemSelecionado.codigo_linha ??
-        itemSelecionado.linha ??
-        itemSelecionado.id_linha ??
-        '—',
-    );
+    const frota = frotaItemLabel(itemSelecionado);
+    const motoristaTxt = motoristaItemLabel(itemSelecionado);
+    const linhaTxt = linhaItemLabel(itemSelecionado);
     const empresaTxt = String(itemSelecionado.empresa ?? '—');
-    const ini = formatHora(itemSelecionado.hor_ini_jor);
-    const fim = formatHora(itemSelecionado.hor_fim_jor);
-    const jornadaTxt =
-      ini !== '—' || fim !== '—' ? `${ini}–${fim}` : null;
+    const jornadaTxt = (() => {
+      const label = jornadaItemLabel(itemSelecionado);
+      return label === '—' ? null : label;
+    })();
     const inicioRealTxt = formatHora(inicioRealItem(itemSelecionado));
     const fimRealTxt = formatHora(
       itemSelecionado.fim_real ?? itemSelecionado.baixa_em,
@@ -305,6 +349,7 @@ export function MapaDetalheScreen() {
     const trabalhadoTxt =
       itemSelecionado.duracao_trabalhada_hhmm ??
       formatDuracaoHhMm(itemSelecionado.duracao_trabalhada_minutos);
+    const emAndamento = escalaEmAndamento(itemSelecionado);
     return {
       frota,
       motoristaTxt,
@@ -314,7 +359,8 @@ export function MapaDetalheScreen() {
       inicioRealTxt,
       fimRealTxt,
       trabalhadoTxt,
-      encerrada: !escalaEmAndamento(itemSelecionado),
+      encerrada: !emAndamento,
+      statusLabel: emAndamento ? 'Em andamento' : 'Encerrada',
     };
   }, [itemSelecionado]);
 
@@ -1188,7 +1234,7 @@ export function MapaDetalheScreen() {
       <AppShell className="bg-[#B9C8D4]">
         <div className="page min-h-dvh bg-[#B9C8D4] text-slate-900">
           <PageHeader title="MAPA" onBack={goLista} />
-          <LoadingState />
+          <LoadingState label="Carregando MAPA…" className="min-h-[40vh]" />
         </div>
       </AppShell>
     );
@@ -1199,7 +1245,11 @@ export function MapaDetalheScreen() {
       <AppShell className="bg-[#B9C8D4]">
         <div className="page min-h-dvh bg-[#B9C8D4] text-slate-900">
           <PageHeader title="MAPA" onBack={goLista} />
-          <EmptyState title="MAPA não encontrado" description="Volte à lista e tente novamente." />
+          <EmptyState
+            title="MAPA não encontrado"
+            description="Volte à lista e tente novamente."
+            className="min-h-[40vh]"
+          />
         </div>
       </AppShell>
     );
@@ -1220,7 +1270,7 @@ export function MapaDetalheScreen() {
               size="icon"
               aria-label="Editar MAPA"
               onClick={() => navigate(`/mapas/${idRegistro}/editar`)}
-              className="h-9 w-9 rounded border border-white/70 text-white hover:bg-white/10"
+              className="h-11 w-11 min-h-[44px] min-w-[44px] rounded border border-white/70 text-white hover:bg-white/10"
             >
               <Pencil className="h-5 w-5" strokeWidth={2.25} />
             </Button>
@@ -1243,9 +1293,12 @@ export function MapaDetalheScreen() {
             </div>
           </section>
 
-          <section>
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-[13px] font-bold uppercase tracking-wide text-muted-foreground">
+          <section aria-labelledby="mapa-carros-heading">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h2
+                id="mapa-carros-heading"
+                className="text-[13px] font-bold uppercase tracking-wide text-muted-foreground"
+              >
                 Carros
               </h2>
               <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1253,7 +1306,7 @@ export function MapaDetalheScreen() {
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="h-10 rounded-full px-3 text-xs font-bold uppercase"
+                  className="h-11 min-h-[44px] rounded-full px-3 text-xs font-bold uppercase"
                   aria-label="Dar baixa"
                   disabled={!itemPodeDarBaixa || busy}
                   onClick={abrirDialogBaixa}
@@ -1263,7 +1316,7 @@ export function MapaDetalheScreen() {
                 <Button
                   type="button"
                   size="icon"
-                  className="h-10 w-10 rounded-full"
+                  className="h-11 w-11 min-h-[44px] min-w-[44px] rounded-full"
                   aria-label="Vincular motorista"
                   onClick={() => openMotoristaNovo()}
                 >
@@ -1273,7 +1326,7 @@ export function MapaDetalheScreen() {
                   type="button"
                   size="icon"
                   variant="outline"
-                  className="h-10 w-10 rounded-full"
+                  className="h-11 w-11 min-h-[44px] min-w-[44px] rounded-full"
                   aria-label="Excluir carro"
                   disabled={selectedItemId == null}
                   onClick={() => setConfirmDeleteItem(true)}
@@ -1283,143 +1336,202 @@ export function MapaDetalheScreen() {
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-slate-400/40">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-secondary/60 hover:bg-secondary/60">
-                    <TableHead className="text-[11px] leading-tight">Carro</TableHead>
-                    <TableHead className="text-[11px] leading-tight">Status</TableHead>
-                    <TableHead className="text-[11px] leading-tight">Empresa</TableHead>
-                    <TableHead className="text-[11px] leading-tight">Linha</TableHead>
-                    <TableHead className="text-[11px] leading-tight">Matrícula</TableHead>
-                    <TableHead className="text-[11px] leading-tight">Início</TableHead>
-                    <TableHead className="text-[11px] leading-tight">Chegada</TableHead>
-                    <TableHead className="w-10 p-0" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {mapa.itens.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="py-6 text-muted-foreground">
-                        Nenhum veículo neste MAPA. Use + para incluir.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    mapa.itens.map((item, i) => {
-                      const temVinculo =
-                        item.id_motorista != null && Number(item.id_motorista) > 0;
-                      const emAndamento = escalaEmAndamento(item);
-                      return (
-                      <TableRow
-                        key={item.id_item}
-                        className={`cursor-pointer ${
-                          item.id_item === selectedItemId
-                            ? 'bg-primary/10'
-                            : i % 2 === 0
-                              ? 'bg-white'
-                              : 'bg-[hsl(var(--zebra))]'
-                        }`}
-                        onClick={() => setSelectedItemId(item.id_item)}
-                      >
-                        <TableCell className="text-xs font-medium">
-                          {item.numero_frota
-                            ? String(item.numero_frota)
-                            : String(item.id_veiculo)}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          <div className="flex flex-col gap-0.5">
-                            <Badge
-                              variant={emAndamento ? 'default' : 'secondary'}
-                              className="w-fit whitespace-nowrap text-[10px] uppercase"
+            {mapa.itens.length === 0 ? (
+              <EmptyState
+                title="Nenhum veículo neste MAPA"
+                description="Use o botão de vincular motorista para incluir a primeira escala."
+                className="rounded-xl border border-dashed border-slate-400/50 bg-white/40 py-10"
+              />
+            ) : (
+              <>
+                {/* Mobile: cards clicáveis */}
+                <ul
+                  className="flex flex-col gap-2 md:hidden"
+                  role="listbox"
+                  aria-label="Escalas do MAPA"
+                  aria-activedescendant={
+                    selectedItemId != null
+                      ? `escala-card-${selectedItemId}`
+                      : undefined
+                  }
+                >
+                  {mapa.itens.map((item) => {
+                    const selected = item.id_item === selectedItemId;
+                    const temVinculo =
+                      item.id_motorista != null && Number(item.id_motorista) > 0;
+                    const emAndamento = escalaEmAndamento(item);
+                    return (
+                      <li key={item.id_item}>
+                        <div
+                          id={`escala-card-${item.id_item}`}
+                          role="option"
+                          aria-selected={selected}
+                          tabIndex={0}
+                          className={cn(
+                            'w-full rounded-xl border bg-white/80 p-3 text-left shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                            selected
+                              ? 'border-primary bg-primary/10 ring-2 ring-primary/40'
+                              : 'border-slate-400/40 hover:border-slate-500/60',
+                          )}
+                          onClick={() => setSelectedItemId(item.id_item)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setSelectedItemId(item.id_item);
+                            }
+                          }}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1 space-y-1.5">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-base font-bold text-slate-900">
+                                  {frotaItemLabel(item)}
+                                </p>
+                                <StatusEscalaBadge item={item} />
+                              </div>
+                              <p className="text-sm text-slate-700">
+                                <span className="font-semibold">Empresa:</span>{' '}
+                                {item.empresa ?? '—'}
+                              </p>
+                              <p className="text-sm text-slate-700">
+                                <span className="font-semibold">Linha:</span>{' '}
+                                {linhaItemLabel(item)}
+                              </p>
+                              <p className="text-sm text-slate-700">
+                                <span className="font-semibold">Motorista:</span>{' '}
+                                {motoristaItemLabel(item)}
+                              </p>
+                              <p className="text-sm text-slate-700">
+                                <span className="font-semibold">Jornada:</span>{' '}
+                                {jornadaItemLabel(item)}
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              className="h-11 w-11 min-h-[44px] min-w-[44px] shrink-0"
+                              aria-label="Editar vínculo"
+                              disabled={!temVinculo || !emAndamento}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openMotoristaEditar(item.id_item);
+                              }}
                             >
-                              {emAndamento ? 'Em andamento' : 'Encerrada'}
-                            </Badge>
-                            {!emAndamento ? (
-                              <span className="text-[10px] font-medium text-slate-700">
-                                Trabalhado:{' '}
-                                {item.duracao_trabalhada_hhmm ??
-                                  formatDuracaoHhMm(item.duracao_trabalhada_minutos)}
-                              </span>
-                            ) : null}
+                              <Pencil className="h-4 w-4" />
+                            </Button>
                           </div>
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {item.empresa ?? '—'}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {item.codigo_linha != null
-                            ? String(item.codigo_linha)
-                            : item.linha ?? '—'}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {item.matricula_motorista ?? '—'}
-                        </TableCell>
-                        <TableCell className="text-xs">{formatHora(item.hor_ini_jor)}</TableCell>
-                        <TableCell className="text-xs">{formatHora(item.chegada_ponto)}</TableCell>
-                        <TableCell className="p-1 text-right">
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="ghost"
-                            className="h-9 w-9"
-                            aria-label="Editar vínculo"
-                            disabled={!temVinculo || !emAndamento}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openMotoristaEditar(item.id_item);
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+
+                {/* Desktop: tabela */}
+                <div className="hidden overflow-hidden rounded-xl border border-slate-400/40 md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-secondary/60 hover:bg-secondary/60">
+                        <TableHead className="text-[11px] leading-tight">Carro</TableHead>
+                        <TableHead className="text-[11px] leading-tight">Status</TableHead>
+                        <TableHead className="text-[11px] leading-tight">Empresa</TableHead>
+                        <TableHead className="text-[11px] leading-tight">Linha</TableHead>
+                        <TableHead className="text-[11px] leading-tight">Matrícula</TableHead>
+                        <TableHead className="text-[11px] leading-tight">Início</TableHead>
+                        <TableHead className="text-[11px] leading-tight">Chegada</TableHead>
+                        <TableHead className="w-12 p-0" />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {mapa.itens.map((item, i) => {
+                        const temVinculo =
+                          item.id_motorista != null && Number(item.id_motorista) > 0;
+                        const emAndamento = escalaEmAndamento(item);
+                        const selected = item.id_item === selectedItemId;
+                        return (
+                          <TableRow
+                            key={item.id_item}
+                            tabIndex={0}
+                            aria-selected={selected}
+                            className={cn(
+                              'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+                              selected
+                                ? 'bg-primary/10'
+                                : i % 2 === 0
+                                  ? 'bg-white'
+                                  : 'bg-[hsl(var(--zebra))]',
+                            )}
+                            onClick={() => setSelectedItemId(item.id_item)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setSelectedItemId(item.id_item);
+                              }
                             }}
                           >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+                            <TableCell className="text-xs font-medium">
+                              {frotaItemLabel(item)}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <StatusEscalaBadge item={item} />
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {item.empresa ?? '—'}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {linhaItemLabel(item)}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {item.matricula_motorista ?? '—'}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {formatHora(item.hor_ini_jor)}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {formatHora(item.chegada_ponto)}
+                            </TableCell>
+                            <TableCell className="p-1 text-right">
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                className="h-11 w-11 min-h-[44px] min-w-[44px]"
+                                aria-label="Editar vínculo"
+                                disabled={!temVinculo || !emAndamento}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openMotoristaEditar(item.id_item);
+                                }}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            )}
           </section>
 
           <Separator />
 
-          <section>
+          <section aria-labelledby="mapa-viagens-heading">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <div className="min-w-0 flex-1">
-                <h2 className="text-[13px] font-bold uppercase tracking-wide text-muted-foreground">
-                  {resumoViagens
-                    ? `Viagens — ${resumoViagens.frota}`
-                    : 'Viagens'}
-                </h2>
-                {resumoViagens ? (
-                  <div className="mt-1 space-y-0.5 text-[13px] leading-snug text-slate-800">
-                    <p>
-                      <span className="font-semibold">Motorista:</span>{' '}
-                      {resumoViagens.motoristaTxt}
-                    </p>
-                    <p className="text-slate-700">
-                      Linha {resumoViagens.linhaTxt} · {resumoViagens.empresaTxt}
-                      {resumoViagens.jornadaTxt
-                        ? ` · Jornada ${resumoViagens.jornadaTxt}`
-                        : ''}
-                    </p>
-                    {resumoViagens.encerrada ? (
-                      <p className="text-slate-700">
-                        Real {resumoViagens.inicioRealTxt}–
-                        {resumoViagens.fimRealTxt}
-                        {resumoViagens.trabalhadoTxt &&
-                        resumoViagens.trabalhadoTxt !== '—'
-                          ? ` · Trabalhado: ${resumoViagens.trabalhadoTxt}`
-                          : ''}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
+              <h2
+                id="mapa-viagens-heading"
+                className="text-[13px] font-bold uppercase tracking-wide text-muted-foreground"
+              >
+                {resumoViagens
+                  ? `Viagens — ${resumoViagens.frota}`
+                  : 'Viagens'}
+              </h2>
               <Button
                 type="button"
                 size="icon"
-                className="h-10 w-10 shrink-0 rounded-full"
+                className="h-11 w-11 min-h-[44px] min-w-[44px] shrink-0 rounded-full"
                 aria-label="Nova viagem"
                 title={
                   itemSelecionado && !escalaEmAndamento(itemSelecionado)
@@ -1433,18 +1545,79 @@ export function MapaDetalheScreen() {
               </Button>
             </div>
 
+            {resumoViagens ? (
+              <div
+                className="mb-3 rounded-xl border border-slate-400/40 bg-white/70 p-3 shadow-sm"
+                aria-live="polite"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-bold text-slate-900">
+                    Veículo {resumoViagens.frota}
+                  </p>
+                  <Badge
+                    variant={resumoViagens.encerrada ? 'secondary' : 'default'}
+                    className="text-[10px] uppercase"
+                  >
+                    {resumoViagens.statusLabel}
+                  </Badge>
+                </div>
+                <dl className="mt-2 grid gap-1.5 text-sm text-slate-800 sm:grid-cols-2">
+                  <div>
+                    <dt className="text-[11px] font-semibold uppercase text-muted-foreground">
+                      Motorista
+                    </dt>
+                    <dd>{resumoViagens.motoristaTxt}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-semibold uppercase text-muted-foreground">
+                      Linha
+                    </dt>
+                    <dd>{resumoViagens.linhaTxt}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-semibold uppercase text-muted-foreground">
+                      Empresa
+                    </dt>
+                    <dd>{resumoViagens.empresaTxt}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[11px] font-semibold uppercase text-muted-foreground">
+                      Status
+                    </dt>
+                    <dd>{resumoViagens.statusLabel}</dd>
+                  </div>
+                </dl>
+                {resumoViagens.jornadaTxt ? (
+                  <p className="mt-2 text-xs text-slate-700">
+                    Jornada {resumoViagens.jornadaTxt}
+                  </p>
+                ) : null}
+                {resumoViagens.encerrada ? (
+                  <p className="mt-1 text-xs text-slate-700">
+                    Real {resumoViagens.inicioRealTxt}–
+                    {resumoViagens.fimRealTxt}
+                    {resumoViagens.trabalhadoTxt &&
+                    resumoViagens.trabalhadoTxt !== '—'
+                      ? ` · Trabalhado: ${resumoViagens.trabalhadoTxt}`
+                      : ''}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
             {!itemSelecionado ? (
-              <p className="rounded-xl border border-dashed border-slate-400/50 bg-white/40 px-4 py-6 text-center text-sm text-slate-700">
-                Selecione um veículo e motorista para visualizar ou registrar
-                viagens.
-              </p>
+              <EmptyState
+                title="Nenhuma escala selecionada"
+                description="Selecione uma escala para visualizar ou registrar viagens."
+                className="rounded-xl border border-dashed border-slate-400/50 bg-white/40 py-10"
+              />
             ) : !escalaEmAndamento(itemSelecionado) ? (
               <>
                 <p className="mb-2 rounded-xl border border-dashed border-slate-400/50 bg-white/40 px-4 py-3 text-center text-sm text-slate-700">
                   Esta escala foi encerrada. Crie uma nova escala para registrar
                   novas viagens.
                 </p>
-                <div className="overflow-hidden rounded-xl border border-slate-400/40">
+                <div className="overflow-x-auto overflow-hidden rounded-xl border border-slate-400/40">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-secondary/60 hover:bg-secondary/60">
@@ -1452,7 +1625,7 @@ export function MapaDetalheScreen() {
                         <TableHead className="text-[11px]">Chegada</TableHead>
                         <TableHead className="text-[11px]">Qtd ida</TableHead>
                         <TableHead className="text-[11px]">Qtd volta</TableHead>
-                        <TableHead className="w-10 p-0" />
+                        <TableHead className="w-12 p-0" />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1481,12 +1654,19 @@ export function MapaDetalheScreen() {
                 </div>
               </>
             ) : !itemProntoParaViagens ? (
-              <p className="rounded-xl border border-dashed border-slate-400/50 bg-white/40 px-4 py-6 text-center text-sm text-slate-700">
-                Este carro ainda não tem motorista vinculado. Use o lápis ou
-                Incluir vínculo antes de registrar viagens.
-              </p>
+              <EmptyState
+                title="Motorista não vinculado"
+                description="Este carro ainda não tem motorista vinculado. Use o lápis ou Incluir vínculo antes de registrar viagens."
+                className="rounded-xl border border-dashed border-slate-400/50 bg-white/40 py-10"
+              />
+            ) : viagensDoItem.length === 0 ? (
+              <EmptyState
+                title="Nenhuma viagem"
+                description="Toque em + para registrar a primeira viagem desta escala."
+                className="rounded-xl border border-dashed border-slate-400/50 bg-white/40 py-10"
+              />
             ) : (
-              <div className="overflow-hidden rounded-xl border border-slate-400/40">
+              <div className="overflow-x-auto overflow-hidden rounded-xl border border-slate-400/40">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-secondary/60 hover:bg-secondary/60">
@@ -1494,41 +1674,33 @@ export function MapaDetalheScreen() {
                       <TableHead className="text-[11px]">Chegada</TableHead>
                       <TableHead className="text-[11px]">Qtd ida</TableHead>
                       <TableHead className="text-[11px]">Qtd volta</TableHead>
-                      <TableHead className="w-10 p-0" />
+                      <TableHead className="w-12 p-0" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {viagensDoItem.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={5} className="py-6 text-muted-foreground">
-                          Nenhuma viagem.
+                    {viagensDoItem.map((v, i) => (
+                      <TableRow
+                        key={v.id_viagem}
+                        className={i % 2 === 0 ? 'bg-white' : 'bg-[hsl(var(--zebra))]'}
+                      >
+                        <TableCell className="text-xs">{formatHora(v.horario_saida)}</TableCell>
+                        <TableCell className="text-xs">{formatHora(v.horario_chegada)}</TableCell>
+                        <TableCell className="text-xs">{v.qtd_pas_ida}</TableCell>
+                        <TableCell className="text-xs">{v.qtd_pas_volta}</TableCell>
+                        <TableCell className="p-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-11 w-11 min-h-[44px] min-w-[44px] text-destructive"
+                            aria-label="Excluir viagem"
+                            onClick={() => setConfirmDeleteViagem(v.id_viagem)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </TableCell>
                       </TableRow>
-                    ) : (
-                      viagensDoItem.map((v, i) => (
-                        <TableRow
-                          key={v.id_viagem}
-                          className={i % 2 === 0 ? 'bg-white' : 'bg-[hsl(var(--zebra))]'}
-                        >
-                          <TableCell className="text-xs">{formatHora(v.horario_saida)}</TableCell>
-                          <TableCell className="text-xs">{formatHora(v.horario_chegada)}</TableCell>
-                          <TableCell className="text-xs">{v.qtd_pas_ida}</TableCell>
-                          <TableCell className="text-xs">{v.qtd_pas_volta}</TableCell>
-                          <TableCell className="p-1">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-9 w-9 text-destructive"
-                              aria-label="Excluir viagem"
-                              onClick={() => setConfirmDeleteViagem(v.id_viagem)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
+                    ))}
                   </TableBody>
                 </Table>
               </div>
@@ -1552,15 +1724,15 @@ export function MapaDetalheScreen() {
             if (!open) closeMotoristaDialog();
           }}
         >
-          <DialogContent className="max-w-[340px] border-slate-400/50 bg-card p-5">
+          <DialogContent className="max-w-[min(100%,22rem)] border-slate-400/50 bg-card p-4 sm:p-5">
             <DialogClose
               type="button"
-              className="absolute right-3 top-3 z-10 rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+              className="absolute right-2 top-2 z-10 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Fechar"
             >
               <X className="h-5 w-5" strokeWidth={2.25} />
             </DialogClose>
-            <DialogHeader className="shrink-0 pr-6">
+            <DialogHeader className="shrink-0 pr-10">
               <DialogTitle className="text-center text-[16px] uppercase tracking-wide text-slate-900">
                 {motoristaDialogMode === 'editar'
                   ? 'Editar vínculo'
@@ -1574,7 +1746,7 @@ export function MapaDetalheScreen() {
             >
               <div className="field-stack min-h-0 flex-1 gap-3 overflow-y-auto overscroll-contain pe-0.5">
               {ocupacaoLoading ? (
-                <p className="text-sm text-slate-700">
+                <p className="rounded-md border border-slate-300/70 bg-slate-50 px-3 py-2 text-sm text-slate-700" role="status">
                   Verificando disponibilidade...
                 </p>
               ) : null}
@@ -1588,6 +1760,7 @@ export function MapaDetalheScreen() {
                     type="button"
                     size="sm"
                     variant="outline"
+                    className="min-h-[44px]"
                     disabled={ocupacaoLoading || vinculoSaving}
                     onClick={() => void carregarOcupacao()}
                   >
@@ -1600,92 +1773,118 @@ export function MapaDetalheScreen() {
                   {erroVinculo}
                 </p>
               ) : null}
-              {isEditar ? (
-                <>
-                  <p className="text-sm text-muted-foreground">
-                    Empresa:{' '}
-                    <span className="font-semibold text-slate-900">
-                      {empresaContextoMotorista || '—'}
-                    </span>
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Linha:{' '}
-                    <span className="font-semibold text-slate-900">
-                      {linhaContextoMotorista || '—'}
-                    </span>
-                  </p>
+
+              <section
+                className="space-y-3 rounded-lg border border-slate-300/60 bg-white/70 p-3"
+                aria-labelledby="vinculo-bloco-escala"
+              >
+                <h3
+                  id="vinculo-bloco-escala"
+                  className="text-[12px] font-bold uppercase tracking-wide text-muted-foreground"
+                >
+                  Escala
+                </h3>
+                {isEditar ? (
+                  <div className="space-y-2 text-sm text-muted-foreground">
+                    <p>
+                      Empresa:{' '}
+                      <span className="font-semibold text-slate-900">
+                        {empresaContextoMotorista || '—'}
+                      </span>
+                    </p>
+                    <p>
+                      Linha:{' '}
+                      <span className="font-semibold text-slate-900">
+                        {linhaContextoMotorista || '—'}
+                      </span>
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex w-full flex-col gap-1">
+                      <Label className="text-[13px] font-semibold uppercase text-slate-900">
+                        Empresa <span className="req">*</span>
+                      </Label>
+                      <Select
+                        value={idEmpresaForm ?? ''}
+                        onValueChange={(v) => {
+                          setIdEmpresaForm(v ?? '');
+                          limparLinhaEAbaixo();
+                        }}
+                      >
+                        <SelectTrigger className="h-11 min-h-[44px] bg-white text-base">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent position="popper" className="z-[400]">
+                          {empresas.length === 0 ? (
+                            <SelectItem value="__empty_empresa" disabled>
+                              Nenhuma empresa cadastrada
+                            </SelectItem>
+                          ) : (
+                            empresas.map((e) => (
+                              <SelectItem key={e.id_empresa} value={String(e.id_empresa)}>
+                                {e.descricao}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex w-full flex-col gap-1">
+                      <Label className="text-[13px] font-semibold uppercase text-slate-900">
+                        Linha <span className="req">*</span>
+                      </Label>
+                      <Select
+                        value={idLinhaForm ?? ''}
+                        onValueChange={(v) => {
+                          setIdLinhaForm(v ?? '');
+                          limparVeiculoEAbaixo();
+                        }}
+                        disabled={!idEmpresaForm}
+                      >
+                        <SelectTrigger className="h-11 min-h-[44px] bg-white text-base">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent position="popper" className="z-[400]">
+                          {linhasFiltradas.length === 0 ? (
+                            <SelectItem value="__empty_linha" disabled>
+                              Nenhuma linha para esta empresa
+                            </SelectItem>
+                          ) : (
+                            linhasFiltradas.map((l) => (
+                              <SelectItem key={l.id_linha} value={String(l.id_linha)}>
+                                {l.codigo_linha != null
+                                  ? `${l.codigo_linha} — ${l.descricao}`
+                                  : l.descricao}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
+              </section>
+
+              <section
+                className="space-y-3 rounded-lg border border-slate-300/60 bg-white/70 p-3"
+                aria-labelledby="vinculo-bloco-veiculo"
+              >
+                <h3
+                  id="vinculo-bloco-veiculo"
+                  className="text-[12px] font-bold uppercase tracking-wide text-muted-foreground"
+                >
+                  Veículo e motorista
+                </h3>
+                {isEditar ? (
                   <p className="text-sm text-muted-foreground">
                     Veículo:{' '}
                     <span className="font-semibold text-slate-900">
                       {frotaContextoMotorista || '—'}
                     </span>
                   </p>
-                </>
-              ) : (
-                <>
-                  <div className="flex w-full flex-col gap-1">
-                    <Label className="text-[13px] font-semibold uppercase text-slate-900">
-                      Empresa <span className="req">*</span>
-                    </Label>
-                    <Select
-                      value={idEmpresaForm ?? ''}
-                      onValueChange={(v) => {
-                        setIdEmpresaForm(v ?? '');
-                        limparLinhaEAbaixo();
-                      }}
-                    >
-                      <SelectTrigger className="h-10 bg-white text-base">
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                      <SelectContent position="popper" className="z-[400]">
-                        {empresas.length === 0 ? (
-                          <SelectItem value="__empty_empresa" disabled>
-                            Nenhuma empresa cadastrada
-                          </SelectItem>
-                        ) : (
-                          empresas.map((e) => (
-                            <SelectItem key={e.id_empresa} value={String(e.id_empresa)}>
-                              {e.descricao}
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="flex w-full flex-col gap-1">
-                    <Label className="text-[13px] font-semibold uppercase text-slate-900">
-                      Linha <span className="req">*</span>
-                    </Label>
-                    <Select
-                      value={idLinhaForm ?? ''}
-                      onValueChange={(v) => {
-                        setIdLinhaForm(v ?? '');
-                        limparVeiculoEAbaixo();
-                      }}
-                      disabled={!idEmpresaForm}
-                    >
-                      <SelectTrigger className="h-10 bg-white text-base">
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                      <SelectContent position="popper" className="z-[400]">
-                        {linhasFiltradas.length === 0 ? (
-                          <SelectItem value="__empty_linha" disabled>
-                            Nenhuma linha para esta empresa
-                          </SelectItem>
-                        ) : (
-                          linhasFiltradas.map((l) => (
-                            <SelectItem key={l.id_linha} value={String(l.id_linha)}>
-                              {l.codigo_linha != null
-                                ? `${l.codigo_linha} — ${l.descricao}`
-                                : l.descricao}
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
+                ) : (
                   <div className="flex w-full flex-col gap-1">
                     <Label
                       htmlFor="veiculo-frota"
@@ -1696,7 +1895,7 @@ export function MapaDetalheScreen() {
                     <Input
                       id="veiculo-frota"
                       ref={veiculoInputRef}
-                      className="h-10 rounded-lg border-slate-400 bg-white font-mono text-base uppercase tracking-wide text-slate-900"
+                      className="h-11 min-h-[44px] rounded-lg border-slate-400 bg-white font-mono text-base uppercase tracking-wide text-slate-900"
                       placeholder={
                         idEmpresaForm && idLinhaForm
                           ? placeholderFrotaEmpresa(nomeEmpresaForm)
@@ -1736,89 +1935,101 @@ export function MapaDetalheScreen() {
                       </span>
                     ) : null}
                   </div>
-                </>
-              )}
+                )}
 
-              <div className="flex w-full flex-col gap-1">
-                <Label className="text-[13px] font-semibold uppercase text-slate-900">
-                  Motorista <span className="req">*</span>
-                </Label>
-                <Select
-                  value={idMotorista ?? ''}
-                  onValueChange={(v) => {
-                    setIdMotorista(v ?? '');
-                    limparHorariosMotorista();
-                  }}
-                  disabled={
-                    motoristaDialogMode === 'novo' ? !frotaValida : !idVeiculoForm
-                  }
-                >
-                  <SelectTrigger className="h-10 bg-white text-base">
-                    <SelectValue
-                      placeholder={
-                        motoristaDialogMode === 'novo'
-                          ? frotaValida
-                            ? 'Selecione'
-                            : 'Informe o veículo antes'
-                          : idVeiculoForm
-                            ? 'Selecione'
-                            : 'Selecione o veículo antes'
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent position="popper" className="z-[400]">
-                    {motoristas.length === 0 ? (
-                      <SelectItem value="__empty_motorista" disabled>
-                        Nenhum motorista disponível
-                      </SelectItem>
-                    ) : (
-                      motoristas.map((m) => (
-                        <SelectItem
-                          key={m.id_motorista}
-                          value={String(m.id_motorista)}
-                          disabled={Boolean(m.emOperacao)}
-                        >
-                          {m.matricula} — {m.nome}
-                          {m.emOperacao ? ' (Em operação)' : ''}
+                <div className="flex w-full flex-col gap-1">
+                  <Label className="text-[13px] font-semibold uppercase text-slate-900">
+                    Motorista <span className="req">*</span>
+                  </Label>
+                  <Select
+                    value={idMotorista ?? ''}
+                    onValueChange={(v) => {
+                      setIdMotorista(v ?? '');
+                      limparHorariosMotorista();
+                    }}
+                    disabled={
+                      motoristaDialogMode === 'novo' ? !frotaValida : !idVeiculoForm
+                    }
+                  >
+                    <SelectTrigger className="h-11 min-h-[44px] bg-white text-base">
+                      <SelectValue
+                        placeholder={
+                          motoristaDialogMode === 'novo'
+                            ? frotaValida
+                              ? 'Selecione'
+                              : 'Informe o veículo antes'
+                            : idVeiculoForm
+                              ? 'Selecione'
+                              : 'Selecione o veículo antes'
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent position="popper" className="z-[400]">
+                      {motoristas.length === 0 ? (
+                        <SelectItem value="__empty_motorista" disabled>
+                          Nenhum motorista disponível
                         </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
+                      ) : (
+                        motoristas.map((m) => (
+                          <SelectItem
+                            key={m.id_motorista}
+                            value={String(m.id_motorista)}
+                            disabled={Boolean(m.emOperacao)}
+                          >
+                            {m.matricula} — {m.nome}
+                            {m.emOperacao ? ' (Em operação)' : ''}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </section>
 
-              <FormField
-                label="Chegada ao ponto"
-                requiredMark
-                type="datetime-local"
-                value={chegada ?? ''}
-                onChange={(e) => setChegada(e.target.value)}
-                disabled={!idMotorista}
-                className="h-10"
-              />
-              <FormField
-                label="Início jornada"
-                requiredMark
-                type="datetime-local"
-                value={horIni ?? ''}
-                onChange={(e) => setHorIni(e.target.value)}
-                disabled={!idMotorista}
-                className="h-10"
-              />
-              <FormField
-                label="Fim jornada"
-                requiredMark
-                type="datetime-local"
-                value={horFim ?? ''}
-                onChange={(e) => setHorFim(e.target.value)}
-                disabled={!idMotorista}
-                className="h-10"
-              />
+              <section
+                className="space-y-3 rounded-lg border border-slate-300/60 bg-white/70 p-3"
+                aria-labelledby="vinculo-bloco-horarios"
+              >
+                <h3
+                  id="vinculo-bloco-horarios"
+                  className="text-[12px] font-bold uppercase tracking-wide text-muted-foreground"
+                >
+                  Horários
+                </h3>
+                <FormField
+                  label="Chegada ao ponto"
+                  requiredMark
+                  type="datetime-local"
+                  value={chegada ?? ''}
+                  onChange={(e) => setChegada(e.target.value)}
+                  disabled={!idMotorista}
+                  className="h-11 min-h-[44px]"
+                />
+                <FormField
+                  label="Início jornada"
+                  requiredMark
+                  type="datetime-local"
+                  value={horIni ?? ''}
+                  onChange={(e) => setHorIni(e.target.value)}
+                  disabled={!idMotorista}
+                  className="h-11 min-h-[44px]"
+                />
+                <FormField
+                  label="Fim jornada"
+                  requiredMark
+                  type="datetime-local"
+                  value={horFim ?? ''}
+                  onChange={(e) => setHorFim(e.target.value)}
+                  disabled={!idMotorista}
+                  className="h-11 min-h-[44px]"
+                />
+              </section>
               </div>
 
               <DialogFooter className="mt-4 shrink-0 grid grid-cols-2 gap-3">
                 <Button
                   type="submit"
+                  className="min-h-[44px]"
                   disabled={
                     vinculoSaving ||
                     (motoristaDialogMode === 'novo' &&
@@ -1834,6 +2045,7 @@ export function MapaDetalheScreen() {
                 <Button
                   type="button"
                   variant="outline"
+                  className="min-h-[44px]"
                   disabled={vinculoSaving}
                   onClick={closeMotoristaDialog}
                 >

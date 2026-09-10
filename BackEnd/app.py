@@ -11,9 +11,17 @@ Executar:
 Variáveis de ambiente:
     REDMAPA_CONFIG        — basename em DAL/arquivos_crip/arq/ (padrão: map)
     REDMAPA_SGBD          — mariadb | postgresql (padrão: mariadb)
-    REDMAPA_ERP_ENABLED   — 0|1 (padrão 0: sem Oracle; 1 exige erp.dat)
-    REDMAPA_ERP_CONFIG    — basename ERP (padrão: erp) — só se ENABLED=1
-    REDMAPA_ERP_SGBD      — padrão oracle — só se ENABLED=1
+    ERP_PROVIDER          — mock | oracle | disabled
+    REDMAPA_ERP_CONFIG    — basename erp.dat (padrão: erp)
+    REDMAPA_ERP_SGBD      — oracle (DAL ERP)
+    ERP_ORACLE_DSN        — Easy Connect/DSN Oracle opcional (sem erp.dat)
+    ERP_ORACLE_HOST       — host Oracle (se DSN não for usado)
+    ERP_ORACLE_PORT       — porta Oracle (padrão 1521)
+    ERP_ORACLE_SERVICE_NAME — service name Oracle
+    ERP_ORACLE_USER       — usuário Oracle/ERP
+    ERP_ORACLE_PASSWORD   — senha Oracle/ERP
+    ERP_ORACLE_TIMEOUT_MS — timeout de consulta Oracle
+    REDMAPA_ERP_ENABLED   — legado 0|1; prefira ERP_PROVIDER
     REDMAPA_COOKIE_SECURE — true em produção (HTTPS)
     REDMAPA_CORS_ORIGINS  — origens CORS separadas por vírgula (sem '*')
     REDMAPA_HOST          — padrão 0.0.0.0
@@ -29,8 +37,12 @@ from flask import Flask, jsonify
 
 from .auth_routes import auth_bp, init_auth_routes
 from .dal_factory import get_dal_instance as get_dal
+from .env_loader import load_backend_env
 from .security import init_security
 from .users_routes import users_bp
+
+# Garante ERP_PROVIDER / REDMAPA_* do BackEnd/.env (sem sobrescrever o shell).
+load_backend_env()
 
 
 def create_app() -> Flask:

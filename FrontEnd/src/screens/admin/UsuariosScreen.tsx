@@ -52,7 +52,7 @@ import {
 } from '@/components/ui/select';
 import { useAuth } from '@/context/AuthContext';
 import { useScreenBg } from '@/hooks/useScreenBg';
-import type { CodigoPerfil, ErpFuncionario, PerfilItem, UsuarioLista } from '@/types';
+import type { CodigoPerfil, PerfilItem, UsuarioLista } from '@/types';
 import type {
   CadastrosMestres,
   EmpresaCadastro,
@@ -83,20 +83,30 @@ const MSG_RESET_OK = 'Reset de usuário realizado com sucesso!';
 const MSG_RESET_FAIL = 'Não foi possível realizar o reset da senha!';
 const MSG_MATRICULA_INVALIDA =
   'Matrícula deve ser numérica com no máximo 5 dígitos.';
-const MSG_NAO_ENCONTRADA = 'Matrícula não encontrada';
+const MSG_NAO_ENCONTRADA = 'Matrícula não encontrada no RH.';
+const MSG_JA_CADASTRADO = 'Usuário já cadastrado.';
+const MSG_PREFILL_RH =
+  'Matrícula localizada no RH. Complete o cadastro e salve.';
 const MSG_NOME_INVALIDO =
   'Nome deve ser alfanumérico (letras, números e espaços).';
 const MSG_NOME_TAMANHO = `Nome deve ter no máximo ${NOME_MAX_LENGTH} caracteres.`;
 const MSG_ERP_INDISPONIVEL =
-  'ERP indisponivel. Preencha nome manualmente.';
+  'Cadastro corporativo indisponível. Tente novamente.';
 const SCREEN_BG = '#b9c8d4';
 
-function buildFotoSrc(
-  info: Pick<ErpFuncionario | UsuarioLista, 'foto_base64' | 'foto_mime'>,
-): string | null {
+function buildFotoSrc(info: {
+  foto_url?: string | null;
+  foto_base64?: string | null;
+  foto_mime?: string | null;
+}): string | null {
+  if (info.foto_url) return info.foto_url;
   if (!info.foto_base64) return null;
   const mime = info.foto_mime || 'image/jpeg';
   return `data:${mime};base64,${info.foto_base64}`;
+}
+
+function normalizeMatriculaInput(value: string): string {
+  return onlyMatriculaDigits(value.replace(/\s+/g, ''));
 }
 
 function FotoPlaceholder() {
@@ -123,6 +133,41 @@ function apiErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
+function isCadastroAtivo(ativo?: number): boolean {
+  return ativo == null || Number(ativo) === 1;
+}
+
+function parseCodigoPerfil(value: unknown): CodigoPerfil | null {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n <= 0) return null;
+  return n as CodigoPerfil;
+}
+
+const SELECT_EMPTY = '__none__';
+
+function selectValueOrEmpty(value: string): string {
+  return value && value.trim() ? value : SELECT_EMPTY;
+}
+
+function parseIdPositivo(value: string): number | null {
+  if (!value || value === SELECT_EMPTY) return null;
+  const n = Number(String(value).trim());
+  if (!Number.isInteger(n) || n <= 0) return null;
+  return n;
+}
+
+function empresasAtivas(cad: CadastrosMestres | null): EmpresaCadastro[] {
+  return (cad?.empresas ?? []).filter((e) => isCadastroAtivo(e.ativo));
+}
+
+function turnosAtivos(cad: CadastrosMestres | null): TurnoCadastro[] {
+  return (cad?.turnos ?? []).filter((t) => isCadastroAtivo(t.ativo));
+}
+
+function locaisAtivos(cad: CadastrosMestres | null): LocalCadastro[] {
+  return (cad?.locais ?? []).filter((l) => isCadastroAtivo(l.ativo));
+}
+
 /** Tela 03 — Cadastro de Usuário (regras de estado). */
 export function UsuariosScreen() {
   const navigate = useNavigate();
@@ -146,6 +191,10 @@ export function UsuariosScreen() {
   const [idTurno, setIdTurno] = useState('');
   const [idLocal, setIdLocal] = useState('');
   const [fotoSrc, setFotoSrc] = useState<string | null>(null);
+  const [consultaCadastroMsg, setConsultaCadastroMsg] = useState<string | null>(null);
+  const [consultaCadastroErro, setConsultaCadastroErro] = useState<string | null>(null);
+  const [consultandoCadastro, setConsultandoCadastro] = useState(false);
+  const [nomeSomenteLeitura, setNomeSomenteLeitura] = useState(false);
 
   const [infoMsg, setInfoMsg] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -170,9 +219,9 @@ export function UsuariosScreen() {
   }, []);
 
   const aplicarDefaultsCadastros = useCallback((cad: CadastrosMestres) => {
-    const emp = cad.empresas?.[0] as EmpresaCadastro | undefined;
-    const tur = cad.turnos?.[0] as TurnoCadastro | undefined;
-    const loc = cad.locais?.[0] as LocalCadastro | undefined;
+    const emp = empresasAtivas(cad)[0];
+    const tur = turnosAtivos(cad)[0];
+    const loc = locaisAtivos(cad)[0];
     setIdEmpresa(emp ? String(emp.id_empresa) : '');
     setIdTurno(tur ? String(tur.id_turno) : '');
     setIdLocal(loc ? String(loc.id_local) : '');
@@ -185,14 +234,18 @@ export function UsuariosScreen() {
     setNome('');
     setCodigoPerfil(PERFIL_DESPACHANTE);
     setFotoSrc(null);
+    setConsultaCadastroMsg(null);
+    setConsultaCadastroErro(null);
+    setConsultandoCadastro(false);
+    setNomeSomenteLeitura(false);
     if (cadastros) aplicarDefaultsCadastros(cadastros);
     else limparVinculos();
   }, [aplicarDefaultsCadastros, cadastros, limparVinculos]);
 
   const aplicarVinculosFromUsuario = useCallback((u: UsuarioLista) => {
-    setIdEmpresa(u.id_empresa != null ? String(u.id_empresa) : '');
-    setIdTurno(u.id_turno != null ? String(u.id_turno) : '');
-    setIdLocal(u.id_local != null ? String(u.id_local) : '');
+    setIdEmpresa(u.id_empresa != null && Number(u.id_empresa) > 0 ? String(u.id_empresa) : '');
+    setIdTurno(u.id_turno != null && Number(u.id_turno) > 0 ? String(u.id_turno) : '');
+    setIdLocal(u.id_local != null && Number(u.id_local) > 0 ? String(u.id_local) : '');
   }, []);
 
   const sincronizarVinculosPorPerfil = useCallback(
@@ -201,22 +254,36 @@ export function UsuariosScreen() {
       cad: CadastrosMestres | null,
       usuario?: UsuarioLista | null,
     ) => {
-      if (perfil !== PERFIL_DESPACHANTE) {
+      const codigo = parseCodigoPerfil(perfil);
+      if (codigo !== PERFIL_DESPACHANTE) {
         limparVinculos();
         return;
       }
       if (
         usuario &&
-        (usuario.id_empresa != null ||
-          usuario.id_turno != null ||
-          usuario.id_local != null)
+        ((usuario.id_empresa != null && Number(usuario.id_empresa) > 0) ||
+          (usuario.id_turno != null && Number(usuario.id_turno) > 0) ||
+          (usuario.id_local != null && Number(usuario.id_local) > 0))
       ) {
         aplicarVinculosFromUsuario(usuario);
         return;
       }
       if (cad) aplicarDefaultsCadastros(cad);
+      else limparVinculos();
     },
     [aplicarDefaultsCadastros, aplicarVinculosFromUsuario, limparVinculos],
+  );
+
+  const garantirVinculosDespachante = useCallback(
+    (cad: CadastrosMestres | null = cadastros) => {
+      if (parseCodigoPerfil(codigoPerfil) !== PERFIL_DESPACHANTE) return;
+      const empOk = empresasAtivas(cad).some((e) => String(e.id_empresa) === idEmpresa);
+      const turOk = turnosAtivos(cad).some((t) => String(t.id_turno) === idTurno);
+      const locOk = locaisAtivos(cad).some((l) => String(l.id_local) === idLocal);
+      if (empOk && turOk && locOk) return;
+      if (cad) aplicarDefaultsCadastros(cad);
+    },
+    [aplicarDefaultsCadastros, cadastros, codigoPerfil, idEmpresa, idLocal, idTurno],
   );
 
   const carregarCadastros = useCallback(async (): Promise<CadastrosMestres | null> => {
@@ -267,12 +334,29 @@ export function UsuariosScreen() {
   const nomeEnabled = mode === 'include' || mode === 'edit';
   const perfilEnabled = mode === 'include' || mode === 'edit';
   const cadastroEnabled = mode === 'include' || mode === 'edit';
-  const vinculoEnabled =
-    cadastroEnabled && codigoPerfil === PERFIL_DESPACHANTE;
+  const codigoPerfilNum = parseCodigoPerfil(codigoPerfil);
+  const isDespachante = codigoPerfilNum === PERFIL_DESPACHANTE;
+  const vinculoEnabled = cadastroEnabled && isDespachante;
+
+  const empresasOptions = empresasAtivas(cadastros);
+  const turnosOptions = turnosAtivos(cadastros);
+  const locaisOptions = locaisAtivos(cadastros);
+  const vinculosDespachanteOk =
+    !isDespachante ||
+    (parseIdPositivo(idEmpresa) != null &&
+      empresasOptions.some((e) => String(e.id_empresa) === idEmpresa) &&
+      parseIdPositivo(idTurno) != null &&
+      turnosOptions.some((t) => String(t.id_turno) === idTurno) &&
+      parseIdPositivo(idLocal) != null &&
+      locaisOptions.some((l) => String(l.id_local) === idLocal));
 
   const canNovo = !busy;
   const canPesquisar = !busy;
-  const canSalvar = !busy && (mode === 'include' || mode === 'edit');
+  const canSalvar =
+    !busy &&
+    (mode === 'include' || mode === 'edit') &&
+    Boolean(nome.trim()) &&
+    vinculosDespachanteOk;
   const canDeletar = !busy && mode === 'edit' && idUsuario != null;
   // Inspetor: reset sempre desabilitado (negócio + UX); backend exige Admin.
   const canReset = !busy && mode === 'edit' && idUsuario != null && podeResetSenha;
@@ -286,12 +370,15 @@ export function UsuariosScreen() {
       setMatricula('');
       setNome('');
       setFotoSrc(null);
+      setConsultaCadastroMsg(null);
+      setConsultaCadastroErro(null);
+      setNomeSomenteLeitura(false);
       const desp = lista.find((p) => Number(p.codigo_perfil) === PERFIL_DESPACHANTE);
-      setCodigoPerfil(
-        (desp ? Number(desp.codigo_perfil) : PERFIL_DESPACHANTE) as CodigoPerfil,
-      );
-      if (cad) aplicarDefaultsCadastros(cad);
-      else limparVinculos();
+      const perfil = parseCodigoPerfil(
+        desp ? desp.codigo_perfil : PERFIL_DESPACHANTE,
+      ) ?? PERFIL_DESPACHANTE;
+      setCodigoPerfil(perfil);
+      sincronizarVinculosPorPerfil(perfil, cad);
       setMode('include');
       focusMatricula();
     } catch {
@@ -302,8 +389,8 @@ export function UsuariosScreen() {
   };
 
   const validarMatriculaErp = async (opts?: { fromBlur?: boolean }) => {
-    if (busy || mode !== 'include') return;
-    const mat = matricula.trim();
+    if (mode !== 'include' || consultandoCadastro) return;
+    const mat = normalizeMatriculaInput(matricula);
     if (!mat || !isValidMatricula(mat)) {
       // Blur com matrícula vazia/inválida: não chama ERP nem mostra erro.
       if (opts?.fromBlur) return;
@@ -312,35 +399,51 @@ export function UsuariosScreen() {
       return;
     }
 
-    setBusy(true);
+    setMatricula(mat);
+    setConsultaCadastroErro(null);
+    setConsultaCadastroMsg('Consultando cadastro...');
+    setConsultandoCadastro(true);
     try {
-      const data = await getErpFuncionario(mat);
-      const func = data.funcionario;
+      const [func, cad] = await Promise.all([
+        getErpFuncionario(mat),
+        cadastros ? Promise.resolve(cadastros) : carregarCadastros(),
+      ]);
       setNome(String(func.nome).slice(0, NOME_MAX_LENGTH));
       setFotoSrc(buildFotoSrc(func));
+      setNomeSomenteLeitura(func.origem === 'oracle');
+      setConsultaCadastroMsg(
+        `${func.matricula} — ${String(func.nome).slice(0, NOME_MAX_LENGTH)} (${func.origem})`,
+      );
+      // Mantém/reaplica Empresa/Turno/Local após consulta Oracle.
+      garantirVinculosDespachante(cad);
     } catch (err) {
-      const erpOff =
+      if (
         err instanceof ApiRequestError &&
         err.status === 503 &&
-        err.body.codigo === 'erp_indisponivel';
-      if (erpOff) {
-        showMsg(MSG_ERP_INDISPONIVEL);
+        err.body.codigo === 'erp_indisponivel'
+      ) {
+        setConsultaCadastroMsg(null);
+        setConsultaCadastroErro(MSG_ERP_INDISPONIVEL);
         setFotoSrc(null);
-        // Cadastro manual: não limpa nome nem força foco na matrícula.
+        setNomeSomenteLeitura(false);
         return;
       }
-      showMsg(apiErrorMessage(err, MSG_NAO_ENCONTRADA));
+      setConsultaCadastroMsg(null);
+      setConsultaCadastroErro(
+        'Matrícula não encontrada no cadastro de funcionários. Confira o número informado.',
+      );
       setNome('');
       setFotoSrc(null);
+      setNomeSomenteLeitura(false);
       focusMatricula();
     } finally {
-      setBusy(false);
+      setConsultandoCadastro(false);
     }
   };
 
   const executarBuscaMatricula = async (matriculaInformada?: string) => {
     if (busy) return;
-    const mat = (matriculaInformada ?? matricula).trim();
+    const mat = normalizeMatriculaInput(matriculaInformada ?? matricula);
     if (!mat || !isValidMatricula(mat)) {
       showMsg(MSG_MATRICULA_INVALIDA);
       return;
@@ -351,21 +454,65 @@ export function UsuariosScreen() {
       const [, cad] = await Promise.all([carregarPerfis(), carregarCadastros()]);
       const data = await getUserByMatricula(mat);
       const u = data.usuario;
-      const perfil = Number(u.codigo_perfil) as CodigoPerfil;
-      setIdUsuario(u.id_usuario);
+      const jaCadastrado =
+        Boolean(data.ja_cadastrado) &&
+        u.id_usuario != null &&
+        Number(u.id_usuario) > 0;
+
+      if (jaCadastrado) {
+        const perfil =
+          parseCodigoPerfil(u.codigo_perfil) ?? PERFIL_DESPACHANTE;
+        setIdUsuario(Number(u.id_usuario));
+        setMatricula(String(u.matricula));
+        setNome(String(u.nome));
+        setCodigoPerfil(perfil);
+        setFotoSrc(buildFotoSrc(u));
+        setConsultaCadastroMsg(null);
+        setConsultaCadastroErro(null);
+        setNomeSomenteLeitura(false);
+        sincronizarVinculosPorPerfil(perfil, cad, {
+          id_usuario: Number(u.id_usuario),
+          matricula: String(u.matricula),
+          nome: String(u.nome),
+          ativo: u.ativo ?? 1,
+          trocar_senha: 0,
+          codigo_perfil: perfil,
+          id_empresa: u.id_empresa ?? null,
+          id_turno: u.id_turno ?? null,
+          id_local: u.id_local ?? null,
+        });
+        setMode('edit');
+        setPesquisarOpen(false);
+        setPesquisarMatricula('');
+        showMsg(data.mensagem || MSG_JA_CADASTRADO);
+        return;
+      }
+
+      // Existe no RH, ainda não cadastrado localmente → preenche inclusão.
+      const perfil = PERFIL_DESPACHANTE;
+      setIdUsuario(null);
       setMatricula(String(u.matricula));
-      setNome(String(u.nome));
+      setNome(String(u.nome ?? '').slice(0, NOME_MAX_LENGTH));
       setCodigoPerfil(perfil);
       setFotoSrc(buildFotoSrc(u));
-      sincronizarVinculosPorPerfil(perfil, cad, u);
-      setMode('edit');
+      setConsultaCadastroMsg(
+        `${u.matricula} — ${String(u.nome ?? '').slice(0, NOME_MAX_LENGTH)} (${u.origem ?? 'rh'})`,
+      );
+      setConsultaCadastroErro(null);
+      setNomeSomenteLeitura(String(u.origem ?? '') === 'oracle');
+      sincronizarVinculosPorPerfil(perfil, cad);
+      setMode('include');
       setPesquisarOpen(false);
       setPesquisarMatricula('');
+      showMsg(data.mensagem || MSG_PREFILL_RH);
     } catch (err) {
       showMsg(apiErrorMessage(err, MSG_NAO_ENCONTRADA));
       setIdUsuario(null);
       setNome('');
       setFotoSrc(null);
+      setConsultaCadastroMsg(null);
+      setConsultaCadastroErro(null);
+      setNomeSomenteLeitura(false);
       setCodigoPerfil(PERFIL_DESPACHANTE);
       setMode('idle');
     } finally {
@@ -396,6 +543,7 @@ export function UsuariosScreen() {
     if (!canSalvar) return;
     const mat = matricula.trim();
     const nomeTrim = nome.trim();
+    const perfil = parseCodigoPerfil(codigoPerfil);
 
     if (!mat || !isValidMatricula(mat)) {
       showMsg(MSG_MATRICULA_INVALIDA);
@@ -413,44 +561,50 @@ export function UsuariosScreen() {
       showMsg(MSG_NOME_INVALIDO);
       return;
     }
-    if (!codigoPerfil || !perfis.some((p) => Number(p.codigo_perfil) === codigoPerfil)) {
+    if (
+      perfil == null ||
+      !perfis.some((p) => Number(p.codigo_perfil) === perfil)
+    ) {
       showMsg('Selecione um perfil válido.');
       return;
     }
-    if (codigoPerfil === PERFIL_DESPACHANTE) {
-      const empresas = cadastros?.empresas ?? [];
-      const turnos = cadastros?.turnos ?? [];
-      const locais = cadastros?.locais ?? [];
+
+    let vinculos: {
+      id_empresa: number | null;
+      id_turno: number | null;
+      id_local: number | null;
+    } = {
+      id_empresa: null,
+      id_turno: null,
+      id_local: null,
+    };
+
+    if (perfil === PERFIL_DESPACHANTE) {
+      const idEmp = parseIdPositivo(idEmpresa);
+      const idTur = parseIdPositivo(idTurno);
+      const idLoc = parseIdPositivo(idLocal);
       if (
-        !idEmpresa ||
-        !empresas.some((e) => String(e.id_empresa) === idEmpresa) ||
-        !idTurno ||
-        !turnos.some((t) => String(t.id_turno) === idTurno) ||
-        !idLocal ||
-        !locais.some((l) => String(l.id_local) === idLocal)
+        idEmp == null ||
+        !empresasOptions.some((e) => Number(e.id_empresa) === idEmp) ||
+        idTur == null ||
+        !turnosOptions.some((t) => Number(t.id_turno) === idTur) ||
+        idLoc == null ||
+        !locaisOptions.some((l) => Number(l.id_local) === idLoc)
       ) {
         showMsg('Selecione empresa, turno e local válidos.');
         return;
       }
+      vinculos = {
+        id_empresa: idEmp,
+        id_turno: idTur,
+        id_local: idLoc,
+      };
     }
-
-    const vinculos =
-      codigoPerfil === PERFIL_DESPACHANTE
-        ? {
-            id_empresa: Number(idEmpresa),
-            id_turno: Number(idTurno),
-            id_local: Number(idLocal),
-          }
-        : {
-            id_empresa: null,
-            id_turno: null,
-            id_local: null,
-          };
 
     setBusy(true);
     try {
       if (mode === 'include') {
-        const data = await createUser(mat, nomeTrim, codigoPerfil, vinculos);
+        const data = await createUser(mat, nomeTrim, perfil, vinculos);
         const temp =
           data.usuario.senha_temporaria ?? data.senha_temporaria;
         if (data.reativado) {
@@ -469,7 +623,7 @@ export function UsuariosScreen() {
       }
 
       if (mode === 'edit' && idUsuario != null) {
-        await updateUserProfile(idUsuario, codigoPerfil, nomeTrim, vinculos);
+        await updateUserProfile(idUsuario, perfil, nomeTrim, vinculos);
         showMsg(MSG_ATUALIZADO_OK);
         goIdle();
       }
@@ -602,7 +756,10 @@ export function UsuariosScreen() {
                   placeholder="Digite a matrícula"
                   value={matricula}
                   onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                    setMatricula(onlyMatriculaDigits(e.target.value));
+                    setMatricula(normalizeMatriculaInput(e.target.value));
+                    setConsultaCadastroMsg(null);
+                    setConsultaCadastroErro(null);
+                    setNomeSomenteLeitura(false);
                     if (mode === 'include') {
                       setFotoSrc(null);
                     }
@@ -634,6 +791,17 @@ export function UsuariosScreen() {
               </div>
             </div>
 
+            {mode === 'include' && (consultaCadastroMsg || consultaCadastroErro) ? (
+              <p
+                className={`text-sm ${
+                  consultaCadastroErro ? 'text-destructive' : 'text-slate-700'
+                }`}
+                role={consultaCadastroErro ? 'alert' : 'status'}
+              >
+                {consultaCadastroErro ?? consultaCadastroMsg}
+              </p>
+            ) : null}
+
             <FormField
               label="Nome"
               requiredMark
@@ -644,6 +812,7 @@ export function UsuariosScreen() {
               value={nome}
               onChange={(e) => setNome(e.target.value.slice(0, NOME_MAX_LENGTH))}
               disabled={!nomeEnabled}
+              readOnly={nomeSomenteLeitura}
             />
 
             <div className="flex w-full flex-col gap-1.5">
@@ -651,9 +820,9 @@ export function UsuariosScreen() {
                 Perfil <span className="req"> *</span>
               </Label>
               <Select
-                value={String(codigoPerfil)}
+                value={String(codigoPerfilNum ?? PERFIL_DESPACHANTE)}
                 onValueChange={(v) => {
-                  const perfil = Number(v) as CodigoPerfil;
+                  const perfil = parseCodigoPerfil(v) ?? PERFIL_DESPACHANTE;
                   setCodigoPerfil(perfil);
                   sincronizarVinculosPorPerfil(perfil, cadastros);
                 }}
@@ -678,11 +847,11 @@ export function UsuariosScreen() {
             <div className="grid grid-cols-2 items-start gap-3">
               <div className="flex w-full flex-col gap-1.5">
                 <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900">
-                  Empresa
+                  Empresa{isDespachante ? <span className="req"> *</span> : null}
                 </Label>
                 <Select
-                  value={idEmpresa}
-                  onValueChange={setIdEmpresa}
+                  value={selectValueOrEmpty(idEmpresa)}
+                  onValueChange={(v) => setIdEmpresa(v === SELECT_EMPTY ? '' : v)}
                   disabled={!vinculoEnabled}
                 >
                   <SelectTrigger
@@ -692,7 +861,10 @@ export function UsuariosScreen() {
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent>
-                    {(cadastros?.empresas ?? []).map((e) => (
+                    <SelectItem value={SELECT_EMPTY} disabled>
+                      Selecione
+                    </SelectItem>
+                    {empresasOptions.map((e) => (
                       <SelectItem key={e.id_empresa} value={String(e.id_empresa)}>
                         {e.descricao}
                       </SelectItem>
@@ -703,11 +875,11 @@ export function UsuariosScreen() {
 
               <div className="flex w-full flex-col gap-1.5">
                 <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900">
-                  Turno
+                  Turno{isDespachante ? <span className="req"> *</span> : null}
                 </Label>
                 <Select
-                  value={idTurno}
-                  onValueChange={setIdTurno}
+                  value={selectValueOrEmpty(idTurno)}
+                  onValueChange={(v) => setIdTurno(v === SELECT_EMPTY ? '' : v)}
                   disabled={!vinculoEnabled}
                 >
                   <SelectTrigger
@@ -717,7 +889,10 @@ export function UsuariosScreen() {
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent>
-                    {(cadastros?.turnos ?? []).map((t) => (
+                    <SelectItem value={SELECT_EMPTY} disabled>
+                      Selecione
+                    </SelectItem>
+                    {turnosOptions.map((t) => (
                       <SelectItem key={t.id_turno} value={String(t.id_turno)}>
                         {t.descricao}
                       </SelectItem>
@@ -729,11 +904,11 @@ export function UsuariosScreen() {
 
             <div className="flex w-full flex-col gap-1.5">
               <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900">
-                Local
+                Local{isDespachante ? <span className="req"> *</span> : null}
               </Label>
               <Select
-                value={idLocal}
-                onValueChange={setIdLocal}
+                value={selectValueOrEmpty(idLocal)}
+                onValueChange={(v) => setIdLocal(v === SELECT_EMPTY ? '' : v)}
                 disabled={!vinculoEnabled}
               >
                 <SelectTrigger
@@ -743,7 +918,10 @@ export function UsuariosScreen() {
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(cadastros?.locais ?? []).map((l) => (
+                  <SelectItem value={SELECT_EMPTY} disabled>
+                    Selecione
+                  </SelectItem>
+                  {locaisOptions.map((l) => (
                     <SelectItem key={l.id_local} value={String(l.id_local)}>
                       {`${l.codigo_local} - ${l.descricao}`}
                     </SelectItem>

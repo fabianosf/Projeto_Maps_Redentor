@@ -11,9 +11,13 @@ import logging
 from flask import Blueprint, g, jsonify, request
 
 from .auth_middleware import json_error, require_admin, require_config_access
-from .dal_factory import get_erp_dal_instance, is_erp_enabled
-from .erp_mock import consultar_funcionario_mock
-from .erp_service import MSG_ERP_INDISPONIVEL, ErpError, consultar_funcionario_erp
+from .erp_funcionario_service import (
+    MSG_ERP_INDISPONIVEL,
+    ERPFuncionarioService,
+    ErpError,
+    build_erp_funcionario_service,
+)
+from .erp_service import consultar_funcionario_erp
 from .users_service import (
     ServiceError,
     atualizar_perfil,
@@ -33,22 +37,25 @@ def _dal():
     return g.dal
 
 
-def _erp_dal_or_error():
-    """
-    Retorna DAL Oracle, None (ERP desligado) ou ErpError (falha de config/conexão).
-    Nunca propaga exception para o Flask (evita 500 por erp.dat ausente).
-    """
-    if not is_erp_enabled():
-        return None
+def _erp_service_or_error() -> ERPFuncionarioService | ErpError | None:
+    """Retorna provider ERP configurado explicitamente ou compat legado."""
     try:
-        return get_erp_dal_instance()
+        return build_erp_funcionario_service()
     except Exception as exc:
-        logger.error("ERP indisponível ao inicializar DAL: %s", exc, exc_info=True)
+        logger.error(
+            "ERP indisponível ao inicializar provider de funcionários: %s",
+            exc,
+            exc_info=True,
+        )
         return ErpError(MSG_ERP_INDISPONIVEL, "erp_indisponivel")
 
 
 def _status_erp_error(codigo: str) -> int:
-    if codigo in ("nao_encontrado_erp", "funcionario_nao_encontrado"):
+    if codigo in (
+        "nao_encontrado_erp",
+        "nao_encontrado_rh",
+        "funcionario_nao_encontrado",
+    ):
         return 404
     if codigo == "erp_indisponivel":
         return 503
@@ -71,57 +78,63 @@ def list_profiles():
 @users_bp.get("/erp-funcionario/<matricula>")
 @require_config_access
 def get_erp_funcionario(matricula: str):
-    """Valida matrícula no ERP (Oracle se ENABLED=1; mock local se 0)."""
-    if not is_erp_enabled():
-        resultado = consultar_funcionario_mock(matricula)
-        if isinstance(resultado, ErpError):
-            return json_error(
-                resultado.mensagem,
-                _status_erp_error(resultado.codigo),
-                resultado.codigo,
-            )
-        return jsonify({"ok": True, "funcionario": resultado}), 200
-
-    erp_dal = _erp_dal_or_error()
-    if isinstance(erp_dal, ErpError):
+    erp_service = _erp_service_or_error()
+    if erp_service is None:
         return json_error(
-            erp_dal.mensagem,
-            _status_erp_error(erp_dal.codigo),
-            erp_dal.codigo,
+            MSG_ERP_INDISPONIVEL,
+            503,
+            "erp_indisponivel",
+        )
+    if isinstance(erp_service, ErpError):
+        return json_error(
+            erp_service.mensagem,
+            _status_erp_error(erp_service.codigo),
+            erp_service.codigo,
         )
 
-    resultado = consultar_funcionario_erp(erp_dal, matricula)
+    resultado = consultar_funcionario_erp(erp_service, matricula)
     if isinstance(resultado, ErpError):
         return json_error(
             resultado.mensagem,
             _status_erp_error(resultado.codigo),
             resultado.codigo,
         )
-    return jsonify({"ok": True, "funcionario": resultado}), 200
+    return jsonify(resultado), 200
 
 
 @users_bp.get("/by-matricula/<matricula>")
 @require_config_access
 def get_user_by_matricula(matricula: str):
-    erp_dal = _erp_dal_or_error()
-    if isinstance(erp_dal, ErpError):
+    erp_service = _erp_service_or_error()
+    if erp_service is None:
         return json_error(
-            erp_dal.mensagem,
-            _status_erp_error(erp_dal.codigo),
-            erp_dal.codigo,
+            MSG_ERP_INDISPONIVEL,
+            503,
+            "erp_indisponivel",
+        )
+    if isinstance(erp_service, ErpError):
+        return json_error(
+            erp_service.mensagem,
+            _status_erp_error(erp_service.codigo),
+            erp_service.codigo,
         )
 
-    resultado = buscar_por_matricula(_dal(), matricula, erp_dal=erp_dal)
+    resultado = buscar_por_matricula(_dal(), matricula, erp_service=erp_service)
     if isinstance(resultado, ServiceError):
         status = 404
         if resultado.codigo == "usuario_inativo":
             status = 409
         elif resultado.codigo == "erp_indisponivel":
             status = 503
-        elif resultado.codigo not in ("nao_encontrado", "nao_encontrado_erp"):
+        elif resultado.codigo not in (
+            "nao_encontrado",
+            "nao_encontrado_erp",
+            "nao_encontrado_rh",
+            "funcionario_nao_encontrado",
+        ):
             status = 400
         return json_error(resultado.mensagem, status, resultado.codigo)
-    return jsonify({"ok": True, "usuario": resultado}), 200
+    return jsonify({"ok": True, **resultado}), 200
 
 
 @users_bp.post("")
@@ -132,16 +145,13 @@ def create_user():
     nome = str(body.get("nome", ""))
     codigo_perfil = int(body.get("codigo_perfil", 0))
 
-    # ERP desligado: cadastro manual no PostgreSQL/MariaDB sem Oracle.
-    erp_dal = None
-    if is_erp_enabled():
-        erp_dal = _erp_dal_or_error()
-        if isinstance(erp_dal, ErpError):
-            return json_error(
-                erp_dal.mensagem,
-                _status_erp_error(erp_dal.codigo),
-                erp_dal.codigo,
-            )
+    erp_service = _erp_service_or_error()
+    if isinstance(erp_service, ErpError):
+        return json_error(
+            erp_service.mensagem,
+            _status_erp_error(erp_service.codigo),
+            erp_service.codigo,
+        )
 
     resultado = criar_usuario(
         _dal(),
@@ -151,13 +161,13 @@ def create_user():
         id_empresa=body.get("id_empresa"),
         id_turno=body.get("id_turno"),
         id_local=body.get("id_local"),
-        erp_dal=erp_dal,
+        erp_service=erp_service,
     )
     if isinstance(resultado, ServiceError):
         status = 409 if resultado.codigo == "matricula_duplicada" else 400
         if resultado.codigo == "erp_indisponivel":
             status = 503
-        elif resultado.codigo == "nao_encontrado_erp":
+        elif resultado.codigo in ("nao_encontrado_erp", "funcionario_nao_encontrado"):
             status = 404
         elif resultado.codigo == "persistencia":
             status = 500

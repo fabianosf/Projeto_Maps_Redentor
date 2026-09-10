@@ -20,12 +20,13 @@ export type {
 export type {
   CodigoPerfil,
   ErpFuncionario,
-  ErpFuncionarioResponse,
   PerfilItem,
   PerfisListResponse,
+  UserByMatriculaResponse,
   UserMutationResponse,
   UsersListResponse,
   UsuarioLista,
+  UsuarioPrefillRh,
   UsuarioPublico,
 } from './usuario';
 

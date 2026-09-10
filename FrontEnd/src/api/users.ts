@@ -1,7 +1,8 @@
 import { apiFetch } from './client';
 import type {
-  ErpFuncionarioResponse,
+  ErpFuncionario,
   PerfisListResponse,
+  UserByMatriculaResponse,
   UserMutationResponse,
   UsersListResponse,
 } from '@/types';
@@ -12,6 +13,13 @@ export type UsuarioVinculos = {
   id_local?: number | null;
 };
 
+function idVinculoOuNull(valor: number | null | undefined): number | null {
+  if (valor == null) return null;
+  const n = Number(valor);
+  if (!Number.isInteger(n) || n <= 0) return null;
+  return n;
+}
+
 export async function listUsers(): Promise<UsersListResponse> {
   return apiFetch<UsersListResponse>('/users', { method: 'GET' });
 }
@@ -20,18 +28,19 @@ export async function listPerfis(): Promise<PerfisListResponse> {
   return apiFetch<PerfisListResponse>('/users/perfis', { method: 'GET' });
 }
 
-export async function getUserByMatricula(matricula: string): Promise<UserMutationResponse> {
-  return apiFetch<UserMutationResponse>(
+export async function getUserByMatricula(
+  matricula: string,
+): Promise<UserByMatriculaResponse> {
+  return apiFetch<UserByMatriculaResponse>(
     `/users/by-matricula/${encodeURIComponent(matricula)}`,
     { method: 'GET' },
   );
 }
 
-export async function getErpFuncionario(matricula: string): Promise<ErpFuncionarioResponse> {
-  return apiFetch<ErpFuncionarioResponse>(
-    `/users/erp-funcionario/${encodeURIComponent(matricula)}`,
-    { method: 'GET' },
-  );
+export async function getErpFuncionario(matricula: string): Promise<ErpFuncionario> {
+  return apiFetch<ErpFuncionario>(`/users/erp-funcionario/${encodeURIComponent(matricula)}`, {
+    method: 'GET',
+  });
 }
 
 export async function createUser(
@@ -45,10 +54,10 @@ export async function createUser(
     body: {
       matricula,
       nome,
-      codigo_perfil: codigoPerfil,
-      id_empresa: vinculos?.id_empresa ?? null,
-      id_turno: vinculos?.id_turno ?? null,
-      id_local: vinculos?.id_local ?? null,
+      codigo_perfil: Number(codigoPerfil),
+      id_empresa: idVinculoOuNull(vinculos?.id_empresa),
+      id_turno: idVinculoOuNull(vinculos?.id_turno),
+      id_local: idVinculoOuNull(vinculos?.id_local),
     },
   });
 }
@@ -62,11 +71,11 @@ export async function updateUserProfile(
   return apiFetch<UserMutationResponse>(`/users/${idUsuario}`, {
     method: 'PUT',
     body: {
-      codigo_perfil: codigoPerfil,
+      codigo_perfil: Number(codigoPerfil),
       ...(nome !== undefined ? { nome } : {}),
-      id_empresa: vinculos?.id_empresa ?? null,
-      id_turno: vinculos?.id_turno ?? null,
-      id_local: vinculos?.id_local ?? null,
+      id_empresa: idVinculoOuNull(vinculos?.id_empresa),
+      id_turno: idVinculoOuNull(vinculos?.id_turno),
+      id_local: idVinculoOuNull(vinculos?.id_local),
     },
   });
 }

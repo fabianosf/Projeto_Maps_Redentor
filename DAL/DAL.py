@@ -145,34 +145,99 @@ class ConnectionPool:
     def set_creator(self, creator):
         self._creator = creator
 
-    def get_connection(self):
-        with self._lock:
-            for conn in self._pool:
-                if conn not in self._in_use:
-                    self._in_use.add(conn)
-                    _log_evento(
-                        f"Conexão reutilizada do pool | em_uso={len(self._in_use)} | "
-                        f"total={len(self._pool)}"
-                    )
-                    return conn
+    @staticmethod
+    def _connection_alive(conn) -> bool:
+        """Valida conexão antes de reutilizar (evita InterfaceError após wait_timeout)."""
+        try:
+            if conn is None:
+                return False
+            if hasattr(conn, "open") and not bool(getattr(conn, "open")):
+                return False
+            if hasattr(conn, "ping"):
+                # reconnect=False: se morreu, descartamos e abrimos outra.
+                conn.ping(reconnect=False)
+                return True
+            cursor = conn.cursor()
+            try:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            finally:
+                cursor.close()
+            return True
+        except Exception as exc:
+            _log_evento(
+                f"Conexão do pool inválida | erro={type(exc).__name__}"
+            )
+            return False
 
-            if len(self._pool) < self.max_connections:
+    @staticmethod
+    def _safe_close(conn) -> None:
+        try:
+            if conn is not None and hasattr(conn, "close"):
+                conn.close()
+        except Exception:
+            pass
+
+    def discard_connection(self, conn) -> None:
+        """Remove conexão morta/inválida do pool (não devolve para reuso)."""
+        with self._lock:
+            self._in_use.discard(conn)
+            if conn in self._pool:
+                self._pool.remove(conn)
+            total = len(self._pool)
+            em_uso = len(self._in_use)
+        self._safe_close(conn)
+        _log_evento(
+            f"Conexão descartada do pool | total={total} | em_uso={em_uso}"
+        )
+
+    def get_connection(self):
+        while True:
+            candidate = None
+            create_new = False
+
+            with self._lock:
+                for conn in list(self._pool):
+                    if conn not in self._in_use:
+                        self._pool.remove(conn)
+                        candidate = conn
+                        break
+                else:
+                    if len(self._pool) < self.max_connections:
+                        create_new = True
+                    else:
+                        exc = DatabaseConnectionError("Pool esgotado")
+                        _log_excecao(
+                            exc,
+                            f"Pool de conexões esgotado | maximo={self.max_connections} | "
+                            f"em_uso={len(self._in_use)} | total={len(self._pool)}",
+                        )
+                        raise exc
+
+            if candidate is not None:
+                if self._connection_alive(candidate):
+                    with self._lock:
+                        self._pool.append(candidate)
+                        self._in_use.add(candidate)
+                        em_uso = len(self._in_use)
+                        total = len(self._pool)
+                    _log_evento(
+                        f"Conexão reutilizada do pool | em_uso={em_uso} | total={total}"
+                    )
+                    return candidate
+                self._safe_close(candidate)
+                _log_evento("Conexão morta removida do pool antes do reuso")
+                continue
+
+            if create_new:
                 _log_evento(
-                    f"Criando nova conexão no pool | total_atual={len(self._pool)} | "
-                    f"maximo={self.max_connections}"
+                    f"Criando nova conexão no pool | maximo={self.max_connections}"
                 )
                 conn = self._creator()
-                self._pool.append(conn)
-                self._in_use.add(conn)
+                with self._lock:
+                    self._pool.append(conn)
+                    self._in_use.add(conn)
                 return conn
-
-            exc = DatabaseConnectionError("Pool esgotado")
-            _log_excecao(
-                exc,
-                f"Pool de conexões esgotado | maximo={self.max_connections} | "
-                f"em_uso={len(self._in_use)}",
-            )
-            raise exc
 
     def return_connection(self, conn):
         with self._lock:
@@ -332,6 +397,8 @@ class DAL:
     def _get_oracle_client_path(self):
         if platform.system() == "Windows":
             paths = [
+                os.path.join(BASE_DIR, "oracle_win", "oracle", "instantclient_21_14"),
+                os.path.join(BASE_DIR, "oracle_win", "instantclient_21_14"),
                 os.path.join(BASE_DIR, "drivers", "oracle_win", "oracle", "instantclient_21_14"),
                 os.path.join(BASE_DIR, "drivers", "oracle_win", "instantclient_21_14"),
             ]
@@ -408,6 +475,9 @@ class DAL:
             # Evita snapshot REPEATABLE READ preso no pool (SELECT sem commit
             # fazia GET /mapas/:id retornar 404 logo após o INSERT).
             autocommit=True,
+            connect_timeout=10,
+            read_timeout=30,
+            write_timeout=30,
         )
 
     def _create_connection_oracle(self, params: Dict[str, Any]):
@@ -621,6 +691,7 @@ class DAL:
         conn = None
         cursor = None
         owned = False
+        dead_conn = False
         in_tx = bool(getattr(self._tls, "in_transaction", False))
         operacao = "SELECT" if fetch else ("DML/TX" if in_tx else "DML/COMMIT")
         qtd_parametros = _contar_parametros(values)
@@ -676,11 +747,21 @@ class DAL:
                 f"sql={sql}",
             )
 
+            # InterfaceError/OperationalError: conexão quebrada — não devolver ao pool.
+            exc_name = type(exc).__name__
+            if exc_name in {
+                "InterfaceError",
+                "OperationalError",
+                "DatabaseError",
+            } or "connect" in str(exc).lower():
+                dead_conn = True
+
             if conn and not in_tx:
                 try:
                     conn.rollback()
                     _log_evento("Rollback executado após falha na consulta")
                 except Exception as rollback_exc:
+                    dead_conn = True
                     _log_excecao(rollback_exc, "Falha ao executar rollback após erro na consulta")
 
             if in_tx:
@@ -690,10 +771,16 @@ class DAL:
 
         finally:
             if cursor:
-                cursor.close()
+                try:
+                    cursor.close()
+                except Exception:
+                    dead_conn = True
 
             if owned and conn:
-                self.pool.return_connection(conn)
+                if dead_conn and hasattr(self.pool, "discard_connection"):
+                    self.pool.discard_connection(conn)
+                else:
+                    self.pool.return_connection(conn)
 
     def read(self, sql, values=None):
         return self.execute_query(sql, values, True)
@@ -713,11 +800,22 @@ class DAL:
         else:
             sql = "SELECT 1"
 
-        _log_evento(f"Iniciando teste de conexão | sgbd={self.sgbd} | sql={sql}")
-        result = self.execute_query(sql)
-        sucesso = not result.empty
-        _log_evento(f"Teste de conexão {'bem-sucedido' if sucesso else 'falhou'} | sgbd={self.sgbd}")
-        return sucesso
+        try:
+            dsn_mask = self._montar_string_conexao()
+        except Exception:
+            dsn_mask = f"sgbd={self.sgbd}"
+
+        _log_evento(f"Iniciando teste de conexão | {dsn_mask} | sql={sql}")
+        try:
+            result = self.execute_query(sql)
+            sucesso = result is not None and not getattr(result, "empty", True)
+            _log_evento(
+                f"Teste de conexão {'bem-sucedido' if sucesso else 'falhou'} | {dsn_mask}"
+            )
+            return sucesso
+        except Exception as exc:
+            _log_excecao(exc, f"Teste de conexão falhou com exceção | {dsn_mask}")
+            return False
 
     def get_sgbd(self) -> str:
         """Retorna o SGBD normalizado em uso (mariadb, oracle ou postgresql)."""

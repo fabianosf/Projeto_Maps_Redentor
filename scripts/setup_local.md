@@ -37,7 +37,7 @@ pip install -r requirements.txt
 | `pymysql` | MariaDB (padrão `REDMAPA_SGBD=mariadb`) |
 | `psycopg2-binary` | PostgreSQL se `REDMAPA_SGBD=postgresql` |
 
-**Opcional (comentado no arquivo):** `oracledb` só se for usar ERP (`erp.dat` / `REDMAPA_ERP_*` em `dal_factory.py`). `Pillow` só para scripts de imagem/doc.
+**Opcional (comentado no arquivo):** `oracledb` só se for usar ERP/Oracle (`ERP_PROVIDER=oracle` + `ERP_ORACLE_*`). `Pillow` só para scripts de imagem/doc.
 
 ## 3. Configuração criptografada (não versionada)
 
@@ -47,7 +47,7 @@ Credenciais do banco **não** vão em `.env` — ficam nos arquivos criptografad
 |------|---------|
 | Chave Fernet | `DAL/arquivos_crip/chave/chave.key` |
 | Config MariaDB (padrão) | `DAL/arquivos_crip/arq/map.dat` |
-| Config ERP (opcional) | `DAL/arquivos_crip/arq/erp.dat` |
+| Config ERP (legado/opcional) | `DAL/arquivos_crip/arq/erp.dat` |
 
 Esses paths estão no `.gitignore` (`chave.key` e `*.dat`). **Não** os crie/edite por este guia se a equipe já tiver cópia local; peça os arquivos ao responsável ou use o utilitário interno da equipe (`scripts/gerar_configs_map.py` / PROJ_GAC) **fora** deste fluxo se for o caso.
 
@@ -75,8 +75,11 @@ Variáveis (`BackEnd/app.py`):
 
 - `REDMAPA_CONFIG` — basename em `arq/` (padrão `map`)
 - `REDMAPA_SGBD` — `mariadb` \| `postgresql`
-- `REDMAPA_ERP_ENABLED` — `0` (padrão local, sem Oracle) \| `1` (exige `erp.dat`)
-- `REDMAPA_ERP_CONFIG` / `REDMAPA_ERP_SGBD` — só com `REDMAPA_ERP_ENABLED=1`
+- `ERP_PROVIDER` — `mock` \| `oracle` \| `disabled`
+- `REDMAPA_ERP_CONFIG` — basename do `.dat` Oracle (padrão `erp` → `erp.dat`)
+- Com `ERP_PROVIDER=oracle`, preferência: `DAL/arquivos_crip/arq/erp.dat` + `chave.key`
+- Alternativa sem `.dat`: `ERP_ORACLE_DSN` ou `ERP_ORACLE_HOST` / `PORT` / `SERVICE_NAME` + `USER` / `PASSWORD`
+- `REDMAPA_ERP_ENABLED` — legado; mantido por compatibilidade
 - `REDMAPA_COOKIE_SECURE` — `true` só com HTTPS
 - `REDMAPA_HOST` / `REDMAPA_PORT` — bind (padrão `0.0.0.0:5000`)
 - `FLASK_DEBUG` — `1` em desenvolvimento
@@ -175,4 +178,4 @@ npm run dev
 | Erro ao abrir `chave.key` / `.dat` | Arquivos ausentes ou chave diferente do `.dat` |
 | Health `ok: false` / 503 | MariaDB parado, host/senha do `map.dat`, ou banco `map` inexistente |
 | Frontend chama API e falha de rede | API fora do ar ou proxy; confirme `:5000` e `npm run dev` |
-| Cadastro ERP / foto falha | Falta `oracledb` + `erp.dat` (opcional; não bloqueia login local) |
+| Cadastro ERP / foto falha | Falta `oracledb` ou `ERP_ORACLE_*` (opcional; não bloqueia login local com `ERP_PROVIDER=mock`) |

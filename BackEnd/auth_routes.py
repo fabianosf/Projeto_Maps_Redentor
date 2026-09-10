@@ -10,6 +10,7 @@ Conforme RF-RN-008, RF-RN-010, RF-RN-011 e RF-RN-012.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable, Optional
 
 from flask import Blueprint, Response, g, jsonify, request
@@ -40,6 +41,7 @@ from .security import limiter
 from .session_store import SessionRecord
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/v1/auth")
+logger = logging.getLogger(__name__)
 
 
 def init_auth_routes(app, dal_factory: Callable[[], Any]) -> None:
@@ -59,6 +61,16 @@ def login():
     # o login retornava 401 "Login inválido!" com o SGBD parado.
     if not g.dal.test_connection():
         sgbd = g.dal.get_sgbd() if hasattr(g.dal, "get_sgbd") else ""
+        dsn_mask = "?"
+        try:
+            if hasattr(g.dal, "_montar_string_conexao"):
+                dsn_mask = g.dal._montar_string_conexao()
+        except Exception:
+            dsn_mask = f"sgbd={sgbd or '?'}"
+        logger.error(
+            "Login recusado: banco indisponível | codigo=db_indisponivel | dsn=%s",
+            dsn_mask,
+        )
         return json_error(mensagem_db_indisponivel(sgbd), 503, "db_indisponivel")
 
     resultado = autenticar_login(g.dal, matricula, senha)

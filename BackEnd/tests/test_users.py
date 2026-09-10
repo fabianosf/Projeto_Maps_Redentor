@@ -139,14 +139,16 @@ def test_reset_admin_ok(client):
 
 
 def test_erp_mock_get_e_post_sem_oracle(client):
-    """REDMAPA_ERP_ENABLED=0: GET usa mock local; POST sem Oracle."""
+    """Provider mock local explícito: GET usa mock; POST não toca Oracle."""
     auth_client(client, "1")
     erp = client.get("/api/v1/users/erp-funcionario/59800")
     assert erp.status_code == 200
-    func = erp.get_json()["funcionario"]
-    assert func["cod_func"] == "59800"
+    func = erp.get_json()
+    assert func["matricula"] == "59800"
     assert func["nome"] == "Jose Ricardo"
-    assert func.get("foto_base64") is None
+    assert func["origem"] == "mock"
+    assert func["foto_url"] is None
+    assert func["ativo"] is True
 
     miss = client.get("/api/v1/users/erp-funcionario/11111")
     assert miss.status_code == 404
@@ -162,3 +164,141 @@ def test_erp_mock_get_e_post_sem_oracle(client):
     )
     assert criado.status_code == 201
     assert criado.get_json()["usuario"]["matricula"] == "59800"
+
+
+def test_erp_funcionario_normaliza_espacos(client):
+    auth_client(client, "1")
+    erp = client.get("/api/v1/users/erp-funcionario/ 59 800 ")
+    assert erp.status_code == 200
+    body = erp.get_json()
+    assert body["matricula"] == "59800"
+    assert body["nome"] == "Jose Ricardo"
+
+
+def test_erp_funcionario_mock_seed_59800(client):
+    auth_client(client, "1")
+    resp = client.get("/api/v1/users/erp-funcionario/59800")
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["matricula"] == "59800"
+    assert body["nome"] == "Jose Ricardo"
+    assert body["origem"] == "mock"
+
+
+def test_erp_funcionario_mock_nao_inclui_admins_reais(client):
+    """59492/59817 não devem existir na lista fixa mock (produção usa Oracle)."""
+    auth_client(client, "1")
+    for mat in ("59492", "59817"):
+        resp = client.get(f"/api/v1/users/erp-funcionario/{mat}")
+        assert resp.status_code == 404
+        assert resp.get_json()["codigo"] == "funcionario_nao_encontrado"
+
+
+def test_erp_funcionario_mock_inexistente_404(client):
+    auth_client(client, "1")
+    resp = client.get("/api/v1/users/erp-funcionario/11111")
+    assert resp.status_code == 404
+    body = resp.get_json()
+    assert body["codigo"] == "funcionario_nao_encontrado"
+    assert "não encontrada" in body["mensagem"].lower()
+
+
+def test_erp_funcionario_oracle_indisponivel_503(client, monkeypatch):
+    from BackEnd.erp_funcionario_service import ErpError
+
+    auth_client(client, "1")
+    monkeypatch.setenv("ERP_PROVIDER", "oracle")
+    monkeypatch.setattr(
+        "BackEnd.users_routes.build_erp_funcionario_service",
+        lambda: ErpError(
+            "Não foi possível consultar o cadastro corporativo no momento. Tente novamente.",
+            "erp_indisponivel",
+        ),
+    )
+    resp = client.get("/api/v1/users/erp-funcionario/59800")
+    assert resp.status_code == 503
+    body = resp.get_json()
+    assert body["codigo"] == "erp_indisponivel"
+
+
+def test_by_matricula_consulta_erp_primeiro_prefill(client):
+    """Matrícula no mock ERP e ausente em tb_usuario → prefill (não 404 local)."""
+    auth_client(client, "1")
+    resp = client.get("/api/v1/users/by-matricula/59800")
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["ok"] is True
+    assert body["ja_cadastrado"] is False
+    assert body["usuario"]["matricula"] == "59800"
+    assert body["usuario"]["nome"] == "Jose Ricardo"
+    assert body["usuario"].get("id_usuario") in (None, 0) or "id_usuario" not in body["usuario"]
+    assert "rh" in body.get("mensagem", "").lower() or "cadastro" in body.get("mensagem", "").lower()
+
+
+def test_by_matricula_ja_cadastrado(client):
+    auth_client(client, "1")
+    criado = client.post(
+        "/api/v1/users",
+        json={"matricula": "59800", "nome": "Jose Ricardo", "codigo_perfil": 3},
+    )
+    assert criado.status_code == 201
+    id_u = criado.get_json()["usuario"]["id_usuario"]
+
+    resp = client.get("/api/v1/users/by-matricula/59800")
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["ja_cadastrado"] is True
+    assert body["usuario"]["id_usuario"] == id_u
+    assert body["usuario"]["matricula"] == "59800"
+
+
+def test_by_matricula_nao_encontrada_rh_404(client):
+    auth_client(client, "1")
+    resp = client.get("/api/v1/users/by-matricula/11111")
+    assert resp.status_code == 404
+    body = resp.get_json()
+    assert body["codigo"] == "nao_encontrado_rh"
+    assert "rh" in body["mensagem"].lower()
+
+
+def test_by_matricula_oracle_qualquer_matricula_nao_limitada_a_seed(client, monkeypatch):
+    """Com provider oracle, qualquer matrícula real do RH preenche — não só seeds mock."""
+    from BackEnd.erp_funcionario_service import (
+        ERPFuncionario,
+        ERPFuncionarioService,
+        ErpError,
+    )
+
+    class _RepoOracleReal:
+        origem = "oracle"
+
+        def consultar(self, matricula: str):
+            mat = str(matricula).strip()
+            if mat == "59548":
+                return ERPFuncionario(
+                    matricula="59548",
+                    nome="Funcionario Oracle Real",
+                    foto_url=None,
+                    ativo=True,
+                    origem="oracle",
+                )
+            return ErpError(
+                "Matrícula não encontrada no cadastro de funcionários.",
+                "funcionario_nao_encontrado",
+            )
+
+    auth_client(client, "1")
+    monkeypatch.setenv("ERP_PROVIDER", "oracle")
+    monkeypatch.setattr(
+        "BackEnd.users_routes.build_erp_funcionario_service",
+        lambda: ERPFuncionarioService(_RepoOracleReal()),
+    )
+
+    resp = client.get("/api/v1/users/by-matricula/59548")
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["ok"] is True
+    assert body["ja_cadastrado"] is False
+    assert body["usuario"]["matricula"] == "59548"
+    assert body["usuario"]["nome"] == "Funcionario Oracle Real"
+    assert body["usuario"]["origem"] == "oracle"

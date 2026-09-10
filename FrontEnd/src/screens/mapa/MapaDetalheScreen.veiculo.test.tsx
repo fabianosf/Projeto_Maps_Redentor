@@ -126,7 +126,9 @@ describe('MapaDetalheScreen — Veículo digitado (modal)', () => {
       await screen.findByRole('heading', { name: /vincular motorista/i }),
     ).toBeInTheDocument();
 
-    const input = screen.getByLabelText(/^veículo/i) as HTMLInputElement;
+    const input = screen.getByRole('textbox', {
+      name: /^veículo/i,
+    }) as HTMLInputElement;
     expect(input.value).toBe('');
     expect(input).toBeDisabled();
     expect(input.placeholder).toBe('Selecione empresa e linha antes');

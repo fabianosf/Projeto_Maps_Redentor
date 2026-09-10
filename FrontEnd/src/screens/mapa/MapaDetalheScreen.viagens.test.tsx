@@ -176,7 +176,9 @@ describe('MapaDetalheScreen — viagens por item/motorista', () => {
   it('sem seleção: mensagem, sem viagens e botão Nova viagem desabilitado', async () => {
     renderDetalhe();
     await waitFor(() => {
-      expect(screen.getByText(/selecione um veículo e motorista/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/selecione uma escala para visualizar ou registrar viagens/i),
+      ).toBeInTheDocument();
     });
     expect(screen.queryByText(/Viagens —/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /nova viagem/i })).toBeDisabled();
@@ -186,39 +188,44 @@ describe('MapaDetalheScreen — viagens por item/motorista', () => {
     const user = userEvent.setup();
     renderDetalhe();
     await waitFor(() => {
-      expect(screen.getByText('C30000')).toBeInTheDocument();
+      expect(screen.getAllByText('C30000').length).toBeGreaterThan(0);
     });
 
-    await user.click(screen.getByText('C30000'));
+    await user.click(screen.getAllByText('C30000')[0]);
     await waitFor(() => {
       expect(screen.getByText(/Viagens — C30000/i)).toBeInTheDocument();
     });
-    expect(screen.getByText(/Motorista:/i).parentElement).toHaveTextContent(
-      /2001 — João da Silva/,
-    );
-    expect(screen.getByText(/Linha 550/i)).toHaveTextContent(/Futuro/);
-    expect(screen.getByText(/Jornada/i)).toBeInTheDocument();
-    expect(screen.getByText('5')).toBeInTheDocument();
-    expect(screen.queryByText('3')).not.toBeInTheDocument();
+    const secaoViagens = screen.getByText(/Viagens — C30000/i).closest('section');
+    expect(secaoViagens).toBeTruthy();
+    expect(
+      within(secaoViagens as HTMLElement).getByText(/2001 — João da Silva/),
+    ).toBeInTheDocument();
+    expect(within(secaoViagens as HTMLElement).getByText('550')).toBeInTheDocument();
+    expect(within(secaoViagens as HTMLElement).getByText('Futuro')).toBeInTheDocument();
+    expect(within(secaoViagens as HTMLElement).getByText(/Jornada/i)).toBeInTheDocument();
+    expect(within(secaoViagens as HTMLElement).getByText('5')).toBeInTheDocument();
+    expect(within(secaoViagens as HTMLElement).queryByText('3')).not.toBeInTheDocument();
 
-    await user.click(screen.getByText('C30002'));
+    await user.click(screen.getAllByText('C30002')[0]);
     await waitFor(() => {
       expect(screen.getByText(/Viagens — C30002/i)).toBeInTheDocument();
     });
-    expect(screen.getByText(/Motorista:/i).parentElement).toHaveTextContent(
-      /3002 — Maria Souza/,
-    );
-    expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.queryByText('5')).not.toBeInTheDocument();
+    const secao2 = screen.getByText(/Viagens — C30002/i).closest('section');
+    expect(secao2).toBeTruthy();
+    expect(
+      within(secao2 as HTMLElement).getByText(/3002 — Maria Souza/),
+    ).toBeInTheDocument();
+    expect(within(secao2 as HTMLElement).getByText('3')).toBeInTheDocument();
+    expect(within(secao2 as HTMLElement).queryByText('5')).not.toBeInTheDocument();
   });
 
   it('Nova viagem envia id_mapa_item no payload', async () => {
     const user = userEvent.setup();
     renderDetalhe();
     await waitFor(() => {
-      expect(screen.getByText('C30000')).toBeInTheDocument();
+      expect(screen.getAllByText('C30000').length).toBeGreaterThan(0);
     });
-    await user.click(screen.getByText('C30000'));
+    await user.click(screen.getAllByText('C30000')[0]);
 
     await user.click(screen.getByRole('button', { name: /nova viagem/i }));
     const dialog = await screen.findByRole('dialog');

@@ -6,20 +6,25 @@
 
 from __future__ import annotations
 
+import logging
+import os
 import re
 from dataclasses import dataclass
 from typing import Any, Optional
 
 from .auth_service import hash_senha
 from .constants import PERFIL_DESPACHANTE, gerar_senha_provisoria
-from .erp_service import ErpError, anexar_foto_erp, matricula_existe_erp
+from .erp_service import ErpError, anexar_foto_erp, consultar_funcionario_erp, matricula_existe_erp
 from .matricula_validation import matricula_valida
+
+logger = logging.getLogger(__name__)
 
 _NOME_ALFANUM = re.compile(r"^[A-Za-zÀ-ÿ0-9\s]+$")
 NOME_MAX_LENGTH = 50
 MSG_MATRICULA_INVALIDA = "Matrícula deve ser numérica com no máximo 5 dígitos."
 MSG_NOME_INVALIDO = "Nome deve ser alfanumérico (letras, números e espaços)."
 MSG_NOME_TAMANHO = f"Nome deve ter no máximo {NOME_MAX_LENGTH} caracteres."
+MSG_NAO_ENCONTRADA_RH = "Matrícula não encontrada no RH."
 
 _SELECT_USUARIO = """
         SELECT u.id_usuario, u.matricula, u.nome, u.ativo, u.trocar_senha,
@@ -77,6 +82,29 @@ def _validar_nome(nome: str) -> ServiceError | None:
     if not _NOME_ALFANUM.match(nome):
         return ServiceError(MSG_NOME_INVALIDO, "validacao")
     return None
+
+
+def _erp_provider_nome(erp_service: Any) -> str:
+    provider = getattr(erp_service, "provider", None)
+    if isinstance(provider, str):
+        return provider.strip().lower()
+    return ""
+
+
+def _permite_cadastro_manual_local(erp_service: Any) -> bool:
+    raw = (os.getenv("ERP_ALLOW_MANUAL_USER_CREATE", "0") or "0").strip().lower()
+    return _erp_provider_nome(erp_service) == "mock" and raw in ("1", "true", "yes", "on")
+
+
+def _deve_validar_cadastro_corporativo(erp_service: Any) -> bool:
+    if erp_service is None:
+        return False
+    provider = _erp_provider_nome(erp_service)
+    if provider == "oracle":
+        return True
+    if provider == "mock":
+        return not _permite_cadastro_manual_local(erp_service)
+    return False
 
 
 def _validar_vinculos_despachante(
@@ -155,37 +183,144 @@ def listar_usuarios(dal) -> list[dict[str, Any]]:
     return df.to_dict(orient="records")
 
 
+def _variantes_matricula(matricula: str) -> list[str]:
+    """Gera variantes de matrícula para casar Oracle ↔ tb_usuario."""
+    base = (matricula or "").strip()
+    variantes: list[str] = []
+    for cand in (base, base.lstrip("0") or "0"):
+        if cand and cand not in variantes:
+            variantes.append(cand)
+        if cand.isdigit():
+            z5 = str(int(cand)).zfill(5)
+            if z5 not in variantes:
+                variantes.append(z5)
+            raw = str(int(cand))
+            if raw not in variantes:
+                variantes.append(raw)
+    return variantes
+
+
+def _buscar_usuario_local(dal, matricula: str, *, apenas_ativo: bool | None):
+    """Busca usuário local por matrícula (com variantes de zeros à esquerda)."""
+    for mat in _variantes_matricula(matricula):
+        if apenas_ativo is True:
+            sql = f"{_SELECT_USUARIO} WHERE u.matricula = ? AND u.ativo = 1"
+        elif apenas_ativo is False:
+            sql = f"{_SELECT_USUARIO} WHERE u.matricula = ? AND u.ativo = 0"
+        else:
+            sql = f"{_SELECT_USUARIO} WHERE u.matricula = ?"
+        df = dal.read(sql, (mat,))
+        if not df.empty:
+            return df
+    return None
+
+
 def buscar_por_matricula(
-    dal, matricula: str, erp_dal=None
+    dal, matricula: str, erp_service=None
 ) -> dict[str, Any] | ServiceError:
+    """
+    Fluxo Pesquisar (cadastro de usuário):
+    1) consulta Oracle/RH (obrigatória; mock só se ERP_PROVIDER=mock);
+    2) se não achar no RH → 404;
+    3) se já existir em tb_usuario → retorna usuário + ja_cadastrado;
+    4) se só no RH → retorna dados para preencher novo cadastro.
+    """
     matricula = (matricula or "").strip()
     if not matricula_valida(matricula):
         return ServiceError(MSG_MATRICULA_INVALIDA, "validacao")
 
-    if erp_dal is not None:
-        erp_ok = matricula_existe_erp(erp_dal, matricula)
-        if isinstance(erp_ok, ErpError):
-            return ServiceError(erp_ok.mensagem, erp_ok.codigo)
-
-    df = dal.read(
-        f"""
-        {_SELECT_USUARIO}
-        WHERE u.matricula = ? AND u.ativo = 1
-        """,
-        (matricula,),
-    )
-    if df.empty:
-        inativo = dal.read(
-            "SELECT id_usuario FROM tb_usuario WHERE matricula = ? AND ativo = 0",
-            (matricula,),
+    if erp_service is None:
+        logger.error(
+            "Busca por matrícula sem provider ERP | matricula=%s",
+            matricula,
         )
-        if not inativo.empty:
-            return ServiceError("Usuário inativo.", "usuario_inativo")
-        return ServiceError("Matrícula não encontrada", "nao_encontrado")
-    usuario = df.iloc[0].to_dict()
-    if erp_dal is not None:
-        anexar_foto_erp(erp_dal, matricula, usuario)
-    return usuario
+        return ServiceError(
+            "Não foi possível consultar o cadastro corporativo no momento. Tente novamente.",
+            "erp_indisponivel",
+        )
+
+    provider = getattr(erp_service, "provider", "?")
+    logger.info(
+        "Busca matrícula | etapa=oracle_rh | ERP_PROVIDER=%s | matricula=%s",
+        provider,
+        matricula,
+    )
+    erp = consultar_funcionario_erp(erp_service, matricula)
+    if isinstance(erp, ErpError):
+        logger.info(
+            "Busca matrícula | etapa=oracle_rh | resultado=%s | matricula=%s | "
+            "proximo=nao_consulta_tb_usuario",
+            erp.codigo,
+            matricula,
+        )
+        if erp.codigo in (
+            "funcionario_nao_encontrado",
+            "nao_encontrado_erp",
+            "nao_encontrado",
+        ):
+            return ServiceError(MSG_NAO_ENCONTRADA_RH, "nao_encontrado_rh")
+        return ServiceError(erp.mensagem, erp.codigo)
+
+    mat_erp = str(erp.get("matricula") or matricula).strip()
+    nome_erp = str(erp.get("nome") or "").strip()
+    foto_url = erp.get("foto_url")
+    origem = str(erp.get("origem") or provider)
+    logger.info(
+        "Busca matrícula | etapa=oracle_rh | resultado=encontrado | "
+        "ERP_PROVIDER=%s | origem_rh=%s | matricula=%s",
+        provider,
+        origem,
+        mat_erp,
+    )
+
+    df_ativo = _buscar_usuario_local(dal, mat_erp, apenas_ativo=True)
+    if df_ativo is not None and not df_ativo.empty:
+        usuario = df_ativo.iloc[0].to_dict()
+        anexar_foto_erp(erp_service, mat_erp, usuario)
+        if foto_url and not usuario.get("foto_url"):
+            usuario["foto_url"] = foto_url
+        logger.info(
+            "Busca matrícula | etapa=tb_usuario | resultado=encontrado_ativo | "
+            "ja_cadastrado=true | id_usuario=%s | matricula=%s | "
+            "nome_origem=tb_usuario | rh_origem=%s",
+            usuario.get("id_usuario"),
+            usuario.get("matricula"),
+            origem,
+        )
+        return {
+            "ja_cadastrado": True,
+            "usuario": usuario,
+            "mensagem": "Usuário já cadastrado.",
+            "fonte_rh": origem,
+        }
+
+    df_inativo = _buscar_usuario_local(dal, mat_erp, apenas_ativo=False)
+    if df_inativo is not None and not df_inativo.empty:
+        logger.info(
+            "Busca matrícula | etapa=tb_usuario | resultado=encontrado_inativo | "
+            "matricula=%s",
+            mat_erp,
+        )
+        return ServiceError("Usuário inativo.", "usuario_inativo")
+
+    logger.info(
+        "Busca matrícula | etapa=tb_usuario | resultado=nao_encontrado | "
+        "ja_cadastrado=false | matricula=%s | prefill_origem=%s",
+        mat_erp,
+        origem,
+    )
+    return {
+        "ja_cadastrado": False,
+        "usuario": {
+            "matricula": mat_erp,
+            "nome": nome_erp,
+            "foto_url": foto_url,
+            "origem": origem,
+            "ativo": True,
+        },
+        "mensagem": "Matrícula localizada no RH. Complete o cadastro e salve.",
+        "fonte_rh": origem,
+    }
 
 
 def _esta_ativo(valor: Any) -> bool:
@@ -219,7 +354,7 @@ def criar_usuario(
     id_empresa: Any = None,
     id_turno: Any = None,
     id_local: Any = None,
-    erp_dal=None,
+    erp_service=None,
 ) -> dict[str, Any] | ServiceError:
     matricula = (matricula or "").strip()
     nome = (nome or "").strip()
@@ -233,8 +368,8 @@ def criar_usuario(
     if not codigo_perfil:
         return ServiceError("Perfil é obrigatório.", "validacao")
 
-    if erp_dal is not None:
-        erp_ok = matricula_existe_erp(erp_dal, matricula)
+    if _deve_validar_cadastro_corporativo(erp_service):
+        erp_ok = matricula_existe_erp(erp_service, matricula)
         if isinstance(erp_ok, ErpError):
             return ServiceError(erp_ok.mensagem, erp_ok.codigo)
 
@@ -281,8 +416,8 @@ def criar_usuario(
         usuario = _carregar_usuario_por_matricula(dal, matricula)
         usuario["senha_temporaria"] = senha_plana
         usuario["reativado"] = True
-        if erp_dal is not None:
-            anexar_foto_erp(erp_dal, matricula, usuario)
+        if erp_service is not None:
+            anexar_foto_erp(erp_service, matricula, usuario)
         return usuario
 
     senha_plana = gerar_senha_provisoria()
@@ -305,8 +440,8 @@ def criar_usuario(
     # Exposta uma única vez na resposta — nunca persistida em texto puro.
     usuario["senha_temporaria"] = senha_plana
     usuario["reativado"] = False
-    if erp_dal is not None:
-        anexar_foto_erp(erp_dal, matricula, usuario)
+    if erp_service is not None:
+        anexar_foto_erp(erp_service, matricula, usuario)
     return usuario
 
 

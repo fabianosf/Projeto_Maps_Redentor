@@ -25,17 +25,33 @@ export interface UsuarioLista {
   id_empresa?: number | null;
   id_turno?: number | null;
   id_local?: number | null;
+  foto_url?: string | null;
   foto_base64?: string | null;
   foto_mime?: string | null;
   /** Presente só na resposta de create/reset — nunca logar. */
   senha_temporaria?: string;
 }
 
-export interface ErpFuncionario {
-  cod_func: string;
+/** Prefill quando a matrícula existe no RH mas ainda não em tb_usuario. */
+export interface UsuarioPrefillRh {
+  matricula: string;
   nome: string;
-  foto_base64?: string | null;
-  foto_mime?: string | null;
+  foto_url?: string | null;
+  origem?: 'oracle' | 'mock' | string;
+  ativo?: boolean;
+  id_usuario?: number;
+  codigo_perfil?: CodigoPerfil | number;
+  id_empresa?: number | null;
+  id_turno?: number | null;
+  id_local?: number | null;
+}
+
+export interface ErpFuncionario {
+  matricula: string;
+  nome: string;
+  foto_url?: string | null;
+  ativo: boolean;
+  origem: 'oracle' | 'mock';
 }
 
 export interface PerfilItem {
@@ -52,5 +68,12 @@ export type UserMutationResponse = ApiSuccess<{
   /** Presente na reativação (também em usuario.senha_temporaria). */
   senha_temporaria?: string;
 }>;
+/** GET /users/by-matricula/:matricula — Oracle/RH primeiro. */
+export type UserByMatriculaResponse = ApiSuccess<{
+  ja_cadastrado: boolean;
+  usuario: UsuarioLista | UsuarioPrefillRh;
+  mensagem?: string;
+  /** oracle | mock — origem da consulta RH (não é tb_usuario). */
+  fonte_rh?: string;
+}>;
 export type PerfisListResponse = ApiSuccess<{ perfis: PerfilItem[] }>;
-export type ErpFuncionarioResponse = ApiSuccess<{ funcionario: ErpFuncionario }>;
