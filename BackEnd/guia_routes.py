@@ -21,6 +21,16 @@ from .guia_roleta_service import (
     salvar_leitura_roleta,
     sugerir_leitura_inicial,
 )
+from .guia_jornada_service import (
+    atualizar_trecho,
+    cancelar_trecho,
+    concluir_trecho,
+    criar_trecho,
+    encerrar_guia,
+    iniciar_trecho,
+    obter_guia_completa,
+    registrar_troca_recurso,
+)
 from .guia_service import (
     GuiaError,
     atualizar_guia,
@@ -153,8 +163,15 @@ def guia_collection():
     body = request.get_json(silent=True) or {}
     resultado = criar_guia(g.dal, body)
     if isinstance(resultado, GuiaError):
-        status = 409 if resultado.codigo == "numero_duplicado" else 400
-        return json_error("Não foi possível cadastrar a guia!", status, resultado.codigo)
+        status = 400
+        if resultado.codigo in (
+            "numero_duplicado",
+            "empresa_diferente",
+            "guia_aberta",
+            "motorista_em_transito",
+        ):
+            status = 409
+        return json_error(resultado.mensagem, status, resultado.codigo)
     return jsonify(
         {"ok": True, "guia": resultado, "mensagem": "Guia cadastrada com sucesso!"}
     ), 201
@@ -188,11 +205,23 @@ def ajuste_manual(id_guia: int):
 @require_session
 def salvar_roleta():
     """Registra/atualiza leitura Ja E ou RioCard (ini/fim) por viagem."""
+    if g.auth_usuario.codigo_perfil not in PERFIS_MAPA:
+        return json_error(
+            "Sem permissão para registrar leituras. Perfil despachante ou admin.",
+            403,
+            "sem_permissao",
+        )
     body = request.get_json(silent=True) or {}
     id_usuario = int(g.auth_usuario.id_usuario)
     resultado = salvar_leitura_roleta(g.dal, body, id_usuario)
     if isinstance(resultado, GuiaError):
         status = 404 if resultado.codigo == "nao_encontrado" else 400
+        if resultado.codigo in (
+            "conflito_versao",
+            "motivo_obrigatorio",
+            "leituras_obrigatorias",
+        ):
+            status = 409
         return json_error(resultado.mensagem, status, resultado.codigo)
     return jsonify(
         {
@@ -206,14 +235,21 @@ def salvar_roleta():
 @guia_bp.get("/roletas/sugestao")
 @require_session
 def sugestao_roleta():
-    """Sugere leitura inicial = final da viagem anterior do mesmo veículo."""
+    """Sugere leitura inicial = final do trecho/viagem anterior do mesmo veículo."""
     id_veiculo = request.args.get("id_veiculo", type=int)
     fonte = request.args.get("fonte", "")
     sentido = request.args.get("sentido", "")
+    id_guia = request.args.get("id_guia", type=int)
+    id_trecho = request.args.get("id_trecho", type=int)
     if not id_veiculo:
         return json_error("Informe id_veiculo.", 400, "validacao")
     sug = sugerir_leitura_inicial(
-        g.dal, id_veiculo=id_veiculo, fonte=fonte, sentido=sentido
+        g.dal,
+        id_veiculo=id_veiculo,
+        fonte=fonte,
+        sentido=sentido,
+        id_guia=id_guia,
+        id_trecho=id_trecho,
     )
     return jsonify({"ok": True, "leitura_ini": sug}), 200
 
@@ -237,6 +273,201 @@ def get_by_numero(numero: str):
     return jsonify({"ok": True, "guia": resultado}), 200
 
 
+@guia_bp.get("/<int:id_guia>")
+@require_session
+def get_guia(id_guia: int):
+    """GET /api/v1/guia/<id> — jornada completa com trechos e alterações."""
+    resultado = obter_guia_completa(g.dal, id_guia)
+    if isinstance(resultado, GuiaError):
+        status = 404 if resultado.codigo == "nao_encontrado" else 400
+        return json_error(resultado.mensagem, status, resultado.codigo)
+    return jsonify({"ok": True, "guia": resultado}), 200
+
+
+@guia_bp.post("/<int:id_guia>/trechos")
+@require_session
+def post_trecho(id_guia: int):
+    if g.auth_usuario.codigo_perfil not in PERFIS_MAPA:
+        return json_error(
+            "Sem permissão para registrar trecho. Perfil despachante ou admin.",
+            403,
+            "sem_permissao",
+        )
+    body = request.get_json(silent=True) or {}
+    resultado = criar_trecho(g.dal, id_guia, body, int(g.auth_usuario.id_usuario))
+    if isinstance(resultado, GuiaError):
+        status = 404 if resultado.codigo == "nao_encontrado" else 400
+        if resultado.codigo in (
+            "guia_encerrada",
+            "empresa_diferente",
+            "guia_aberta",
+            "motorista_em_transito",
+            "guia_paralela",
+            "conflito_versao",
+            "leituras_obrigatorias",
+            "carro_em_transito",
+            "trecho_em_transito",
+        ):
+            status = 409
+        return json_error(resultado.mensagem, status, resultado.codigo)
+    return jsonify({"ok": True, "trecho": resultado, "mensagem": "Trecho registrado."}), 201
+
+
+@guia_bp.put("/trechos/<int:id_trecho>")
+@require_session
+def put_trecho(id_trecho: int):
+    if g.auth_usuario.codigo_perfil not in PERFIS_MAPA:
+        return json_error(
+            "Sem permissão para alterar trecho.", 403, "sem_permissao"
+        )
+    body = request.get_json(silent=True) or {}
+    resultado = atualizar_trecho(
+        g.dal, id_trecho, body, int(g.auth_usuario.id_usuario)
+    )
+    if isinstance(resultado, GuiaError):
+        status = 404 if resultado.codigo == "nao_encontrado" else 400
+        if resultado.codigo in (
+            "guia_encerrada",
+            "conflito_versao",
+            "motivo_obrigatorio",
+        ):
+            status = 409
+        return json_error(resultado.mensagem, status, resultado.codigo)
+    return jsonify({"ok": True, "trecho": resultado}), 200
+
+
+@guia_bp.post("/trechos/<int:id_trecho>/iniciar")
+@require_session
+def post_iniciar_trecho(id_trecho: int):
+    if g.auth_usuario.codigo_perfil not in PERFIS_MAPA:
+        return json_error(
+            "Sem permissão para iniciar trecho.", 403, "sem_permissao"
+        )
+    body = request.get_json(silent=True) or {}
+    resultado = iniciar_trecho(
+        g.dal, id_trecho, body, int(g.auth_usuario.id_usuario)
+    )
+    if isinstance(resultado, GuiaError):
+        status = 404 if resultado.codigo == "nao_encontrado" else 400
+        if resultado.codigo in (
+            "guia_encerrada",
+            "motorista_em_transito",
+            "carro_em_transito",
+            "trecho_concluido",
+            "trecho_cancelado",
+            "conflito_versao",
+        ):
+            status = 409
+        return json_error(resultado.mensagem, status, resultado.codigo)
+    return jsonify({"ok": True, "trecho": resultado, "mensagem": "Trecho iniciado."}), 200
+
+
+@guia_bp.post("/trechos/<int:id_trecho>/concluir")
+@require_session
+def post_concluir_trecho(id_trecho: int):
+    if g.auth_usuario.codigo_perfil not in PERFIS_MAPA:
+        return json_error(
+            "Sem permissão para concluir trecho.", 403, "sem_permissao"
+        )
+    body = request.get_json(silent=True) or {}
+    resultado = concluir_trecho(
+        g.dal, id_trecho, body, int(g.auth_usuario.id_usuario)
+    )
+    if isinstance(resultado, GuiaError):
+        status = 404 if resultado.codigo == "nao_encontrado" else 400
+        if resultado.codigo in (
+            "guia_encerrada",
+            "trecho_nao_iniciado",
+            "conflito_versao",
+            "trecho_cancelado",
+            "leitura_invalida",
+            "horario_invalido",
+        ):
+            status = 409
+        return json_error(resultado.mensagem, status, resultado.codigo)
+    return jsonify(
+        {"ok": True, "trecho": resultado, "mensagem": "Trecho concluído."}
+    ), 200
+
+
+@guia_bp.post("/trechos/<int:id_trecho>/cancelar")
+@require_session
+def post_cancelar_trecho(id_trecho: int):
+    if g.auth_usuario.codigo_perfil not in PERFIS_MAPA:
+        return json_error(
+            "Sem permissão para cancelar trecho.", 403, "sem_permissao"
+        )
+    body = request.get_json(silent=True) or {}
+    resultado = cancelar_trecho(
+        g.dal, id_trecho, body, int(g.auth_usuario.id_usuario)
+    )
+    if isinstance(resultado, GuiaError):
+        status = 404 if resultado.codigo == "nao_encontrado" else 400
+        if resultado.codigo in (
+            "guia_encerrada",
+            "trecho_concluido",
+            "conflito_versao",
+            "motivo_obrigatorio",
+        ):
+            status = 409
+        return json_error(resultado.mensagem, status, resultado.codigo)
+    return jsonify(
+        {"ok": True, "trecho": resultado, "mensagem": "Trecho cancelado."}
+    ), 200
+
+
+@guia_bp.post("/<int:id_guia>/alteracao")
+@require_session
+def post_alteracao_guia(id_guia: int):
+    """Troca linha/carro/rota na mesma empresa (auditoria)."""
+    if g.auth_usuario.codigo_perfil not in PERFIS_MAPA:
+        return json_error(
+            "Sem permissão para alterar recursos da guia.", 403, "sem_permissao"
+        )
+    body = request.get_json(silent=True) or {}
+    resultado = registrar_troca_recurso(
+        g.dal, id_guia, body, int(g.auth_usuario.id_usuario)
+    )
+    if isinstance(resultado, GuiaError):
+        status = 404 if resultado.codigo == "nao_encontrado" else 400
+        if resultado.codigo in ("guia_encerrada", "empresa_diferente", "trecho_em_transito"):
+            status = 409
+        return json_error(resultado.mensagem, status, resultado.codigo)
+    return jsonify(
+        {
+            "ok": True,
+            "guia": resultado,
+            "mensagem": "Alteração registrada com auditoria.",
+        }
+    ), 200
+
+
+@guia_bp.post("/<int:id_guia>/encerrar")
+@require_session
+def post_encerrar_guia(id_guia: int):
+    if g.auth_usuario.codigo_perfil not in PERFIS_MAPA:
+        return json_error(
+            "Sem permissão para encerrar guia.", 403, "sem_permissao"
+        )
+    body = request.get_json(silent=True) or {}
+    resultado = encerrar_guia(
+        g.dal, id_guia, body, id_usuario=int(g.auth_usuario.id_usuario)
+    )
+    if isinstance(resultado, GuiaError):
+        status = 404 if resultado.codigo == "nao_encontrado" else 400
+        if resultado.codigo in (
+            "conflito_versao",
+            "motivo_obrigatorio",
+            "trecho_em_transito",
+            "horario_invalido",
+        ):
+            status = 409
+        return json_error(resultado.mensagem, status, resultado.codigo)
+    return jsonify(
+        {"ok": True, "guia": resultado, "mensagem": "Guia encerrada."}
+    ), 200
+
+
 @guia_bp.put("/<int:id_guia>")
 @require_session
 def update_guia(id_guia: int):
@@ -245,6 +476,8 @@ def update_guia(id_guia: int):
     if isinstance(resultado, GuiaError):
         status = 404 if resultado.codigo == "nao_encontrado" else 400
         if resultado.codigo == "numero_duplicado":
+            status = 409
+        if resultado.codigo == "empresa_diferente":
             status = 409
         return json_error(resultado.mensagem, status, resultado.codigo)
     return jsonify({"ok": True, "guia": resultado, "mensagem": "Guia atualizada com sucesso."}), 200

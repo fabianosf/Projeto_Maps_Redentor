@@ -15,6 +15,11 @@ export interface Guia {
   /** DATETIME no banco; front usa HH:MM extraído. */
   hor_ini?: string | null;
   hor_fim?: string | null;
+  /** Chegada ao ponto na abertura da jornada. */
+  chegada_ponto?: string | null;
+  /** ABERTA | ENCERRADA */
+  status?: 'ABERTA' | 'ENCERRADA' | string | null;
+  versao?: number | null;
   roleta01_ini?: number | null;
   roleta01_fim?: number | null;
   roleta2_ini?: number | null;
@@ -26,6 +31,75 @@ export interface Guia {
   turno_descricao?: string | null;
   linha_codigo?: string | null;
   linha_descricao?: string | null;
+  trechos?: GuiaTrecho[];
+  alteracoes?: GuiaAlteracao[];
+  auditorias?: GuiaAuditoria[];
+  motorista_disponibilidade?: MotoristaDisponibilidade | null;
+}
+
+/** Trecho/viagem dentro da mesma Guia (jornada). */
+export interface GuiaTrecho {
+  id_trecho: number;
+  id_guia: number;
+  seq?: number | null;
+  id_linha?: number | null;
+  id_veiculo?: number | null;
+  id_local_origem?: number | null;
+  id_local_destino?: number | null;
+  sentido?: 'IDA' | 'VOLTA' | string | null;
+  /** PLANEJADO | EM_TRANSITO | CONCLUIDO | CANCELADO */
+  status?: 'PLANEJADO' | 'EM_TRANSITO' | 'CONCLUIDO' | 'CANCELADO' | string | null;
+  versao?: number | null;
+  hor_ini?: string | null;
+  hor_fim?: string | null;
+  jae_ini?: number | null;
+  jae_fim?: number | null;
+  riocard_ini?: number | null;
+  riocard_fim?: number | null;
+  total_jae?: number | null;
+  total_riocard?: number | null;
+  codigo_linha?: string | number | null;
+  linha_descricao?: string | null;
+  numero_frota?: string | null;
+  origem_descricao?: string | null;
+  destino_descricao?: string | null;
+  exige_novas_leituras?: boolean;
+  sugestao_mesmo_carro?: boolean;
+}
+
+export interface GuiaAuditoria {
+  id_auditoria: number;
+  entidade: 'guia' | 'trecho' | 'roleta' | string;
+  id_entidade: number;
+  id_guia?: number | null;
+  id_usuario?: number | null;
+  campo: string;
+  valor_anterior?: string | null;
+  valor_novo?: string | null;
+  motivo: string;
+  registrado_em?: string | null;
+  despachante?: string | null;
+}
+
+export type MotoristaDisponibilidade = {
+  disponibilidade: 'LIVRE' | 'DISPONIVEL' | 'EM_TRANSITO' | string;
+  id_guia_aberta?: number | null;
+  id_trecho_em_transito?: number | null;
+  id_empresa?: number | null;
+  numero_guia?: string | null;
+};
+
+export interface GuiaAlteracao {
+  id_alteracao: number;
+  id_guia: number;
+  id_usuario?: number | null;
+  campo: 'linha' | 'veiculo' | 'rota' | string;
+  valor_anterior?: string | null;
+  valor_novo?: string | null;
+  motivo: string;
+  registrado_em?: string | null;
+  despachante?: string | null;
+  matricula_despachante?: string | null;
 }
 
 export type GuiaSyncStatus =
@@ -143,6 +217,9 @@ export interface GuiaPayload {
   hor_fim?: string;
   horario_pegada?: string;
   horario_largada?: string;
+  /** HH:MM chegada ao ponto (abertura da jornada). */
+  chegada_ponto?: string;
+  chegada?: string;
   roleta01_ini?: number | null;
   roleta01_fim?: number | null;
   roleta01_inicial?: number | null;
@@ -270,6 +347,7 @@ export type GuiaRoletaHistoricoItem = {
 export type GuiaRoletaPayload = {
   id_viagem?: number | null;
   id_guia?: number | null;
+  id_trecho?: number | null;
   id_veiculo?: number | null;
   sentido: SentidoViagem;
   fonte: GuiaFonteRoleta;
@@ -289,5 +367,35 @@ export type GuiaRoletaResponse = ApiSuccess<{
   mensagem?: string;
 }>;
 
+export type GuiaAlteracaoRecursoPayload = {
+  campo: 'linha' | 'veiculo' | 'rota';
+  motivo: string;
+  id_linha?: number | null;
+  id_veiculo?: number | null;
+  numero_frota?: string;
+  carro?: string;
+  valor_novo?: string;
+  valor_anterior?: string;
+};
+
+export type GuiaTrechoPayload = {
+  sentido?: 'IDA' | 'VOLTA' | string;
+  id_linha?: number | null;
+  id_veiculo?: number | null;
+  numero_frota?: string;
+  id_local_origem?: number | null;
+  id_local_destino?: number | null;
+  hor_ini?: string;
+  hor_fim?: string;
+  jae_ini?: number | null;
+  jae_fim?: number | null;
+  riocard_ini?: number | null;
+  riocard_fim?: number | null;
+  iniciar?: boolean;
+  motivo?: string;
+  versao?: number;
+};
+
 export type GuiaResponse = ApiSuccess<{ guia: Guia; mensagem?: string }>;
+export type GuiaTrechoResponse = ApiSuccess<{ trecho: GuiaTrecho; mensagem?: string }>;
 export type GuiaDeleteResponse = ApiSuccess<{ mensagem?: string }>;

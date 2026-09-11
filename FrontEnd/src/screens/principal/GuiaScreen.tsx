@@ -24,13 +24,19 @@ import { ApiRequestError } from '@/api/client';
 import {
   createGuia,
   deleteGuia,
+  encerrarGuia,
   getContextoEscala,
+  getGuia,
   getGuiaByNumero,
   getHistoricoRoleta,
+  iniciarTrechoGuia,
+  concluirTrechoGuia,
+  cancelarTrechoGuia,
   listEscalasGuia,
   listGuias,
   registrarAjusteManual,
   registrarAlteracaoEscala,
+  registrarAlteracaoGuia,
   salvarRoletaLeitura,
   updateGuia,
 } from '@/api/guia';
@@ -66,6 +72,7 @@ import { cn } from '@/lib/utils';
 import type { CadastrosMestres, LinhaCadastro } from '@/types/cadastro';
 import type {
   Guia,
+  GuiaAlteracao,
   GuiaContextoEscala,
   GuiaEscalaOpcao,
   GuiaFonteRoleta,
@@ -75,6 +82,7 @@ import type {
   GuiaRoletaBloco,
   GuiaRoletaHistoricoItem,
   GuiaSyncStatus,
+  GuiaTrecho,
   GuiaViagemCard,
   OrigemEmbarque,
   SentidoViagem,
@@ -341,6 +349,15 @@ export function GuiaScreen() {
   const [altHorFim, setAltHorFim] = useState('');
   const [altChegada, setAltChegada] = useState('');
   const [altJustificativa, setAltJustificativa] = useState('');
+  const [guiaStatus, setGuiaStatus] = useState<string | null>(null);
+  const [guiaTrechos, setGuiaTrechos] = useState<GuiaTrecho[]>([]);
+  const [guiaAlteracoes, setGuiaAlteracoes] = useState<GuiaAlteracao[]>([]);
+  const [trocaRecursoOpen, setTrocaRecursoOpen] = useState(false);
+  const [trocaCampo, setTrocaCampo] = useState<'veiculo' | 'linha'>('veiculo');
+  const [trocaValor, setTrocaValor] = useState('');
+  const [trocaMotivo, setTrocaMotivo] = useState('');
+  const [encerrarOpen, setEncerrarOpen] = useState(false);
+  const [encerrarHorFim, setEncerrarHorFim] = useState('');
   const [viagemDetalheOpen, setViagemDetalheOpen] = useState(false);
   const [historicoJaE, setHistoricoJaE] = useState<GuiaRoletaHistoricoItem[]>([]);
   const [historicoRio, setHistoricoRio] = useState<GuiaRoletaHistoricoItem[]>([]);
@@ -372,6 +389,11 @@ export function GuiaScreen() {
   const camposHabilitados = (modo === 'include' || modo === 'edit') && !busy;
   const salvarHabilitado = (modo === 'include' || modo === 'edit') && !busy;
   const deletarHabilitado = modo === 'edit' && idGuia != null && !busy;
+  const jornadaAberta =
+    modo === 'edit' &&
+    idGuia != null &&
+    String(guiaStatus || '').toUpperCase() !== 'ENCERRADA' &&
+    !busy;
   const modoNovaComEscala = modo === 'include';
 
   const aplicarFormulario = useCallback((values: FormState) => {
@@ -398,6 +420,9 @@ export function GuiaScreen() {
   const aplicarGuia = useCallback(
     (guia: Guia, nextModo: GuiaModo = 'edit') => {
       setIdGuia(guia.id_guia);
+      setGuiaStatus(guia.status ?? (guia.hor_fim ? 'ENCERRADA' : 'ABERTA'));
+      setGuiaTrechos(guia.trechos ?? []);
+      setGuiaAlteracoes(guia.alteracoes ?? []);
       aplicarFormulario({
         nrGuia: guia.numero ?? '',
         dataGuia:
@@ -439,6 +464,9 @@ export function GuiaScreen() {
   const resetIdle = useCallback(() => {
     setModo('idle');
     setIdGuia(null);
+    setGuiaStatus(null);
+    setGuiaTrechos([]);
+    setGuiaAlteracoes([]);
     aplicarFormulario(emptyForm());
     setContextoEscala(null);
     setMapasOpcoes([]);
@@ -446,6 +474,8 @@ export function GuiaScreen() {
     setIdMapaSel('');
     setConfirmadoEscala(false);
     setAlteracaoOpen(false);
+    setTrocaRecursoOpen(false);
+    setEncerrarOpen(false);
   }, [aplicarFormulario]);
 
   const carregarLista = useCallback(async () => {
@@ -706,6 +736,119 @@ export function GuiaScreen() {
       if (dataGuia) void carregarEscalasDoDia(dataGuia, idMapaSel ? Number(idMapaSel) : undefined);
     } catch (err) {
       setInfoMsg(apiMsg(err, 'Não foi possível alterar a escala.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmarTrocaRecurso = async () => {
+    if (busy || idGuia == null) return;
+    const motivo = trocaMotivo.trim();
+    if (motivo.length < 5) {
+      setInfoMsg('Informe o motivo da troca (mín. 5 caracteres).');
+      return;
+    }
+    if (!trocaValor.trim()) {
+      setInfoMsg(
+        trocaCampo === 'veiculo' ? 'Informe o novo carro.' : 'Informe a nova linha.',
+      );
+      return;
+    }
+    setBusy(true);
+    try {
+      const data = await registrarAlteracaoGuia(idGuia, {
+        campo: trocaCampo,
+        motivo,
+        numero_frota: trocaCampo === 'veiculo' ? trocaValor.trim() : undefined,
+        id_linha:
+          trocaCampo === 'linha' && Number.isFinite(Number(trocaValor))
+            ? Number(trocaValor)
+            : undefined,
+      });
+      aplicarGuia(data.guia, 'edit');
+      setTrocaRecursoOpen(false);
+      setTrocaMotivo('');
+      setTrocaValor('');
+      setInfoMsg(data.mensagem ?? 'Alteração registrada com auditoria.');
+      await carregarLista();
+    } catch (err) {
+      setInfoMsg(apiMsg(err, 'Não foi possível registrar a troca.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmarEncerrarJornada = async () => {
+    if (busy || idGuia == null) return;
+    const fim = encerrarHorFim.trim();
+    if (fim && !isValidHHMM(fim)) {
+      setInfoMsg('FIM(JORNADA) inválido.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const data = await encerrarGuia(idGuia, {
+        ...(fim ? { hor_fim: fim } : {}),
+        motivo_tipo: 'fim_jornada',
+        motivo: 'Encerramento ao fim da jornada',
+      });
+      aplicarGuia(data.guia, 'edit');
+      setEncerrarOpen(false);
+      setInfoMsg(data.mensagem ?? 'Guia encerrada.');
+      await carregarLista();
+    } catch (err) {
+      setInfoMsg(apiMsg(err, 'Não foi possível encerrar a guia.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const acaoTrecho = async (
+    trecho: GuiaTrecho,
+    acao: 'iniciar' | 'concluir' | 'cancelar',
+  ) => {
+    if (busy || !podeAlterarEscala) return;
+    if (acao === 'cancelar') {
+      const motivo = window.prompt('Motivo do cancelamento do trecho:');
+      if (!motivo || motivo.trim().length < 5) {
+        setInfoMsg('Informe o motivo do cancelamento (mín. 5 caracteres).');
+        return;
+      }
+      setBusy(true);
+      try {
+        const data = await cancelarTrechoGuia(trecho.id_trecho, {
+          motivo: motivo.trim(),
+          versao: trecho.versao ?? undefined,
+        });
+        if (idGuia != null) {
+          const det = await getGuia(idGuia);
+          aplicarGuia(det.guia, 'edit');
+        }
+        setInfoMsg(data.mensagem ?? 'Trecho cancelado.');
+      } catch (err) {
+        setInfoMsg(apiMsg(err, 'Não foi possível cancelar o trecho.'));
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    setBusy(true);
+    try {
+      const data =
+        acao === 'iniciar'
+          ? await iniciarTrechoGuia(trecho.id_trecho, {
+              versao: trecho.versao ?? undefined,
+            })
+          : await concluirTrechoGuia(trecho.id_trecho, {
+              versao: trecho.versao ?? undefined,
+            });
+      if (idGuia != null) {
+        const det = await getGuia(idGuia);
+        aplicarGuia(det.guia, 'edit');
+      }
+      setInfoMsg(data.mensagem ?? (acao === 'iniciar' ? 'Trecho iniciado.' : 'Trecho concluído.'));
+    } catch (err) {
+      setInfoMsg(apiMsg(err, 'Não foi possível atualizar o trecho.'));
     } finally {
       setBusy(false);
     }
@@ -2042,9 +2185,142 @@ export function GuiaScreen() {
                   )}
                 />
               </div>
+
+              {modo === 'edit' && guiaStatus ? (
+                <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+                  Status da jornada:{' '}
+                  <span className="font-semibold">
+                    {String(guiaStatus).toUpperCase() === 'ENCERRADA'
+                      ? 'Encerrada'
+                      : 'Aberta'}
+                  </span>
+                  {guiaTrechos.length > 0
+                    ? ` · ${guiaTrechos.length} trecho(s)`
+                    : null}
+                </p>
+              ) : null}
+
+              {guiaTrechos.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-700">
+                    Trechos da jornada
+                  </p>
+                  <ul className="max-h-40 space-y-1 overflow-y-auto text-sm text-slate-700">
+                    {guiaTrechos.map((t) => (
+                      <li
+                        key={t.id_trecho}
+                        className="rounded border border-slate-200 bg-white px-2 py-1.5"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span>
+                            #{t.seq ?? t.id_trecho} {t.sentido ?? '—'} ·{' '}
+                            {t.status ?? '—'} · Linha{' '}
+                            {t.codigo_linha ?? t.id_linha ?? '—'} · Frota{' '}
+                            {t.numero_frota ?? '—'}
+                            {t.total_jae != null ? ` · Ja E ${t.total_jae}` : ''}
+                            {t.total_riocard != null
+                              ? ` · RioCard ${t.total_riocard}`
+                              : ''}
+                          </span>
+                          {jornadaAberta && podeAlterarEscala ? (
+                            <span className="flex gap-1">
+                              {String(t.status).toUpperCase() === 'EM_TRANSITO' ? (
+                                <>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={busy}
+                                    onClick={() => void acaoTrecho(t, 'concluir')}
+                                  >
+                                    Concluir
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="destructive"
+                                    disabled={busy}
+                                    onClick={() => void acaoTrecho(t, 'cancelar')}
+                                  >
+                                    Cancelar
+                                  </Button>
+                                </>
+                              ) : null}
+                              {String(t.status).toUpperCase() === 'PLANEJADO' ? (
+                                <>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={busy}
+                                    onClick={() => void acaoTrecho(t, 'iniciar')}
+                                  >
+                                    Iniciar
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="destructive"
+                                    disabled={busy}
+                                    onClick={() => void acaoTrecho(t, 'cancelar')}
+                                  >
+                                    Cancelar
+                                  </Button>
+                                </>
+                              ) : null}
+                            </span>
+                          ) : null}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {guiaAlteracoes.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-700">
+                    Histórico de trocas
+                  </p>
+                  <ul className="max-h-32 space-y-1 overflow-y-auto text-xs text-slate-600">
+                    {guiaAlteracoes.map((a) => (
+                      <li key={a.id_alteracao}>
+                        {a.campo}: {a.valor_anterior || '—'} → {a.valor_novo || '—'}{' '}
+                        ({a.motivo})
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
 
             <div className="flex flex-wrap gap-2 border-t border-slate-200 bg-white/80 p-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                disabled={!jornadaAberta || !podeAlterarEscala}
+                onClick={() => {
+                  setTrocaCampo('veiculo');
+                  setTrocaValor(carro);
+                  setTrocaMotivo('');
+                  setTrocaRecursoOpen(true);
+                }}
+              >
+                Trocar carro/linha
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                disabled={!jornadaAberta}
+                onClick={() => {
+                  setEncerrarHorFim(horarioLargada || '');
+                  setEncerrarOpen(true);
+                }}
+              >
+                Encerrar jornada
+              </Button>
               <Button
                 type="button"
                 variant="outline"
@@ -2079,6 +2355,113 @@ export function GuiaScreen() {
                 Deletar
               </Button>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={trocaRecursoOpen} onOpenChange={setTrocaRecursoOpen}>
+          <DialogContent className="max-w-[380px] border-slate-400/50 bg-screen p-5">
+            <DialogHeader>
+              <DialogTitle className="text-center text-[16px] uppercase tracking-wide">
+                Troca na jornada
+              </DialogTitle>
+            </DialogHeader>
+            <p className="mt-2 text-sm text-slate-600">
+              Troca linha ou carro sem encerrar a guia (mesma empresa). Exige motivo
+              para auditoria.
+            </p>
+            <div className="mt-3 space-y-3">
+              <div>
+                <Label className="mb-1.5 block text-sm font-semibold">Campo</Label>
+                <Select
+                  value={trocaCampo}
+                  onValueChange={(v) => setTrocaCampo(v as 'veiculo' | 'linha')}
+                >
+                  <SelectTrigger className={selectTriggerClass}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="veiculo">Carro</SelectItem>
+                    <SelectItem value="linha">Linha</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <FormField
+                label={trocaCampo === 'veiculo' ? 'Novo carro (frota)' : 'Nova linha (id)'}
+                name="troca_valor"
+                type="tel"
+                inputMode="numeric"
+                value={trocaValor}
+                onChange={(e) =>
+                  setTrocaValor(
+                    trocaCampo === 'veiculo'
+                      ? onlyDigits(e.target.value, 8)
+                      : onlyDigits(e.target.value),
+                  )
+                }
+                className={fieldClass}
+              />
+              <div>
+                <Label htmlFor="troca_motivo" className="mb-1.5 block text-sm font-semibold">
+                  Motivo
+                </Label>
+                <textarea
+                  id="troca_motivo"
+                  rows={3}
+                  maxLength={255}
+                  value={trocaMotivo}
+                  onChange={(e) => setTrocaMotivo(e.target.value)}
+                  className={cn(fieldClass, 'min-h-[4rem] w-full resize-y px-3 py-2')}
+                />
+              </div>
+            </div>
+            <DialogFooter className="mt-4 gap-2">
+              <Button type="button" variant="outline" onClick={() => setTrocaRecursoOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                disabled={busy || trocaMotivo.trim().length < 5 || !trocaValor.trim()}
+                onClick={() => void confirmarTrocaRecurso()}
+              >
+                Confirmar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={encerrarOpen} onOpenChange={setEncerrarOpen}>
+          <DialogContent className="max-w-[360px] border-slate-400/50 bg-screen p-5">
+            <DialogHeader>
+              <DialogTitle className="text-center text-[16px] uppercase tracking-wide">
+                Encerrar jornada
+              </DialogTitle>
+            </DialogHeader>
+            <p className="mt-2 text-sm text-slate-600">
+              Encerre ao final do turno ou antes de mudar de empresa (Redentor /
+              Futuro / Barra).
+            </p>
+            <FormField
+              label="Fim(Jornada)"
+              name="encerrar_hor_fim"
+              type="text"
+              inputMode="numeric"
+              placeholder="HH:MM (agora se vazio)"
+              value={encerrarHorFim}
+              onChange={(e) => setEncerrarHorFim(maskHHMM(e.target.value))}
+              className={cn(fieldClass, 'mt-3')}
+            />
+            <DialogFooter className="mt-4 gap-2">
+              <Button type="button" variant="outline" onClick={() => setEncerrarOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                disabled={busy}
+                onClick={() => void confirmarEncerrarJornada()}
+              >
+                Encerrar
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 

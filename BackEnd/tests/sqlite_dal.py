@@ -123,13 +123,62 @@ CREATE TABLE tb_guia (
     id_motorista INTEGER,
     id_item_map INTEGER,
     hor_ini TEXT,
+    chegada_ponto TEXT,
     hor_fim TEXT,
     roleta01_ini INTEGER,
     roleta01_fim INTEGER,
     roleta2_ini INTEGER,
     roleta2_fim INTEGER,
     observacao TEXT,
+    status TEXT NOT NULL DEFAULT 'ABERTA',
+    versao INTEGER NOT NULL DEFAULT 1,
     data TEXT
+);
+
+CREATE TABLE tb_guia_trecho (
+    id_trecho INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_guia INTEGER NOT NULL,
+    seq INTEGER NOT NULL DEFAULT 1,
+    id_linha INTEGER,
+    id_veiculo INTEGER,
+    id_local_origem INTEGER,
+    id_local_destino INTEGER,
+    sentido TEXT NOT NULL DEFAULT 'IDA',
+    status TEXT NOT NULL DEFAULT 'PLANEJADO',
+    hor_ini TEXT,
+    hor_fim TEXT,
+    jae_ini INTEGER,
+    jae_fim INTEGER,
+    riocard_ini INTEGER,
+    riocard_fim INTEGER,
+    id_usuario INTEGER,
+    criado_em TEXT NOT NULL,
+    atualizado_em TEXT,
+    versao INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE tb_guia_alteracao (
+    id_alteracao INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_guia INTEGER NOT NULL,
+    id_usuario INTEGER NOT NULL,
+    campo TEXT NOT NULL,
+    valor_anterior TEXT,
+    valor_novo TEXT,
+    motivo TEXT NOT NULL,
+    registrado_em TEXT NOT NULL
+);
+
+CREATE TABLE tb_guia_auditoria (
+    id_auditoria INTEGER PRIMARY KEY AUTOINCREMENT,
+    entidade TEXT NOT NULL,
+    id_entidade INTEGER NOT NULL,
+    id_guia INTEGER,
+    id_usuario INTEGER NOT NULL,
+    campo TEXT NOT NULL,
+    valor_anterior TEXT,
+    valor_novo TEXT,
+    motivo TEXT NOT NULL,
+    registrado_em TEXT NOT NULL
 );
 
 CREATE TABLE tb_chegada_saida (
@@ -195,6 +244,7 @@ CREATE TABLE tb_guia_roleta_leitura (
     id_leitura INTEGER PRIMARY KEY AUTOINCREMENT,
     id_viagem INTEGER,
     id_guia INTEGER,
+    id_trecho INTEGER,
     id_veiculo INTEGER NOT NULL,
     sentido TEXT NOT NULL,
     fonte TEXT NOT NULL,
@@ -206,7 +256,8 @@ CREATE TABLE tb_guia_roleta_leitura (
     status_leitura TEXT NOT NULL DEFAULT 'iniciada',
     id_usuario INTEGER NOT NULL,
     criado_em TEXT NOT NULL,
-    atualizado_em TEXT NOT NULL
+    atualizado_em TEXT NOT NULL,
+    versao INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE tb_guia_roleta_historico (
@@ -277,7 +328,17 @@ class SqliteTestDal:
         return self._mutate(sql, values)
 
     def update(self, sql: str, values: Optional[tuple] = None) -> bool:
-        return self._mutate(sql, values)
+        try:
+            with self._lock:
+                cur = self._conn.execute(self._sql_sqlite(sql), values or ())
+                if not self._in_transaction:
+                    self._conn.commit()
+                return int(cur.rowcount or 0) > 0
+        except sqlite3.Error:
+            if not self._in_transaction:
+                with self._lock:
+                    self._conn.rollback()
+            return False
 
     def delete(self, sql: str, values: Optional[tuple] = None) -> bool:
         return self._mutate(sql, values)

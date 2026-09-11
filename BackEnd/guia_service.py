@@ -12,6 +12,8 @@ from datetime import datetime
 from typing import Any, Optional
 
 _HHMM = re.compile(r"^\d{2}:\d{2}$")
+_HHMMSS = re.compile(r"^\d{2}:\d{2}:\d{2}$")
+_DATETIME = re.compile(r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?$")
 
 
 @dataclass(frozen=True)
@@ -20,13 +22,15 @@ class GuiaError:
     codigo: str = "guia_error"
 
 
-def _parse_int_opcional(valor: Any) -> Optional[int]:
+def _parse_int_opcional(valor: Any, *, allow_zero: bool = False) -> Optional[int]:
     if valor is None or valor == "":
         return None
     try:
         n = int(valor)
     except (TypeError, ValueError):
         return None
+    if allow_zero:
+        return n if n >= 0 else None
     return n if n > 0 else None
 
 
@@ -68,10 +72,43 @@ def _data_br_para_sql(data_br: str) -> Optional[str]:
     return f"{m.group(3)}-{m.group(2)}-{m.group(1)}"
 
 
-def _datetime_guia(data_sql: Optional[str], hhmm: Optional[str]) -> Optional[str]:
-    if not data_sql or not hhmm or not _HHMM.match(hhmm):
+def _normalizar_horario(valor: Optional[str]) -> Optional[str]:
+    """Aceita HH:MM, HH:MM:SS ou datetime completo → HH:MM:SS ou YYYY-MM-DD HH:MM:SS."""
+    if valor is None:
         return None
-    return f"{data_sql} {hhmm}:00"
+    s = str(valor).strip()
+    if not s:
+        return None
+    if _DATETIME.match(s):
+        s = s.replace("T", " ")
+        if len(s) == 16:
+            return f"{s}:00"
+        return s[:19]
+    if _HHMMSS.match(s):
+        return s
+    if _HHMM.match(s):
+        return f"{s}:00"
+    return None
+
+
+def _horario_valido(valor: Optional[str]) -> bool:
+    if not valor or not str(valor).strip():
+        return True
+    return _normalizar_horario(str(valor).strip()) is not None
+
+
+def _datetime_guia(data_sql: Optional[str], hhmm: Optional[str]) -> Optional[str]:
+    """Monta DATETIME completo a partir da data da guia + horário (ou datetime absoluto)."""
+    if not hhmm:
+        return None
+    norm = _normalizar_horario(str(hhmm).strip())
+    if not norm:
+        return None
+    if len(norm) >= 19 and norm[4] == "-":
+        return norm
+    if not data_sql:
+        return None
+    return f"{data_sql} {norm}"
 
 
 def _data_cadastro_agora() -> str:
@@ -97,7 +134,13 @@ def _row_guia(dal, id_guia: int) -> Optional[dict[str, Any]]:
     )
     if df.empty:
         return None
-    return df.iloc[0].to_dict()
+    row = df.iloc[0].to_dict()
+    st = str(row.get("status") or "").strip().upper()
+    if st not in ("ABERTA", "ENCERRADA"):
+        row["status"] = "ENCERRADA" if row.get("hor_fim") else "ABERTA"
+    else:
+        row["status"] = st
+    return row
 
 
 def buscar_por_numero(dal, numero: str) -> dict[str, Any] | GuiaError:
@@ -105,23 +148,14 @@ def buscar_por_numero(dal, numero: str) -> dict[str, Any] | GuiaError:
     if not numero:
         return GuiaError("Informe o número da guia.", "validacao")
     df = dal.read(
-        """
-        SELECT g.*, v.numero_frota, m.matricula AS matricula_motorista,
-               t.descricao AS turno_descricao,
-               l.codigo_linha AS linha_codigo,
-               l.descricao AS linha_descricao
-        FROM tb_guia g
-        LEFT JOIN tb_veiculo v ON v.id_veiculo = g.id_veiculo
-        LEFT JOIN tb_motorista m ON m.id_motorista = g.id_motorista
-        LEFT JOIN tb_turno t ON t.id_turno = g.id_turno
-        LEFT JOIN tb_linha l ON l.id_linha = g.id_linha
-        WHERE g.numero = ?
-        """,
+        "SELECT id_guia FROM tb_guia WHERE numero = ?",
         (numero,),
     )
     if df.empty:
         return GuiaError("Guia não encontrada.", "nao_encontrado")
-    return df.iloc[0].to_dict()
+    from .guia_jornada_service import obter_guia_completa
+
+    return obter_guia_completa(dal, int(df.iloc[0]["id_guia"]))
 
 
 def listar_guias(dal, data_br: Optional[str] = None) -> list[dict[str, Any]] | GuiaError:
@@ -282,9 +316,9 @@ def _validar_payload(
 
     hor_ini = str(body.get("hor_ini", body.get("horario_pegada", ""))).strip()
     hor_fim = str(body.get("hor_fim", body.get("horario_largada", ""))).strip()
-    if hor_ini and not _HHMM.match(hor_ini):
+    if hor_ini and not _horario_valido(hor_ini):
         return GuiaError("INÍCIO(JORNADA) inválido.", "validacao")
-    if hor_fim and not _HHMM.match(hor_fim):
+    if hor_fim and not _horario_valido(hor_fim):
         return GuiaError("FIM(JORNADA) inválido.", "validacao")
 
     obs_base = str(body.get("observacao", "")).strip()
@@ -306,7 +340,7 @@ def _validar_payload(
     return {
         "numero": numero,
         "data_sql": data_sql,
-        "id_empresa": _parse_int_opcional(body.get("id_empresa")),
+        "id_empresa": _parse_int_opcional(body.get("id_empresa"), allow_zero=True),
         "id_linha": _parse_int_opcional(body.get("id_linha")),
         "id_turno": _parse_int_opcional(body.get("id_turno")),
         "id_veiculo": _parse_int_opcional(body.get("id_veiculo")),
@@ -316,6 +350,9 @@ def _validar_payload(
         "matricula_motorista": matricula_motorista,
         "hor_ini": hor_ini,
         "hor_fim": hor_fim,
+        "chegada_ponto": str(
+            body.get("chegada_ponto", body.get("chegada", ""))
+        ).strip(),
         "roleta01_ini": _parse_int_opcional(
             body.get(
                 "roleta01_ini",
@@ -323,7 +360,8 @@ def _validar_payload(
                     "roleta01_inicial",
                     body.get("roleta_ini", body.get("roleta_inicial")),
                 ),
-            )
+            ),
+            allow_zero=True,
         ),
         "roleta01_fim": _parse_int_opcional(
             body.get(
@@ -332,13 +370,16 @@ def _validar_payload(
                     "roleta01_final",
                     body.get("roleta_fim", body.get("roleta_final")),
                 ),
-            )
+            ),
+            allow_zero=True,
         ),
         "roleta2_ini": _parse_int_opcional(
-            body.get("roleta2_ini", body.get("roleta2_inicial"))
+            body.get("roleta2_ini", body.get("roleta2_inicial")),
+            allow_zero=True,
         ),
         "roleta2_fim": _parse_int_opcional(
-            body.get("roleta2_fim", body.get("roleta2_final"))
+            body.get("roleta2_fim", body.get("roleta2_final")),
+            allow_zero=True,
         ),
         "observacao": obs or None,
     }
@@ -370,13 +411,28 @@ def criar_guia(dal, body: dict[str, Any]) -> dict[str, Any] | GuiaError:
     if not numero_informado:
         body_ctx = {**body_ctx, "numero": _gerar_numero_guia(dal, body_ctx)}
 
-    validado = _validar_payload(body_ctx)
+    validado = _validar_payload(body_ctx, permitir_numero_vazio=False)
     if isinstance(validado, GuiaError):
         return validado
     dados = _resolver_vinculos(dal, validado)
     if isinstance(dados, GuiaError):
         return dados
 
+    # Abertura de jornada: empresa + motorista obrigatórios no fluxo operacional
+    if not dados.get("id_empresa") and dados.get("id_empresa") != 0:
+        # ainda permite legado sem empresa se veio só número/manual antigo
+        pass
+    if dados.get("id_motorista") is None and dados.get("matricula_motorista"):
+        return GuiaError("Motorista não encontrado.", "motorista_invalido")
+
+    from .guia_jornada_service import (
+        STATUS_ABERTA,
+        STATUS_ENCERRADA,
+        criar_trecho_inicial,
+        validar_abertura_jornada,
+    )
+
+    # Número informado: checa duplicidade antes das regras de jornada
     existe = dal.read(
         "SELECT id_guia FROM tb_guia WHERE numero = ?",
         (dados["numero"],),
@@ -384,7 +440,6 @@ def criar_guia(dal, body: dict[str, Any]) -> dict[str, Any] | GuiaError:
     if not existe.empty:
         if numero_informado:
             return GuiaError("NR(Guia) já cadastrado.", "numero_duplicado")
-        # regenera uma vez se colisão após geração automática
         novo = _gerar_numero_guia(dal, {**body_ctx, **dados})
         dados = {**dados, "numero": novo}
         existe2 = dal.read(
@@ -394,15 +449,29 @@ def criar_guia(dal, body: dict[str, Any]) -> dict[str, Any] | GuiaError:
         if not existe2.empty:
             return GuiaError("NR(Guia) já cadastrado.", "numero_duplicado")
 
+    erro_jornada = validar_abertura_jornada(
+        dal,
+        id_motorista=dados.get("id_motorista"),
+        id_empresa=dados.get("id_empresa"),
+        data_sql=dados["data_sql"],
+    )
+    if erro_jornada and not dados.get("hor_fim"):
+        return erro_jornada
+
+    status = STATUS_ENCERRADA if dados.get("hor_fim") else STATUS_ABERTA
+    chegada = dados.get("chegada_ponto") or ""
+    if chegada and not _horario_valido(chegada):
+        return GuiaError("Chegada ao ponto inválida.", "validacao")
+
     ok = dal.create(
         """
         INSERT INTO tb_guia (
             numero, id_empresa, id_linha, id_turno, id_veiculo, id_motorista,
             id_item_map,
-            hor_ini, hor_fim, roleta01_ini, roleta01_fim, roleta2_ini, roleta2_fim,
-            observacao, data
+            hor_ini, chegada_ponto, hor_fim, roleta01_ini, roleta01_fim,
+            roleta2_ini, roleta2_fim, observacao, status, data
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             dados["numero"],
@@ -413,12 +482,14 @@ def criar_guia(dal, body: dict[str, Any]) -> dict[str, Any] | GuiaError:
             dados["id_motorista"],
             dados.get("id_item_map"),
             _datetime_guia(dados["data_sql"], dados["hor_ini"]),
+            _datetime_guia(dados["data_sql"], chegada) if chegada else None,
             _datetime_guia(dados["data_sql"], dados["hor_fim"]),
             dados["roleta01_ini"],
             dados["roleta01_fim"],
             dados["roleta2_ini"],
             dados["roleta2_fim"],
             dados["observacao"],
+            status,
             _data_cadastro_agora(),
         ),
     )
@@ -428,11 +499,36 @@ def criar_guia(dal, body: dict[str, Any]) -> dict[str, Any] | GuiaError:
         "SELECT id_guia FROM tb_guia WHERE numero = ?",
         (dados["numero"],),
     )
-    return _row_guia(dal, int(row.iloc[0]["id_guia"])) or {"ok": True}
+    id_guia = int(row.iloc[0]["id_guia"])
+    trecho = criar_trecho_inicial(
+        dal,
+        id_guia,
+        id_linha=dados.get("id_linha"),
+        id_veiculo=dados.get("id_veiculo"),
+        data_sql=dados["data_sql"],
+        hor_ini=dados.get("hor_ini"),
+        hor_fim=dados.get("hor_fim"),
+        chegada_ponto=chegada or None,
+        jae_ini=dados.get("roleta01_ini"),
+        jae_fim=dados.get("roleta01_fim"),
+        riocard_ini=dados.get("roleta2_ini"),
+        riocard_fim=dados.get("roleta2_fim"),
+    )
+    if isinstance(trecho, GuiaError):
+        return trecho
+    from .guia_jornada_service import obter_guia_completa
+
+    completo = obter_guia_completa(dal, id_guia)
+    if isinstance(completo, GuiaError):
+        return _row_guia(dal, id_guia) or {"ok": True}
+    return completo
 
 
 def atualizar_guia(dal, id_guia: int, body: dict[str, Any]) -> dict[str, Any] | GuiaError:
-    atual = dal.read("SELECT id_guia FROM tb_guia WHERE id_guia = ?", (id_guia,))
+    atual = dal.read(
+        "SELECT id_guia, id_empresa, status, hor_fim FROM tb_guia WHERE id_guia = ?",
+        (id_guia,),
+    )
     if atual.empty:
         return GuiaError("Guia não encontrada.", "nao_encontrado")
 
@@ -446,6 +542,19 @@ def atualizar_guia(dal, id_guia: int, body: dict[str, Any]) -> dict[str, Any] | 
     if isinstance(dados, GuiaError):
         return dados
 
+    emp_atual = atual.iloc[0].get("id_empresa")
+    emp_novo = dados.get("id_empresa")
+    if (
+        emp_atual is not None
+        and emp_novo is not None
+        and int(emp_atual) != int(emp_novo)
+    ):
+        return GuiaError(
+            "Não é permitido alterar a empresa da guia aberta. "
+            "Encerre a jornada e abra nova guia na empresa destino.",
+            "empresa_diferente",
+        )
+
     dup = dal.read(
         "SELECT id_guia FROM tb_guia WHERE numero = ? AND id_guia <> ?",
         (dados["numero"], id_guia),
@@ -453,40 +562,52 @@ def atualizar_guia(dal, id_guia: int, body: dict[str, Any]) -> dict[str, Any] | 
     if not dup.empty:
         return GuiaError("NR(Guia) já cadastrado.", "numero_duplicado")
 
+    status = "ENCERRADA" if dados.get("hor_fim") else "ABERTA"
+    chegada = dados.get("chegada_ponto") or ""
+    if chegada and not _horario_valido(chegada):
+        return GuiaError("Chegada ao ponto inválida.", "validacao")
+
     ok = dal.update(
         """
         UPDATE tb_guia
         SET numero = ?, id_empresa = ?, id_linha = ?, id_turno = ?,
             id_veiculo = ?, id_motorista = ?, id_item_map = ?,
-            hor_ini = ?, hor_fim = ?,
+            hor_ini = ?, chegada_ponto = COALESCE(?, chegada_ponto), hor_fim = ?,
             roleta01_ini = ?, roleta01_fim = ?, roleta2_ini = ?, roleta2_fim = ?,
-            observacao = ?
+            observacao = ?, status = ?
         WHERE id_guia = ?
         """,
         (
             dados["numero"],
-            dados["id_empresa"],
+            dados["id_empresa"] if dados["id_empresa"] is not None else emp_atual,
             dados["id_linha"],
             dados["id_turno"],
             dados["id_veiculo"],
             dados["id_motorista"],
             dados.get("id_item_map"),
             _datetime_guia(dados["data_sql"], dados["hor_ini"]),
+            _datetime_guia(dados["data_sql"], chegada) if chegada else None,
             _datetime_guia(dados["data_sql"], dados["hor_fim"]),
             dados["roleta01_ini"],
             dados["roleta01_fim"],
             dados["roleta2_ini"],
             dados["roleta2_fim"],
             dados["observacao"],
+            status,
             id_guia,
         ),
     )
     if not ok:
         return GuiaError("Falha ao atualizar guia.", "persistencia")
-    row = _row_guia(dal, id_guia)
-    if row is None:
-        return GuiaError("Guia não encontrada.", "nao_encontrado")
-    return row
+    from .guia_jornada_service import obter_guia_completa
+
+    completo = obter_guia_completa(dal, id_guia)
+    if isinstance(completo, GuiaError):
+        row = _row_guia(dal, id_guia)
+        if row is None:
+            return GuiaError("Guia não encontrada.", "nao_encontrado")
+        return row
+    return completo
 
 
 def excluir_guia(dal, id_guia: int) -> GuiaError | None:
@@ -496,6 +617,9 @@ def excluir_guia(dal, id_guia: int) -> GuiaError | None:
     )
     if not em_uso.empty:
         return GuiaError("Guia vinculada a chegada/saída; não é possível excluir.", "guia_em_uso")
+    dal.delete("DELETE FROM tb_guia_auditoria WHERE id_guia = ?", (id_guia,))
+    dal.delete("DELETE FROM tb_guia_alteracao WHERE id_guia = ?", (id_guia,))
+    dal.delete("DELETE FROM tb_guia_trecho WHERE id_guia = ?", (id_guia,))
     ok = dal.delete("DELETE FROM tb_guia WHERE id_guia = ?", (id_guia,))
     if not ok:
         return GuiaError("Guia não encontrada.", "nao_encontrado")

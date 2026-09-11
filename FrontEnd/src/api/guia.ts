@@ -3,6 +3,7 @@ import type {
   Guia,
   GuiaAjusteManualPayload,
   GuiaAlteracaoEscalaPayload,
+  GuiaAlteracaoRecursoPayload,
   GuiaContextoEscala,
   GuiaContextoEscalaResponse,
   GuiaDeleteResponse,
@@ -13,6 +14,8 @@ import type {
   GuiaRoletaHistoricoItem,
   GuiaRoletaPayload,
   GuiaRoletaResponse,
+  GuiaTrechoPayload,
+  GuiaTrechoResponse,
 } from '@/types/guia';
 
 /** @deprecated Prefer type Guia from @/types/guia */
@@ -54,6 +57,10 @@ export async function listGuias(
   return apiFetch<GuiaListResponse>(`/guia/consulta${q}`, { method: 'GET' });
 }
 
+export async function getGuia(idGuia: number): Promise<GuiaResponse> {
+  return apiFetch<GuiaResponse>(`/guia/${idGuia}`, { method: 'GET' });
+}
+
 export async function getGuiaByNumero(numero: string): Promise<GuiaResponse> {
   return apiFetch<GuiaResponse>(`/guia/by-numero/${encodeURIComponent(numero)}`, {
     method: 'GET',
@@ -83,6 +90,87 @@ export async function deleteGuia(idGuia: number): Promise<GuiaDeleteResponse> {
   });
 }
 
+export async function encerrarGuia(
+  idGuia: number,
+  body?: {
+    hor_fim?: string;
+    horario_largada?: string;
+    motivo_tipo?: 'fim_jornada' | 'transferencia_empresa' | string;
+    motivo?: string;
+    versao?: number;
+  },
+): Promise<GuiaResponse> {
+  return apiFetch<GuiaResponse>(`/guia/${idGuia}/encerrar`, {
+    method: 'POST',
+    body: body ?? {},
+  });
+}
+
+export async function registrarAlteracaoGuia(
+  idGuia: number,
+  body: GuiaAlteracaoRecursoPayload,
+): Promise<GuiaResponse> {
+  return apiFetch<GuiaResponse>(`/guia/${idGuia}/alteracao`, {
+    method: 'POST',
+    body,
+  });
+}
+
+export async function criarTrechoGuia(
+  idGuia: number,
+  body: GuiaTrechoPayload,
+): Promise<GuiaTrechoResponse> {
+  return apiFetch<GuiaTrechoResponse>(`/guia/${idGuia}/trechos`, {
+    method: 'POST',
+    body,
+  });
+}
+
+export async function atualizarTrechoGuia(
+  idTrecho: number,
+  body: GuiaTrechoPayload,
+): Promise<GuiaTrechoResponse> {
+  return apiFetch<GuiaTrechoResponse>(`/guia/trechos/${idTrecho}`, {
+    method: 'PUT',
+    body,
+  });
+}
+
+export async function iniciarTrechoGuia(
+  idTrecho: number,
+  body?: { hor_ini?: string; versao?: number },
+): Promise<GuiaTrechoResponse> {
+  return apiFetch<GuiaTrechoResponse>(`/guia/trechos/${idTrecho}/iniciar`, {
+    method: 'POST',
+    body: body ?? {},
+  });
+}
+
+export async function concluirTrechoGuia(
+  idTrecho: number,
+  body?: {
+    hor_fim?: string;
+    jae_fim?: number | null;
+    riocard_fim?: number | null;
+    versao?: number;
+  },
+): Promise<GuiaTrechoResponse> {
+  return apiFetch<GuiaTrechoResponse>(`/guia/trechos/${idTrecho}/concluir`, {
+    method: 'POST',
+    body: body ?? {},
+  });
+}
+
+export async function cancelarTrechoGuia(
+  idTrecho: number,
+  body: { motivo: string; versao?: number },
+): Promise<GuiaTrechoResponse> {
+  return apiFetch<GuiaTrechoResponse>(`/guia/trechos/${idTrecho}/cancelar`, {
+    method: 'POST',
+    body,
+  });
+}
+
 /** Ajuste manual com auditoria — não sobrescreve roleta original. */
 export async function registrarAjusteManual(
   idGuia: number,
@@ -108,12 +196,16 @@ export async function sugerirRoletaInicial(params: {
   id_veiculo: number;
   fonte: 'jae' | 'riocard';
   sentido: 'ida' | 'volta';
+  id_guia?: number;
+  id_trecho?: number;
 }): Promise<{ ok: boolean; leitura_ini: number | null }> {
   const q = new URLSearchParams({
     id_veiculo: String(params.id_veiculo),
     fonte: params.fonte,
     sentido: params.sentido,
   });
+  if (params.id_guia != null) q.set('id_guia', String(params.id_guia));
+  if (params.id_trecho != null) q.set('id_trecho', String(params.id_trecho));
   return apiFetch(`/guia/roletas/sugestao?${q.toString()}`, { method: 'GET' });
 }
 

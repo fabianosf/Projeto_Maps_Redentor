@@ -116,6 +116,7 @@ function montarPayload(state: {
   motorista: string;
   horarioPegada: string;
   horarioLargada: string;
+  chegadaPonto: string;
   roletaInicial: string;
   roletaFinal: string;
   roleta2Inicial: string;
@@ -136,7 +137,9 @@ function montarPayload(state: {
     carro: state.carro.trim(),
     motorista: state.motorista.trim(),
     horario_pegada: state.horarioPegada.trim(),
-    horario_largada: state.horarioLargada.trim(),
+    // Fim vazio = jornada permanece ABERTA
+    horario_largada: state.horarioLargada.trim() || undefined,
+    chegada_ponto: state.chegadaPonto.trim() || undefined,
     roleta01_inicial: state.roletaInicial ? Number(state.roletaInicial) : null,
     roleta01_final: state.roletaFinal ? Number(state.roletaFinal) : null,
     roleta2_inicial: state.roleta2Inicial ? Number(state.roleta2Inicial) : null,
@@ -155,7 +158,10 @@ function validarFormulario(payload: GuiaPayload): string | null {
   }
   const ini = payload.horario_pegada ?? '';
   const fim = payload.horario_largada ?? '';
-  if (ini && !isValidHHMM(ini)) return 'INÍCIO(JORNADA) inválido.';
+  const chegada = payload.chegada_ponto ?? '';
+  if (!ini) return 'Informe o INÍCIO(JORNADA).';
+  if (!isValidHHMM(ini)) return 'INÍCIO(JORNADA) inválido.';
+  if (chegada && !isValidHHMM(chegada)) return 'Chegada ao ponto inválida.';
   if (fim && !isValidHHMM(fim)) return 'FIM(JORNADA) inválido.';
   if ((payload.observacao ?? '').length > OBS_MAX) {
     return `Observação deve ter no máximo ${OBS_MAX} caracteres.`;
@@ -181,6 +187,7 @@ export function NovaGuiaScreen() {
   const [motorista, setMotorista] = useState('');
   const [horarioPegada, setHorarioPegada] = useState('');
   const [horarioLargada, setHorarioLargada] = useState('');
+  const [chegadaPonto, setChegadaPonto] = useState('');
   const [roletaInicial, setRoletaInicial] = useState('');
   const [roletaFinal, setRoletaFinal] = useState('');
   const [roleta2Inicial, setRoleta2Inicial] = useState('');
@@ -254,6 +261,10 @@ export function NovaGuiaScreen() {
     setCarro(ctx.numero_frota ? String(ctx.numero_frota) : '');
     setMotorista(ctx.matricula_motorista ? String(ctx.matricula_motorista) : '');
     if (ctx.data) setDataGuia(ctx.data);
+    if (ctx.hor_ini_jor_hhmm) setHorarioPegada(ctx.hor_ini_jor_hhmm);
+    if (ctx.chegada_ponto_hhmm) setChegadaPonto(ctx.chegada_ponto_hhmm);
+    // Abertura de jornada: não preenche fim (guia fica ABERTA)
+    setHorarioLargada('');
   };
 
   const selecionarEscala = async (idItemStr: string) => {
@@ -286,6 +297,7 @@ export function NovaGuiaScreen() {
       motorista,
       horarioPegada,
       horarioLargada,
+      chegadaPonto,
       roletaInicial,
       roletaFinal,
       roleta2Inicial,
@@ -542,10 +554,25 @@ export function NovaGuiaScreen() {
           ) : null}
 
           <p className="pt-1 text-center text-[13px] font-semibold uppercase tracking-wide text-slate-700">
-            Dados da execução
+            Abertura da jornada
+          </p>
+          <p className="text-center text-xs text-slate-600">
+            A guia permanece aberta enquanto o motorista estiver na mesma empresa.
+            Preencha o fim só ao encerrar a jornada.
           </p>
 
           <div className="grid grid-cols-2 gap-3">
+            <FormField
+              label="Chegada ao ponto"
+              name="chegada_ponto"
+              type="text"
+              inputMode="numeric"
+              placeholder="HH:MM"
+              value={chegadaPonto}
+              onChange={(e) => setChegadaPonto(maskHHMM(e.target.value))}
+              className={halfFieldClass}
+              disabled={!camposHabilitados}
+            />
             <FormField
               label="Início(Jornada)"
               name="hor_ini"
@@ -557,18 +584,19 @@ export function NovaGuiaScreen() {
               className={halfFieldClass}
               disabled={!camposHabilitados}
             />
-            <FormField
-              label="Fim(Jornada)"
-              name="hor_fim"
-              type="text"
-              inputMode="numeric"
-              placeholder="HH:MM real"
-              value={horarioLargada}
-              onChange={(e) => setHorarioLargada(maskHHMM(e.target.value))}
-              className={halfFieldClass}
-              disabled={!camposHabilitados}
-            />
           </div>
+
+          <FormField
+            label="Fim(Jornada) — opcional"
+            name="hor_fim"
+            type="text"
+            inputMode="numeric"
+            placeholder="Vazio = guia aberta"
+            value={horarioLargada}
+            onChange={(e) => setHorarioLargada(maskHHMM(e.target.value))}
+            className={fieldClass}
+            disabled={!camposHabilitados}
+          />
 
           <div className="grid grid-cols-2 gap-3">
             <FormField
