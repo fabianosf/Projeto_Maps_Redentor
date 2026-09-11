@@ -47,6 +47,15 @@ export interface MotoristaCadastro {
   ativo?: number;
 }
 
+export interface FrotaRegraApi {
+  regex?: string;
+  max_len?: number;
+  exemplo?: string;
+  mensagem?: string;
+  placeholder?: string;
+  mascara?: string | null;
+}
+
 export interface CadastrosMestres {
   empresas: EmpresaCadastro[];
   linhas: LinhaCadastro[];
@@ -54,6 +63,7 @@ export interface CadastrosMestres {
   locais: LocalCadastro[];
   veiculos: VeiculoCadastro[];
   motoristas: MotoristaCadastro[];
+  frota_regra?: FrotaRegraApi | null;
 }
 
 export type CadastrosResponse = ApiSuccess<{ cadastros: CadastrosMestres }>;

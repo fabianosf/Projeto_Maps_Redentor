@@ -67,11 +67,12 @@ import {
   toDateTimeLocal,
 } from '@/utils/mapaFormat';
 import {
+  configurarRegraFrota,
   normalizarFrotaDigitada,
   placeholderFrotaEmpresa,
   mascaraGuiaFrotaEmpresa,
   erroFrotaDuranteDigitacao,
-  validarFrotaParaEmpresa,
+  validarFrota,
 } from '@/utils/frotaVeiculo';
 import { SCREEN_BG } from '@/theme/tokens';
 
@@ -259,9 +260,15 @@ export function MapaDetalheScreen() {
         return null;
       });
       setCadastros(cadRes.cadastros);
+      configurarRegraFrota(cadRes.cadastros?.frota_regra);
     } catch (e) {
       const msg =
-        e instanceof ApiRequestError ? e.message : 'Falha de comunicação com a API.';
+        e instanceof ApiRequestError
+          ? e.status >= 500
+            ? e.message ||
+              'Não foi possível carregar o detalhe do MAPA. Tente novamente.'
+            : e.message
+          : 'Falha de comunicação com a API.';
       toast.error(msg);
       goLista();
     } finally {
@@ -451,12 +458,11 @@ export function MapaDetalheScreen() {
       }
       return null;
     }
-    if (!frotaQuery.trim() || validarFrotaParaEmpresa(frotaQuery, nomeEmpresaForm)) {
+    if (!frotaQuery.trim() || validarFrota(frotaQuery)) {
       return null;
     }
     const existente = (cadastros?.veiculos ?? []).find((v) => {
       if (!isAtivo(v.ativo)) return false;
-      if (String(v.id_empresa ?? '') !== idEmpresaForm) return false;
       return String(v.numero_frota ?? '').toUpperCase() === frotaQuery.trim().toUpperCase();
     });
     if (!existente) return null;
@@ -475,18 +481,16 @@ export function MapaDetalheScreen() {
   }, [
     cadastros,
     frotaQuery,
-    idEmpresaForm,
     idVeiculoForm,
     idsVeiculosOcupados,
     motoristaDialogMode,
-    nomeEmpresaForm,
     ocupacaoVeiculos,
   ]);
 
   const frotaValida =
     motoristaDialogMode === 'editar'
       ? Boolean(idVeiculoForm) && !motivoVeiculoOcupado
-      : validarFrotaParaEmpresa(frotaQuery, nomeEmpresaForm) == null &&
+      : validarFrota(frotaQuery) == null &&
         frotaQuery.trim().length > 0 &&
         !motivoVeiculoOcupado;
 
@@ -622,11 +626,10 @@ export function MapaDetalheScreen() {
 
   const buscarVeiculoPorFrota = (frota: string): VeiculoCadastro | null => {
     const q = frota.trim().toUpperCase();
-    if (!q || !idEmpresaForm) return null;
+    if (!q) return null;
     return (
       (cadastros?.veiculos ?? []).find((v) => {
         if (!isAtivo(v.ativo)) return false;
-        if (String(v.id_empresa ?? '') !== idEmpresaForm) return false;
         return String(v.numero_frota ?? '').toUpperCase() === q;
       }) ?? null
     );
@@ -819,7 +822,7 @@ export function MapaDetalheScreen() {
 
     if (motoristaDialogMode === 'novo') {
       const frota = frotaQuery.trim().toUpperCase();
-      const erroFrota = validarFrotaParaEmpresa(frota, nomeEmpresaForm);
+      const erroFrota = validarFrota(frota);
       if (erroFrota) {
         setFrotaErro(erroFrota);
         setErroVinculo(erroFrota);
@@ -966,7 +969,7 @@ export function MapaDetalheScreen() {
   const confirmarCadastroVeiculo = async () => {
     if (!mapa || vinculoSaving) return;
     const frota = frotaQuery.trim().toUpperCase();
-    const erroFrota = validarFrotaParaEmpresa(frota, nomeEmpresaForm);
+    const erroFrota = validarFrota(frota);
     if (erroFrota) {
       setFrotaErro(erroFrota);
       setErroVinculo(erroFrota);
@@ -2165,7 +2168,7 @@ export function MapaDetalheScreen() {
         <ConfirmDialog
           open={confirmCriarVeiculo}
           title="Cadastrar veículo"
-          message={`Veículo ${frotaQuery.trim().toUpperCase() || '—'} não encontrado para ${nomeEmpresaForm || 'a empresa'}. Deseja cadastrá-lo?`}
+          message={`Veículo ${frotaQuery.trim().toUpperCase() || '—'} não encontrado. Deseja cadastrá-lo?`}
           confirmLabel="Cadastrar"
           cancelLabel="Cancelar"
           onConfirm={() => void confirmarCadastroVeiculo()}

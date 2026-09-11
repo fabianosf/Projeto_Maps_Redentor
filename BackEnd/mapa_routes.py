@@ -141,10 +141,37 @@ def ocupacao_escalas():
 @mapa_bp.get("/<int:id_registro>")
 @require_mapa_access
 def get_map(id_registro: int):
-    resultado = obter_mapa_completo(_dal(), id_registro)
+    try:
+        resultado = obter_mapa_completo(_dal(), id_registro)
+    except Exception as exc:  # noqa: BLE001 — detalhe nunca vira 500 opaco
+        logger.error(
+            "Falha em GET /api/v1/mapas/%s: %s\n%s",
+            id_registro,
+            exc,
+            traceback.format_exc(),
+        )
+        return json_error(
+            "Não foi possível carregar o detalhe do MAPA. Tente novamente.",
+            500,
+            "mapa_detalhe_indisponivel",
+        )
     if isinstance(resultado, MapaError):
-        return json_error(resultado.mensagem, 404, resultado.codigo)
-    return jsonify({"ok": True, "mapa": resultado}), 200
+        status = 404 if resultado.codigo == "nao_encontrado" else 400
+        return json_error(resultado.mensagem, status, resultado.codigo)
+    try:
+        return jsonify({"ok": True, "mapa": resultado}), 200
+    except TypeError as exc:
+        logger.error(
+            "Serialização JSON falhou em GET /api/v1/mapas/%s: %s\n%s",
+            id_registro,
+            exc,
+            traceback.format_exc(),
+        )
+        return json_error(
+            "Não foi possível carregar o detalhe do MAPA. Tente novamente.",
+            500,
+            "mapa_detalhe_indisponivel",
+        )
 
 
 @mapa_bp.post("")

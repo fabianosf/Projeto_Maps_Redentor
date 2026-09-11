@@ -120,7 +120,7 @@ export function BancoHorasScreen() {
     return (
       <AppShell className="bg-screen">
         <div className="page min-h-dvh bg-screen text-slate-900">
-          <PageHeader title="Banco de horas" onBack={() => navigate('/principal')} />
+          <PageHeader title="Banco de horas" onBack={() => navigate('/registros')} />
           <LoadingState />
         </div>
       </AppShell>
@@ -130,7 +130,7 @@ export function BancoHorasScreen() {
   return (
     <AppShell className="bg-screen">
       <div className="page flex min-h-dvh flex-col bg-screen text-slate-900">
-        <PageHeader title="Banco de horas" onBack={() => navigate('/principal')} />
+        <PageHeader title="Banco de horas" onBack={() => navigate('/registros')} />
         <div className="page-body flex min-h-0 flex-1 flex-col gap-4">
           <p className="text-sm text-slate-700">
             Controle operacional — não é integração oficial de folha de pagamento.

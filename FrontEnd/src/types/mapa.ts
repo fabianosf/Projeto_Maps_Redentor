@@ -9,6 +9,9 @@ export interface MapaListaItem {
   linha?: string | null;
   turno: string;
   despachante?: string;
+  /** Opcional — se a API enviar. */
+  total_viagens?: number | null;
+  qtd_viagens?: number | null;
 }
 
 export interface MapaViagem {

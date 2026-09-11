@@ -8,6 +8,12 @@ import { EmptyState } from '@/components/EmptyState';
 import { ErrorState } from '@/components/ErrorState';
 import { LoadingState } from '@/components/LoadingState';
 import { PageHeader } from '@/components/PageHeader';
+import {
+  FilterBottomSheet,
+  FilterChipsBar,
+  OpsCard,
+  StatusSeal,
+} from '@/components/ops';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -30,6 +36,7 @@ function textoBusca(row: MapaListaItem): string {
   return [
     formatCodigoMapa(row.codigo_mapa),
     String(row.codigo_mapa ?? ''),
+    row.empresa ?? '',
     row.linha ?? '',
     row.turno ?? '',
   ]
@@ -44,6 +51,26 @@ function dataExibicao(row: MapaListaItem): string | null {
   return br || null;
 }
 
+/** Status de apresentação a partir dos campos já disponíveis na lista. */
+function statusMapaLista(row: MapaListaItem): {
+  label: string;
+  tone: 'success' | 'info' | 'neutral';
+} {
+  const qtd = Number(row.total_viagens ?? row.qtd_viagens ?? NaN);
+  if (Number.isFinite(qtd) && qtd > 0) {
+    return { label: 'Com viagens', tone: 'success' };
+  }
+  if (row.linha) return { label: 'Planejado', tone: 'info' };
+  return { label: 'Cadastrado', tone: 'neutral' };
+}
+
+function qtdViagensLabel(row: MapaListaItem): string {
+  const qtd = row.total_viagens ?? row.qtd_viagens;
+  if (qtd == null || !Number.isFinite(Number(qtd))) return 'Viagens no detalhe';
+  const n = Number(qtd);
+  return `${n} viagem${n === 1 ? '' : 's'}`;
+}
+
 /** Tela 04 — Lista MAPA (UX mobile-first; mesmos dados/rotas/API). */
 export function MapasListScreen() {
   const navigate = useNavigate();
@@ -56,6 +83,10 @@ export function MapasListScreen() {
   const [busca, setBusca] = useState('');
   const [filtroTurno, setFiltroTurno] = useState('');
   const [filtroLinha, setFiltroLinha] = useState('');
+  const [filtroOpen, setFiltroOpen] = useState(false);
+  const [draftTurno, setDraftTurno] = useState('');
+  const [draftLinha, setDraftLinha] = useState('');
+  const [draftBusca, setDraftBusca] = useState('');
 
   const aliveRef = useRef(true);
 
@@ -144,7 +175,50 @@ export function MapasListScreen() {
     setBusca('');
     setFiltroTurno('');
     setFiltroLinha('');
+    setDraftBusca('');
+    setDraftTurno('');
+    setDraftLinha('');
   };
+
+  const abrirFiltro = () => {
+    setDraftBusca(busca);
+    setDraftTurno(filtroTurno);
+    setDraftLinha(filtroLinha);
+    setFiltroOpen(true);
+  };
+
+  const aplicarFiltro = () => {
+    setBusca(draftBusca);
+    setFiltroTurno(draftTurno);
+    setFiltroLinha(draftLinha);
+    setFiltroOpen(false);
+  };
+
+  const chips = useMemo(() => {
+    const list: { id: string; label: string; onClear: () => void }[] = [];
+    if (busca.trim()) {
+      list.push({
+        id: 'busca',
+        label: `Busca: ${busca.trim()}`,
+        onClear: () => setBusca(''),
+      });
+    }
+    if (filtroTurno) {
+      list.push({
+        id: 'turno',
+        label: `Turno: ${filtroTurno}`,
+        onClear: () => setFiltroTurno(''),
+      });
+    }
+    if (filtroLinha) {
+      list.push({
+        id: 'linha',
+        label: `Linha: ${filtroLinha}`,
+        onClear: () => setFiltroLinha(''),
+      });
+    }
+    return list;
+  }, [busca, filtroTurno, filtroLinha]);
 
   const abrirMapa = (id: number) => {
     navigate(`/mapas/${id}`);
@@ -155,7 +229,7 @@ export function MapasListScreen() {
   return (
     <AppShell className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-screen text-slate-900">
       <PageHeader
-        title="CADASTRO DE MAPAS"
+        title="Mapas"
         onBack={() => navigate('/principal')}
         rightSlot={
           <Button
@@ -163,7 +237,7 @@ export function MapasListScreen() {
             variant="ghost"
             aria-label="Novo MAPA"
             onClick={novoMapa}
-            className="h-11 min-h-touch gap-1 rounded-lg border border-white/70 bg-white px-2.5 text-[12px] font-bold uppercase tracking-wide text-primary hover:bg-white/90"
+            className="h-11 min-h-touch gap-1 rounded-lg px-2.5 text-[12px] font-bold uppercase tracking-wide text-primary-foreground hover:bg-primary-foreground/10"
           >
             <Plus className="h-5 w-5" strokeWidth={2.75} aria-hidden />
             <span>Novo</span>
@@ -171,7 +245,7 @@ export function MapasListScreen() {
         }
       />
 
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col pb-tabbar">
         {loading ? (
           <LoadingState label="Carregando mapas…" />
         ) : error ? (
@@ -179,13 +253,9 @@ export function MapasListScreen() {
         ) : mapas.length === 0 ? (
           <EmptyState
             title="Nenhum MAPA cadastrado"
-            description="Toque em + Novo para criar o primeiro MAPA."
+            description="Toque em Novo para criar o primeiro MAPA."
             action={
-              <Button
-                type="button"
-                onClick={novoMapa}
-                className="min-h-touch gap-2"
-              >
+              <Button type="button" onClick={novoMapa} className="min-h-touch gap-2">
                 <Plus className="h-5 w-5" aria-hidden />
                 Novo MAPA
               </Button>
@@ -193,104 +263,18 @@ export function MapasListScreen() {
           />
         ) : (
           <>
-            <section
-              className="toolbar-actions shrink-0 flex-col space-y-3 border-b border-border/60 bg-card/70 px-4 py-3"
-              aria-label="Busca e filtros"
-            >
-              <div className="relative w-full">
-                <Search
-                  className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden
-                />
-                <Input
-                  type="search"
-                  value={busca}
-                  onChange={(e) => setBusca(e.target.value)}
-                  placeholder="Buscar nº, linha ou turno"
-                  aria-label="Buscar por número, linha ou turno"
-                  className="h-11 min-h-touch border-input bg-card pl-10 text-base"
-                />
-              </div>
-
-              <div className="grid w-full grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1">
-                  <Label
-                    htmlFor="filtro-turno"
-                    className="text-section uppercase text-foreground"
-                  >
-                    Turno
-                  </Label>
-                  <Select
-                    value={filtroTurno || FILTRO_TODOS}
-                    onValueChange={(v) =>
-                      setFiltroTurno(v === FILTRO_TODOS ? '' : v)
-                    }
-                  >
-                    <SelectTrigger
-                      id="filtro-turno"
-                      className="h-11 min-h-touch border-input bg-card text-base"
-                    >
-                      <SelectValue placeholder="Todos" />
-                    </SelectTrigger>
-                    <SelectContent position="popper" className="z-[300]">
-                      <SelectItem value={FILTRO_TODOS}>Todos</SelectItem>
-                      {turnosOpcoes.map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {t}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex flex-col gap-1">
-                  <Label
-                    htmlFor="filtro-linha"
-                    className="text-section uppercase text-foreground"
-                  >
-                    Linha
-                  </Label>
-                  <Select
-                    value={filtroLinha || FILTRO_TODOS}
-                    onValueChange={(v) =>
-                      setFiltroLinha(v === FILTRO_TODOS ? '' : v)
-                    }
-                  >
-                    <SelectTrigger
-                      id="filtro-linha"
-                      className="h-11 min-h-touch border-slate-400 bg-white text-base"
-                    >
-                      <SelectValue placeholder="Todas" />
-                    </SelectTrigger>
-                    <SelectContent position="popper" className="z-[300]">
-                      <SelectItem value={FILTRO_TODOS}>Todas</SelectItem>
-                      {linhasOpcoes.map((l) => (
-                        <SelectItem key={l} value={l}>
-                          {l}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
+            <div className="shrink-0 space-y-2 border-b border-border/50 bg-card/40 px-4 py-3">
+              <FilterChipsBar
+                chips={chips}
+                filterActive={temFiltroAtivo}
+                onOpenFilters={abrirFiltro}
+              />
               {temFiltroAtivo ? (
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-slate-700">
-                    {filtrados.length} resultado
-                    {filtrados.length === 1 ? '' : 's'}
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={limparFiltros}
-                    className="h-11 min-h-touch px-3 text-sm"
-                  >
-                    Limpar filtros
-                  </Button>
-                </div>
+                <p className="text-xs font-medium text-slate-600">
+                  {filtrados.length} resultado{filtrados.length === 1 ? '' : 's'}
+                </p>
               ) : null}
-            </section>
+            </div>
 
             {filtrados.length === 0 ? (
               <EmptyState
@@ -309,109 +293,137 @@ export function MapasListScreen() {
               />
             ) : (
               <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]">
-                {/* Mobile: cards */}
-                <ul className="flex flex-col gap-3 p-4 md:hidden" role="list">
+                <ul className="flex flex-col gap-2.5 p-4" role="list">
                   {filtrados.map((row) => {
                     const data = dataExibicao(row);
-                    const linha = row.linha?.trim() ? row.linha : '—';
+                    const st = statusMapaLista(row);
                     return (
                       <li key={row.id_registro}>
-                        <button
-                          type="button"
+                        <OpsCard
                           onClick={() => abrirMapa(row.id_registro)}
-                          className="list-card"
+                          aria-label={`Abrir MAPA ${formatCodigoMapa(row.codigo_mapa)}`}
                         >
-                          <div className="flex items-baseline justify-between gap-3">
-                            <span className="text-lg font-bold tabular-nums text-primary">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-base font-bold tabular-nums text-primary">
                               {formatCodigoMapa(row.codigo_mapa)}
-                            </span>
-                            {data ? (
-                              <span className="text-sm font-medium text-slate-600">
-                                {data}
-                              </span>
-                            ) : null}
+                            </p>
+                            <StatusSeal
+                              label={st.label}
+                              tone={st.tone}
+                              icon={st.tone === 'success' ? 'ok' : 'tempo'}
+                            />
                           </div>
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[15px] font-semibold text-slate-900">
-                            <span className="max-w-full truncate">
-                              <span className="sr-only">Linha </span>
-                              {linha}
-                            </span>
-                            <span className="text-slate-400" aria-hidden>
-                              ·
-                            </span>
-                            <span>
-                              <span className="sr-only">Turno </span>
-                              {row.turno}
-                            </span>
-                          </div>
-                        </button>
+                          <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-600">
+                            <div>
+                              <dt className="font-semibold uppercase tracking-wide text-slate-400">
+                                Empresa
+                              </dt>
+                              <dd className="truncate font-semibold text-slate-900">
+                                {row.empresa?.trim() || '—'}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="font-semibold uppercase tracking-wide text-slate-400">
+                                Turno
+                              </dt>
+                              <dd className="truncate font-semibold text-slate-900">
+                                {row.turno || '—'}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="font-semibold uppercase tracking-wide text-slate-400">
+                                Linha
+                              </dt>
+                              <dd className="truncate font-semibold text-slate-900">
+                                {row.linha?.trim() || '—'}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt className="font-semibold uppercase tracking-wide text-slate-400">
+                                Data
+                              </dt>
+                              <dd className="font-semibold tabular-nums text-slate-900">
+                                {data ?? '—'}
+                              </dd>
+                            </div>
+                          </dl>
+                          <p className="text-xs font-medium text-slate-500">
+                            {qtdViagensLabel(row)}
+                          </p>
+                        </OpsCard>
                       </li>
                     );
                   })}
                 </ul>
-
-                {/* Desktop: tabela */}
-                <div className="hidden border-y border-slate-400/40 bg-white/70 md:block">
-                  <table className="w-full caption-bottom border-collapse text-sm">
-                    <thead className="sticky top-0 z-10">
-                      <tr className="border-b-2 border-slate-500/40 bg-table-head">
-                        <th className="px-3 py-3.5 text-left text-[13px] font-bold uppercase tracking-wide text-slate-900">
-                          Número
-                        </th>
-                        <th className="px-3 py-3.5 text-left text-[13px] font-bold uppercase tracking-wide text-slate-900">
-                          Linha
-                        </th>
-                        <th className="px-3 py-3.5 text-left text-[13px] font-bold uppercase tracking-wide text-slate-900">
-                          Turno
-                        </th>
-                        <th className="px-3 py-3.5 text-left text-[13px] font-bold uppercase tracking-wide text-slate-900">
-                          Data
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtrados.map((row, i) => {
-                        const data = dataExibicao(row);
-                        return (
-                          <tr
-                            key={row.id_registro}
-                            tabIndex={0}
-                            role="link"
-                            aria-label={`Abrir MAPA ${formatCodigoMapa(row.codigo_mapa)}`}
-                            className={`cursor-pointer border-b border-border/50 text-slate-900 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${
-                              i % 2 === 0 ? 'bg-white' : 'bg-table-zebra'
-                            }`}
-                            onClick={() => abrirMapa(row.id_registro)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
-                                e.preventDefault();
-                                abrirMapa(row.id_registro);
-                              }
-                            }}
-                          >
-                            <td className="px-3 py-3.5 text-left text-base font-semibold tabular-nums">
-                              {formatCodigoMapa(row.codigo_mapa)}
-                            </td>
-                            <td className="max-w-[220px] truncate px-3 py-3.5 text-left text-base font-semibold">
-                              {row.linha ?? '—'}
-                            </td>
-                            <td className="px-3 py-3.5 text-left text-base font-semibold">
-                              {row.turno}
-                            </td>
-                            <td className="px-3 py-3.5 text-left text-base font-semibold text-slate-700">
-                              {data ?? '—'}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
               </div>
             )}
           </>
         )}
       </div>
+
+      <FilterBottomSheet
+        open={filtroOpen}
+        onOpenChange={setFiltroOpen}
+        title="Filtrar mapas"
+        onClear={() => {
+          limparFiltros();
+          setFiltroOpen(false);
+        }}
+        onApply={aplicarFiltro}
+      >
+        <div className="relative">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <Input
+            type="search"
+            value={draftBusca}
+            onChange={(e) => setDraftBusca(e.target.value)}
+            placeholder="Buscar nº, empresa, linha ou turno"
+            aria-label="Buscar"
+            className="h-11 pl-9"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="mapa-filtro-turno">Turno</Label>
+          <Select
+            value={draftTurno || FILTRO_TODOS}
+            onValueChange={(v) => setDraftTurno(v === FILTRO_TODOS ? '' : v)}
+          >
+            <SelectTrigger id="mapa-filtro-turno" className="h-11">
+              <SelectValue placeholder="Todos" />
+            </SelectTrigger>
+            <SelectContent position="popper" className="z-[300]">
+              <SelectItem value={FILTRO_TODOS}>Todos</SelectItem>
+              {turnosOpcoes.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {t}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="mapa-filtro-linha">Linha</Label>
+          <Select
+            value={draftLinha || FILTRO_TODOS}
+            onValueChange={(v) => setDraftLinha(v === FILTRO_TODOS ? '' : v)}
+          >
+            <SelectTrigger id="mapa-filtro-linha" className="h-11">
+              <SelectValue placeholder="Todas" />
+            </SelectTrigger>
+            <SelectContent position="popper" className="z-[300]">
+              <SelectItem value={FILTRO_TODOS}>Todas</SelectItem>
+              {linhasOpcoes.map((l) => (
+                <SelectItem key={l} value={l}>
+                  {l}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </FilterBottomSheet>
     </AppShell>
   );
 }

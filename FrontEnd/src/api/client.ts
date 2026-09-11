@@ -182,7 +182,9 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
           ? 'Recurso não encontrado.'
           : response.status === 405
             ? 'Consulta não disponível neste endereço (método não permitido). Reinicie a API ou tente novamente.'
-            : `Erro HTTP ${response.status}`;
+            : response.status >= 500
+              ? 'Não foi possível concluir a operação. Tente novamente.'
+              : `Erro HTTP ${response.status}`;
       const errBody = toApiError(
         rawText.trim()
           ? data

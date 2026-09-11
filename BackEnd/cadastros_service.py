@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -17,33 +18,60 @@ class CadastroError:
     codigo: str = "validacao"
 
 
-# Padrão oficial de frota por empresa (1 letra + 5 dígitos = 6 caracteres).
-# Redentor: C47NNN | Futuro: C30NNN | Barra: D13NNN
-_REGRAS_FROTA: dict[str, dict[str, str]] = {
-    "redentor": {
-        "codigo": "C47",
-        "regex": r"^C47\d{3}$",
-        "exemplo": "C47654",
-        "mascara": "C47___",
-        "mensagem": "Informe no formato C47 + 3 números. Ex.: C47654.",
-    },
-    "futuro": {
-        "codigo": "C30",
-        "regex": r"^C30\d{3}$",
-        "exemplo": "C30114",
-        "mascara": "C30___",
-        "mensagem": "Informe no formato C30 + 3 números. Ex.: C30114.",
-    },
-    "barra": {
-        "codigo": "D13",
-        "regex": r"^D13\d{3}$",
-        "exemplo": "D13450",
-        "mascara": "D13___",
-        "mensagem": "Informe no formato D13 + 3 números. Ex.: D13450.",
-    },
-}
+# Validação genérica de frota (independente da empresa).
+# Aceita apenas: 47xxx | 30xxx | 13xxx (cinco dígitos).
+# Configurável via tb_configuracao / env: FROTA_REGEX, FROTA_MAX_LEN, FROTA_EXEMPLO, FROTA_MENSAGEM.
+_FROTA_REGEX_DEFAULT = r"^(47|30|13)[0-9]{3}$"
+_FROTA_MAX_LEN_DEFAULT = 5
+_FROTA_EXEMPLO_DEFAULT = "47123"
+_FROTA_MENSAGEM_DEFAULT = (
+    "Informe um carro válido: 47xxx, 30xxx ou 13xxx. "
+    "Exemplos: 47123, 30123 ou 13123."
+)
 
-_RE_FROTA_BASICO = re.compile(r"^([A-Za-z])(\d{5})$")
+
+def _cfg_valor(dal, chave: str) -> Optional[str]:
+    try:
+        rows = _rows(
+            dal,
+            "SELECT valor FROM tb_configuracao WHERE chave = ? LIMIT 1",
+            (chave,),
+        )
+        if rows and rows[0].get("valor") is not None:
+            texto = str(rows[0]["valor"]).strip()
+            return texto or None
+    except Exception:
+        pass
+    env = os.environ.get(chave)
+    if env is not None and str(env).strip():
+        return str(env).strip()
+    return None
+
+
+def obter_regra_frota(dal=None) -> dict[str, Any]:
+    """Regra genérica de frota (sem vínculo com empresa)."""
+    regex = _FROTA_REGEX_DEFAULT
+    max_len = _FROTA_MAX_LEN_DEFAULT
+    exemplo = _FROTA_EXEMPLO_DEFAULT
+    mensagem = _FROTA_MENSAGEM_DEFAULT
+    if dal is not None:
+        regex = _cfg_valor(dal, "FROTA_REGEX") or regex
+        exemplo = _cfg_valor(dal, "FROTA_EXEMPLO") or exemplo
+        mensagem = _cfg_valor(dal, "FROTA_MENSAGEM") or mensagem
+        raw_max = _cfg_valor(dal, "FROTA_MAX_LEN")
+        if raw_max:
+            try:
+                max_len = max(1, min(40, int(raw_max)))
+            except (TypeError, ValueError):
+                pass
+    return {
+        "regex": regex,
+        "max_len": max_len,
+        "exemplo": exemplo,
+        "mensagem": mensagem,
+        "placeholder": f"Ex.: {exemplo}",
+        "mascara": None,
+    }
 
 
 def _rows(dal, sql: str, values: Any = None) -> list[dict[str, Any]]:
@@ -68,7 +96,7 @@ def _rows(dal, sql: str, values: Any = None) -> list[dict[str, Any]]:
     return out
 
 
-def listar_cadastros_mestres(dal) -> dict[str, list[dict[str, Any]]]:
+def listar_cadastros_mestres(dal) -> dict[str, Any]:
     """Somente registros ativos — usado por Guia, Usuários, etc."""
     return {
         "empresas": _rows(dal, "SELECT * FROM tb_empresa WHERE ativo = 1 ORDER BY codigo_empresa"),
@@ -90,7 +118,7 @@ def listar_cadastros_mestres(dal) -> dict[str, list[dict[str, Any]]]:
             SELECT id_veiculo, codigo_veiculo, numero_frota, placa, ativo, id_empresa
             FROM tb_veiculo
             WHERE ativo = 1
-            ORDER BY SUBSTR(numero_frota, 2), numero_frota
+            ORDER BY numero_frota
             """,
         ),
         "motoristas": _rows(
@@ -102,6 +130,7 @@ def listar_cadastros_mestres(dal) -> dict[str, list[dict[str, Any]]]:
             ORDER BY CAST(matricula AS UNSIGNED), matricula
             """,
         ),
+        "frota_regra": obter_regra_frota(dal),
     }
 
 
@@ -119,65 +148,85 @@ def _empresa_por_id(dal, id_empresa: int) -> Optional[dict[str, Any]]:
     return rows[0] if rows else None
 
 
-def _validar_frota_empresa(
-    numero_frota: str, empresa_descricao: str
+def _proximo_codigo_veiculo(dal) -> int:
+    rows = _rows(dal, "SELECT COALESCE(MAX(codigo_veiculo), 0) AS m FROM tb_veiculo")
+    try:
+        return int(rows[0]["m"]) + 1 if rows else 1
+    except (TypeError, ValueError, KeyError):
+        return 1
+
+
+def validar_frota(
+    numero_frota: str, dal=None
 ) -> CadastroError | tuple[str, int]:
-    """Retorna (frota_normalizada, codigo_veiculo) ou CadastroError."""
+    """
+    Valida frota genérica (única, formato configurável).
+    Retorna (frota_normalizada, codigo_veiculo_sugerido) ou CadastroError.
+    Não depende da empresa.
+    """
+    regra = obter_regra_frota(dal)
     frota = (numero_frota or "").strip().upper()
-    chave = (empresa_descricao or "").strip().lower()
-    regra = _REGRAS_FROTA.get(chave)
+    mensagem = str(regra["mensagem"])
+    max_len = int(regra["max_len"])
 
-    if not regra:
-        if empresa_descricao:
-            return CadastroError(
-                f"Empresa '{empresa_descricao}' sem padrão de frota configurado.",
-                "validacao",
-            )
-        return CadastroError("Selecione a empresa.", "validacao")
-
-    mensagem = regra["mensagem"]
     if not frota:
         return CadastroError(mensagem, "validacao")
-    if len(frota) > 20:
-        return CadastroError("Número de frota inválido (máximo 20 caracteres).", "validacao")
-
-    if not re.fullmatch(regra["regex"], frota):
-        return CadastroError(mensagem, "frota_fora_faixa")
-
-    m = _RE_FROTA_BASICO.fullmatch(frota)
-    if not m:
-        return CadastroError(mensagem, "validacao")
+    if len(frota) > max_len:
+        return CadastroError(mensagem, "frota_invalida")
     try:
-        numero = int(m.group(2))
-    except ValueError:
-        return CadastroError(mensagem, "validacao")
+        padrao = re.compile(str(regra["regex"]))
+    except re.error:
+        padrao = re.compile(_FROTA_REGEX_DEFAULT)
+    if not padrao.fullmatch(frota):
+        return CadastroError(mensagem, "frota_invalida")
 
-    return frota, numero
+    # codigo_veiculo: dígitos da frota quando houver; senão próximo sequencial.
+    digitos = re.sub(r"\D", "", frota)
+    if digitos:
+        try:
+            codigo = int(digitos[-9:])
+            if codigo > 0:
+                return frota, codigo
+        except ValueError:
+            pass
+    if dal is not None:
+        return frota, _proximo_codigo_veiculo(dal)
+    return frota, abs(hash(frota)) % 1_000_000_000 or 1
+
+
+# Compat: nome antigo usado por mapa_service / testes legados.
+def _validar_frota_empresa(
+    numero_frota: str, empresa_descricao: str = ""
+) -> CadastroError | tuple[str, int]:
+    """Compat: ignora empresa; valida formato genérico."""
+    del empresa_descricao
+    return validar_frota(numero_frota, dal=None)
 
 
 def criar_veiculo(
     dal,
     *,
     numero_frota: str,
-    id_empresa: int,
+    id_empresa: int | None = None,
 ) -> dict[str, Any] | CadastroError:
     """
-    Cria veículo vinculado à empresa.
-    placa = numero_frota apenas como placeholder (coluna NOT NULL) — não é placa real.
+    Cria veículo independente (identificador único = numero_frota).
+    id_empresa é opcional/informativo — não amarra o formato da frota.
     """
-    try:
-        id_emp = int(id_empresa)
-    except (TypeError, ValueError):
-        return CadastroError("Empresa inválida.", "validacao")
+    id_emp: int | None = None
+    if id_empresa is not None and str(id_empresa).strip() not in ("", "null", "None"):
+        try:
+            id_emp = int(id_empresa)
+        except (TypeError, ValueError):
+            return CadastroError("Empresa inválida.", "validacao")
+        empresa = _empresa_por_id(dal, id_emp)
+        if empresa is None:
+            return CadastroError("Empresa não encontrada ou inativa.", "validacao")
 
-    empresa = _empresa_por_id(dal, id_emp)
-    if empresa is None:
-        return CadastroError("Empresa não encontrada ou inativa.", "validacao")
-
-    validado = _validar_frota_empresa(numero_frota, str(empresa["descricao"]))
+    validado = validar_frota(numero_frota, dal=dal)
     if isinstance(validado, CadastroError):
         return validado
-    frota, codigo_veiculo = validado
+    frota, codigo_sugerido = validado
 
     existente = _rows(
         dal,
@@ -194,6 +243,16 @@ def criar_veiculo(
             f"Já existe veículo com a frota {frota}.",
             "frota_duplicada",
         )
+
+    # Evita colisão de codigo_veiculo UNIQUE
+    codigo_veiculo = codigo_sugerido
+    colisao = _rows(
+        dal,
+        "SELECT id_veiculo FROM tb_veiculo WHERE codigo_veiculo = ? LIMIT 1",
+        (codigo_veiculo,),
+    )
+    if colisao:
+        codigo_veiculo = _proximo_codigo_veiculo(dal)
 
     # placa: placeholder temporário (= frota) — coluna obrigatória UNIQUE; não é placa real
     placa_placeholder = frota[:10]

@@ -1,151 +1,136 @@
-﻿import { useCallback, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+﻿import { useNavigate } from 'react-router-dom';
 import {
+  AlertTriangle,
   BarChart3,
+  Bus,
   Clock3,
-  Cog,
-  LogOut,
-  Map,
   MapPinned,
   NotebookTabs,
 } from 'lucide-react';
 import { AppShell } from '@/components/AppShell';
+import { HubNavCard } from '@/components/HubNavCard';
 import { PageHeader } from '@/components/PageHeader';
-import { Button } from '@/components/ui/button';
+import { StatusBadge } from '@/components/StatusBadge';
 import { useAuth } from '@/context/AuthContext';
 import { useScreenBg } from '@/hooks/useScreenBg';
-import { actionBtn3dBase } from '@/lib/actionBtn3d';
-import { cn } from '@/lib/utils';
 import { SCREEN_BG } from '@/theme/tokens';
 import {
   canAccessBancoHoras,
-  canAccessConfiguracao,
   canAccessMapas,
 } from '@/utils/perfilAccess';
 
-const BG = SCREEN_BG;
+function formatHoje(): string {
+  try {
+    return new Intl.DateTimeFormat('pt-BR', {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'long',
+    }).format(new Date());
+  } catch {
+    return new Date().toLocaleDateString('pt-BR');
+  }
+}
 
-/** Cards grandes — área de toque ≥ 44px (WCAG / mobile). */
-const cardBtnClass = cn(
-  actionBtn3dBase,
-  'flex h-14 min-h-[44px] w-full max-w-[320px] items-center justify-center gap-2 px-4 text-[15px]',
-);
-
-type MenuCard = {
-  id: string;
-  label: string;
-  ariaLabel: string;
-  icon: ReactNode;
-  onClick: () => void;
-};
-
+/** Início — resumo operacional do dia e atalhos (sem menu legado). */
 export function TelaPrincipalScreen() {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
-  useScreenBg(BG);
+  const { user } = useAuth();
+  useScreenBg(SCREEN_BG);
 
-  const podeConfiguracao = canAccessConfiguracao(user?.codigo_perfil);
   const podeMapas = canAccessMapas(user?.codigo_perfil);
   const podeBancoHoras = canAccessBancoHoras(user?.codigo_perfil);
-
-  const handleSair = useCallback(() => {
-    void logout();
-  }, [logout]);
-
-  const cards: MenuCard[] = [];
-
-  if (podeMapas) {
-    cards.push({
-      id: 'mapas',
-      label: 'MAPAS',
-      ariaLabel: 'Mapas',
-      icon: <MapPinned className="h-5 w-5 shrink-0" strokeWidth={2.25} aria-hidden />,
-      onClick: () => navigate('/mapas'),
-    });
-  }
-
-  if (podeBancoHoras) {
-    cards.push({
-      id: 'banco-horas',
-      label: 'Banco de horas',
-      ariaLabel: 'Banco de horas operacional',
-      icon: <Clock3 className="h-5 w-5 shrink-0" strokeWidth={2.25} aria-hidden />,
-      onClick: () => navigate('/banco-horas'),
-    });
-  }
-
-  cards.push(
-    {
-      id: 'guia',
-      label: 'Guia',
-      ariaLabel: 'Guia',
-      icon: <NotebookTabs className="h-5 w-5 shrink-0" strokeWidth={2.25} aria-hidden />,
-      onClick: () => navigate('/guia'),
-    },
-    {
-      id: 'entrada-saida',
-      label: 'Chegada / Saída',
-      ariaLabel: 'Chegada e Saída',
-      icon: <Map className="h-5 w-5 shrink-0" strokeWidth={2.25} aria-hidden />,
-      onClick: () => navigate('/entrada-saida'),
-    },
-    {
-      id: 'indicadores',
-      label: 'Indicadores',
-      ariaLabel: 'Indicadores',
-      icon: <BarChart3 className="h-5 w-5 shrink-0" strokeWidth={2.25} aria-hidden />,
-      onClick: () => navigate('/indicadores'),
-    },
-  );
-
-  if (podeConfiguracao) {
-    cards.push({
-      id: 'configuracao',
-      label: 'Configuração',
-      ariaLabel: 'Configuração',
-      icon: <Cog className="h-5 w-5 shrink-0" strokeWidth={2.25} aria-hidden />,
-      onClick: () => navigate('/configuracao'),
-    });
-  }
-
-  cards.push({
-    id: 'sair',
-    label: 'Sair',
-    ariaLabel: 'Sair',
-    icon: <LogOut className="h-5 w-5 shrink-0" strokeWidth={2.25} aria-hidden />,
-    onClick: handleSair,
-  });
 
   return (
     <AppShell className="bg-screen">
       <div className="page box-border flex min-h-dvh flex-col bg-screen text-slate-900">
-        <PageHeader title="RedMapa" />
+        <PageHeader title="Início" />
 
-        <div className="page-body-center flex-1 gap-3 py-6">
-          {user ? (
-            <div className="surface-card mb-2 w-full max-w-[320px] px-4 py-3 text-center">
-              <p className="text-sm font-semibold text-foreground">{user.nome}</p>
-              <p className="helper-text mt-0.5">Matrícula {user.matricula}</p>
+        <div className="page-body flex-1 gap-4 pb-tabbar">
+          <section className="surface-card rounded-2xl px-4 py-3.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+              Resumo do dia
+            </p>
+            <h2 className="mt-1 text-lg font-bold capitalize leading-snug text-slate-900">
+              {formatHoje()}
+            </h2>
+            {user ? (
+              <p className="mt-1 text-sm text-slate-600">
+                {user.nome}
+                <span className="text-slate-400"> · </span>
+                Matrícula {user.matricula}
+              </p>
+            ) : null}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <StatusBadge label="Sessão ativa" tone="success" icon="ok" />
+              <StatusBadge label="Operação do dia" tone="info" icon="tempo" />
             </div>
-          ) : null}
+          </section>
 
-          <nav
-            className="flex w-full max-w-[320px] flex-col items-center gap-3"
-            aria-label="Menu principal"
-          >
-            {cards.map((card) => (
-              <Button
-                key={card.id}
-                type="button"
-                className={cardBtnClass}
-                aria-label={card.ariaLabel}
-                onClick={card.onClick}
-              >
-                {card.icon}
-                <span>{card.label}</span>
-              </Button>
-            ))}
-          </nav>
+          <section className="space-y-2" aria-label="Alertas">
+            <h3 className="px-0.5 text-[13px] font-bold uppercase tracking-wide text-slate-700">
+              Alertas
+            </h3>
+            <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-3.5 py-3">
+              <AlertTriangle
+                className="mt-0.5 h-5 w-5 shrink-0 text-amber-700"
+                aria-hidden
+              />
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-amber-950">
+                  Acompanhe pendências na Guia
+                </p>
+                <p className="mt-0.5 text-xs leading-snug text-amber-900/80">
+                  Saídas, chegadas, leituras e divergências ficam no módulo
+                  operacional Guia.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-2" aria-label="Atalhos operacionais">
+            <h3 className="px-0.5 text-[13px] font-bold uppercase tracking-wide text-slate-700">
+              Atalhos
+            </h3>
+            <div className="flex flex-col gap-2.5">
+              {podeMapas ? (
+                <HubNavCard
+                  title="Mapas"
+                  description="Planejamento de escalas do turno"
+                  icon={<MapPinned className="h-5 w-5" aria-hidden />}
+                  onClick={() => navigate('/mapas')}
+                />
+              ) : null}
+              <HubNavCard
+                title="Guia"
+                description="Registrar e acompanhar viagens"
+                icon={<NotebookTabs className="h-5 w-5" aria-hidden />}
+                onClick={() => navigate('/guia')}
+                meta={
+                  <StatusBadge label="Operacional" tone="primary" icon="tempo" />
+                }
+              />
+              <HubNavCard
+                title="Chegada / Saída"
+                description="Registros de ponto e auditoria"
+                icon={<Bus className="h-5 w-5" aria-hidden />}
+                onClick={() => navigate('/entrada-saida')}
+              />
+              {podeBancoHoras ? (
+                <HubNavCard
+                  title="Banco de horas"
+                  description="Histórico e ajustes de jornada"
+                  icon={<Clock3 className="h-5 w-5" aria-hidden />}
+                  onClick={() => navigate('/banco-horas')}
+                />
+              ) : null}
+              <HubNavCard
+                title="Indicadores"
+                description="Painel operacional"
+                icon={<BarChart3 className="h-5 w-5" aria-hidden />}
+                onClick={() => navigate('/indicadores')}
+              />
+            </div>
+          </section>
         </div>
       </div>
     </AppShell>

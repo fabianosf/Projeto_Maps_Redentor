@@ -476,61 +476,29 @@ def criar_trecho_inicial(
     riocard_fim: Optional[int] = None,
     id_usuario: Optional[int] = None,
     sentido: str = "IDA",
-) -> dict[str, Any] | GuiaError:
-    """Cria o primeiro trecho da jornada (abertura)."""
-    existentes = dal.read(
-        "SELECT id_trecho FROM tb_guia_trecho WHERE id_guia = ? LIMIT 1",
-        (int(id_guia),),
+) -> dict[str, Any] | GuiaError | None:
+    """
+    Legado: abertura da jornada NÃO cria trecho.
+    Início/fim da jornada pertencem ao motorista e não geram Ida/Volta
+    nem colocam recursos em trânsito. Mantido como no-op compatível.
+    """
+    del (
+        dal,
+        id_guia,
+        id_linha,
+        id_veiculo,
+        data_sql,
+        hor_ini,
+        hor_fim,
+        chegada_ponto,
+        jae_ini,
+        jae_fim,
+        riocard_ini,
+        riocard_fim,
+        id_usuario,
+        sentido,
     )
-    if existentes is not None and not getattr(existentes, "empty", True):
-        return listar_trechos(dal, int(id_guia))[0]
-
-    origem, destino = _locais_da_linha(dal, id_linha)
-    sent = (sentido or "IDA").strip().upper()
-    if sent not in SENTIDOS:
-        sent = "IDA"
-    ini_dt = _datetime_guia(data_sql, hor_ini) or (
-        _datetime_guia(data_sql, chegada_ponto) if chegada_ponto else None
-    )
-    fim_dt = _datetime_guia(data_sql, hor_fim)
-    # Abertura da jornada: trecho inicial fica PLANEJADO até iniciar rota
-    if fim_dt:
-        st = TRECHO_CONCLUIDO
-    else:
-        st = TRECHO_PLANEJADO
-    ok = dal.create(
-        """
-        INSERT INTO tb_guia_trecho (
-            id_guia, seq, id_linha, id_veiculo,
-            id_local_origem, id_local_destino, sentido, status,
-            hor_ini, hor_fim, jae_ini, jae_fim, riocard_ini, riocard_fim,
-            id_usuario, criado_em, versao
-        ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-        """,
-        (
-            int(id_guia),
-            id_linha,
-            id_veiculo,
-            origem,
-            destino,
-            sent,
-            st,
-            ini_dt,
-            fim_dt,
-            jae_ini,
-            jae_fim,
-            riocard_ini,
-            riocard_fim,
-            id_usuario,
-            _agora(),
-        ),
-    )
-    if not ok:
-        return GuiaError("Falha ao criar trecho inicial da guia.", "persistencia")
-    trechos = listar_trechos(dal, int(id_guia))
-    if not trechos:
-        return GuiaError("Falha ao ler trecho inicial.", "persistencia")
-    return trechos[0]
+    return None
 
 
 def criar_trecho(
@@ -584,19 +552,16 @@ def criar_trecho(
         if id_veiculo is None:
             return GuiaError("Carro não encontrado.", "carro_invalido")
 
-    # Empresa do veículo deve bater com a da guia (quando informada)
-    if id_veiculo is not None and guia.get("id_empresa") is not None:
-        vei = dal.read(
-            "SELECT id_empresa FROM tb_veiculo WHERE id_veiculo = ?",
+    # Carro é cadastro independente — não amarra id_empresa do veículo à guia.
+    if id_veiculo is not None:
+        vei_ok = dal.read(
+            "SELECT id_veiculo, ativo FROM tb_veiculo WHERE id_veiculo = ?",
             (int(id_veiculo),),
         )
-        if vei is not None and not vei.empty:
-            id_emp_v = vei.iloc[0].get("id_empresa")
-            if id_emp_v is not None and int(id_emp_v) != int(guia["id_empresa"]):
-                return GuiaError(
-                    "Carro de outra empresa. Encerre a guia e abra outra na empresa destino.",
-                    "empresa_diferente",
-                )
+        if vei_ok is None or vei_ok.empty:
+            return GuiaError("Carro não encontrado.", "carro_invalido")
+        if int(vei_ok.iloc[0].get("ativo") or 0) not in (1, True):
+            return GuiaError("Carro está inativo.", "carro_invalido")
 
     if id_linha is not None and guia.get("id_empresa") is not None:
         lin = dal.read(
@@ -640,16 +605,6 @@ def criar_trecho(
     if hor_fim and not _horario_valido(hor_fim):
         return GuiaError("Fim do trecho inválido.", "validacao")
 
-    # Carro em trânsito em outra guia/trecho
-    if id_veiculo is not None:
-        disp_v = disponibilidade_veiculo(dal, id_veiculo)
-        if disp_v["disponibilidade"] == MOT_EM_TRANSITO:
-            return GuiaError(
-                f"Carro em trânsito (guia {disp_v.get('numero_guia')}). "
-                "Conclua ou cancele o trecho antes de iniciar outro.",
-                "carro_em_transito",
-            )
-
     jae_ini = _parse_id(body.get("jae_ini"), allow_zero=True)
     jae_fim = _parse_id(body.get("jae_fim"), allow_zero=True)
     rio_ini = _parse_id(body.get("riocard_ini"), allow_zero=True)
@@ -664,10 +619,23 @@ def criar_trecho(
                     "leituras_obrigatorias",
                 )
 
-    iniciar = bool(body.get("iniciar")) or bool(hor_ini)
-    if hor_fim:
+    quer_iniciar = bool(body.get("iniciar")) or bool(hor_ini)
+    if quer_iniciar and not hor_ini:
+        return GuiaError(
+            "Informe a SAÍDA real do trecho para iniciar o trânsito.",
+            "saida_obrigatoria",
+        )
+    if hor_fim and not hor_ini:
+        return GuiaError(
+            "Informe a SAÍDA real antes da CHEGADA.",
+            "saida_obrigatoria",
+        )
+
+    # PLANEJADO (pendente) sem saída; EM_TRANSITO só com SAÍDA real;
+    # CONCLUIDO só com SAÍDA + CHEGADA reais (nunca usa fim da jornada).
+    if hor_ini and hor_fim:
         st = TRECHO_CONCLUIDO
-    elif iniciar:
+    elif hor_ini:
         st = TRECHO_EM_TRANSITO
     else:
         st = TRECHO_PLANEJADO
@@ -677,6 +645,16 @@ def criar_trecho(
     err_int = _validar_intervalo_horarios(ini_dt, fim_dt)
     if err_int:
         return err_int
+
+    # Carro em trânsito só impede iniciar (não bloqueia trecho PENDENTE).
+    if st == TRECHO_EM_TRANSITO and id_veiculo is not None:
+        disp_v = disponibilidade_veiculo(dal, id_veiculo)
+        if disp_v["disponibilidade"] == MOT_EM_TRANSITO:
+            return GuiaError(
+                f"Carro em trânsito (guia {disp_v.get('numero_guia')}). "
+                "Conclua ou cancele o trecho antes de iniciar outro.",
+                "carro_em_transito",
+            )
 
     seq = _proxima_seq_trecho(dal, int(id_guia))
     ok = dal.create(
@@ -814,13 +792,18 @@ def atualizar_trecho(
     if hor_fim:
         mudancas.append(("hor_fim", trecho.get("hor_fim"), hor_fim))
 
-    # Edição de dado já salvo exige motivo
-    ja_salvo = bool(trecho.get("hor_ini") or trecho.get("jae_ini") is not None)
-    if mudancas and ja_salvo:
+    # Edição livre em PENDENTE (PLANEJADO sem saída).
+    # CONCLUIDO / EM_TRANSITO com dados salvos → exige motivo + auditoria.
+    st_atual = _status_trecho(trecho)
+    pendente_sem_saida = st_atual == TRECHO_PLANEJADO and not trecho.get("hor_ini")
+    exige_auditoria = (not pendente_sem_saida) and bool(mudancas)
+    if st_atual == TRECHO_CONCLUIDO and mudancas:
+        exige_auditoria = True
+    if exige_auditoria:
         motivo = str(body.get("motivo") or body.get("justificativa") or "").strip()
         if len(motivo) < 5:
             return GuiaError(
-                "Informe o motivo ao editar dado já salvo (mín. 5 caracteres).",
+                "Informe o motivo ao corrigir trecho já iniciado/concluído (mín. 5 caracteres).",
                 "motivo_obrigatorio",
             )
         for campo, ant, novo in mudancas:
@@ -838,11 +821,33 @@ def atualizar_trecho(
             if err_a:
                 return err_a
 
-    st = _status_trecho(trecho)
+    st = st_atual
     if hor_fim:
-        st = TRECHO_CONCLUIDO
-    elif hor_ini and st == TRECHO_PLANEJADO:
+        if st_atual == TRECHO_PLANEJADO and not (hor_ini or trecho.get("hor_ini")):
+            return GuiaError(
+                "Informe a SAÍDA real antes da CHEGADA.",
+                "saida_obrigatoria",
+            )
+        if st_atual == TRECHO_PLANEJADO and (hor_ini or trecho.get("hor_ini")):
+            # Registro completo de viagem já encerrada
+            st = TRECHO_CONCLUIDO
+        elif st_atual == TRECHO_EM_TRANSITO:
+            st = TRECHO_CONCLUIDO
+        elif st_atual == TRECHO_CONCLUIDO:
+            st = TRECHO_CONCLUIDO
+    elif hor_ini and st_atual == TRECHO_PLANEJADO:
         st = TRECHO_EM_TRANSITO
+
+    if st == TRECHO_EM_TRANSITO and id_veiculo is not None:
+        disp_v = disponibilidade_veiculo(
+            dal, id_veiculo, excluir_id_trecho=int(id_trecho)
+        )
+        if disp_v["disponibilidade"] == MOT_EM_TRANSITO:
+            return GuiaError(
+                f"Carro em trânsito (guia {disp_v.get('numero_guia')}). "
+                "Conclua ou cancele o trecho antes.",
+                "carro_em_transito",
+            )
 
     ok = dal.update(
         """
@@ -939,17 +944,22 @@ def iniciar_trecho(
 
     hor_ini = str(body.get("hor_ini") or "").strip()
     if not hor_ini:
-        hor_ini = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return GuiaError(
+            "Informe a SAÍDA real do trecho para iniciar o trânsito.",
+            "saida_obrigatoria",
+        )
     if not _horario_valido(hor_ini):
-        return GuiaError("Início do trecho inválido.", "validacao")
+        return GuiaError("SAÍDA do trecho inválida.", "validacao")
     ini_dt = _datetime_guia(data_sql, hor_ini)
+    if ini_dt is None:
+        return GuiaError("SAÍDA do trecho inválida.", "validacao")
 
-    # Lock otimista: só inicia se ainda PLANEJADO na versão esperada
+    # Lock otimista: só inicia se ainda PLANEJADO; grava SAÍDA real (não COALESCE legado).
     versao_atual = _versao(trecho)
     ok = dal.update(
         """
         UPDATE tb_guia_trecho
-        SET status = ?, hor_ini = COALESCE(hor_ini, ?),
+        SET status = ?, hor_ini = ?,
             id_usuario = ?, atualizado_em = ?,
             versao = COALESCE(versao, 1) + 1
         WHERE id_trecho = ?
@@ -1025,10 +1035,15 @@ def concluir_trecho(
     data_sql = str(guia.get("hor_ini") or guia.get("data") or "")[:10]
     hor_fim = str(body.get("hor_fim") or "").strip()
     if not hor_fim:
-        hor_fim = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return GuiaError(
+            "Informe a CHEGADA real do trecho para concluir.",
+            "chegada_obrigatoria",
+        )
     if not _horario_valido(hor_fim):
-        return GuiaError("Fim do trecho inválido.", "validacao")
+        return GuiaError("CHEGADA do trecho inválida.", "validacao")
     fim_dt = _datetime_guia(data_sql, hor_fim)
+    if fim_dt is None:
+        return GuiaError("CHEGADA do trecho inválida.", "validacao")
     err_int = _validar_intervalo_horarios(trecho.get("hor_ini"), fim_dt)
     if err_int:
         return err_int
@@ -1189,6 +1204,61 @@ def cancelar_trecho(
     return GuiaError("Trecho não encontrado.", "nao_encontrado")
 
 
+def excluir_trecho(
+    dal, id_trecho: int, body: dict[str, Any] | None, id_usuario: int
+) -> GuiaError | None:
+    """
+    Exclui trecho PENDENTE (PLANEJADO sem SAÍDA).
+    EM_TRANSITO deve ser cancelado com motivo; CONCLUIDO só corrige com auditoria.
+    """
+    del id_usuario  # reservado para auditoria futura de exclusão
+    body = body or {}
+    df = dal.read(
+        "SELECT * FROM tb_guia_trecho WHERE id_trecho = ?",
+        (int(id_trecho),),
+    )
+    if df is None or getattr(df, "empty", True):
+        return GuiaError("Trecho não encontrado.", "nao_encontrado")
+    trecho = df.iloc[0].to_dict()
+    err_v = _checar_versao(trecho, body)
+    if err_v:
+        return err_v
+
+    id_guia = int(trecho["id_guia"])
+    guia = _row_guia(dal, id_guia)
+    if not guia:
+        return GuiaError("Guia não encontrada.", "nao_encontrado")
+    if _status_guia(guia) != STATUS_ABERTA:
+        return GuiaError("Guia encerrada.", "guia_encerrada")
+
+    st = _status_trecho(trecho)
+    if st == TRECHO_EM_TRANSITO:
+        return GuiaError(
+            "Trecho em trânsito não pode ser excluído. Cancele informando o motivo.",
+            "trecho_em_transito",
+        )
+    if st == TRECHO_CONCLUIDO:
+        return GuiaError(
+            "Trecho concluído não pode ser excluído. Corrija com motivo e auditoria.",
+            "trecho_concluido",
+        )
+    if st == TRECHO_CANCELADO:
+        return GuiaError("Trecho já cancelado.", "trecho_cancelado")
+    if trecho.get("hor_ini"):
+        return GuiaError(
+            "Trecho com SAÍDA registrada não pode ser excluído. Cancele com motivo.",
+            "trecho_com_saida",
+        )
+
+    ok = dal.delete(
+        "DELETE FROM tb_guia_trecho WHERE id_trecho = ?",
+        (int(id_trecho),),
+    )
+    if not ok:
+        return GuiaError("Falha ao excluir trecho.", "persistencia")
+    return None
+
+
 def registrar_troca_recurso(
     dal, id_guia: int, body: dict[str, Any], id_usuario: int
 ) -> dict[str, Any] | GuiaError:
@@ -1239,18 +1309,11 @@ def registrar_troca_recurso(
         if not id_veiculo_novo:
             return GuiaError("Informe o novo carro.", "validacao")
         vei = dal.read(
-            "SELECT id_veiculo, numero_frota, id_empresa FROM tb_veiculo WHERE id_veiculo = ? AND ativo = 1",
+            "SELECT id_veiculo, numero_frota, ativo FROM tb_veiculo WHERE id_veiculo = ? AND ativo = 1",
             (int(id_veiculo_novo),),
         )
         if vei is None or vei.empty:
             return GuiaError("Carro não encontrado.", "carro_invalido")
-        if id_empresa is not None and vei.iloc[0].get("id_empresa") is not None:
-            if int(vei.iloc[0]["id_empresa"]) != int(id_empresa):
-                return GuiaError(
-                    "Troca para outra empresa não é permitida nesta guia. "
-                    "Encerre a jornada e abra nova guia na empresa destino.",
-                    "empresa_diferente",
-                )
         valor_novo = str(vei.iloc[0].get("numero_frota") or id_veiculo_novo)
         dal.update(
             "UPDATE tb_guia SET id_veiculo = ?, versao = COALESCE(versao, 1) + 1 WHERE id_guia = ?",

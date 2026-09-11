@@ -134,10 +134,17 @@ export interface GuiaViagemCard {
   viagem_label: string;
   id_viagem?: number | null;
   id_guia?: number | null;
+  /** Trecho operacional (jornada), quando consolidado. */
+  id_trecho?: number | null;
+  trecho_status?: string | null;
+  trecho_versao?: number | null;
   id_mapa?: number | null;
   cod_map?: number | null;
   codigo_mapa?: string | null;
   mapa?: string | null;
+  /** Código/descrição da linha para lista compacta. */
+  linha?: string | null;
+  codigo_linha?: string | number | null;
   veiculo: string;
   numero_frota?: string | null;
   id_veiculo?: number | null;
@@ -184,6 +191,8 @@ export interface GuiaResumoDia {
   embarques_ida?: number;
   embarques_volta?: number;
   total_viagens: number;
+  /** Trechos/viagens ainda pendentes (operacional). */
+  total_pendente?: number;
   ultima_leitura?: string | null;
 }
 

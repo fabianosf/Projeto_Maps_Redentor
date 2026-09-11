@@ -76,7 +76,7 @@ export function IndicadoresConfigScreen() {
   const snapshotRef = useRef<IndicadorVinculo[]>([]);
   const [infoMsg, setInfoMsg] = useState<string | null>(null);
 
-  const voltar = () => navigate('/configuracao');
+  const voltar = () => navigate('/mais');
 
   const carregarVinculos = useCallback(async (idPerfil: number) => {
     setBusy(true);

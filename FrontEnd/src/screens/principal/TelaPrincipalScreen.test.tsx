@@ -38,24 +38,23 @@ vi.mock('@/context/AuthContext', () => ({
 }));
 
 describe('TelaPrincipalScreen', () => {
-  it('oculta Configuração para Despachante', () => {
+  it('mostra resumo do dia e atalho Guia', () => {
     authState.perfil = 2;
     authState.nome = 'Despachante';
     renderWithProviders(<TelaPrincipalScreen />);
 
-    expect(screen.getByRole('button', { name: 'Guia' })).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: 'Configuração' }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Início' })).toBeInTheDocument();
+    expect(screen.getByText(/Resumo do dia/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Guia/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Configuração' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sair' })).not.toBeInTheDocument();
   });
 
-  it('exibe Configuração para Administrador', () => {
-    authState.perfil = 1;
-    authState.nome = 'Admin';
+  it('exibe Mapas para Despachante', () => {
+    authState.perfil = 2;
+    authState.nome = 'Despachante';
     renderWithProviders(<TelaPrincipalScreen />);
 
-    expect(
-      screen.getByRole('button', { name: 'Configuração' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Mapas/i })).toBeInTheDocument();
   });
 });

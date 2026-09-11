@@ -6,13 +6,17 @@
 
 from __future__ import annotations
 
+import logging
+import math
 import re
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from typing import Any, Optional
 
 from .cadastros_service import CadastroError, criar_veiculo
 from .constants import COD_MAP_INSERT_RETRIES, COD_MAP_MAX
+
+logger = logging.getLogger(__name__)
 
 STATUS_ESCALA_EM_ANDAMENTO = "EM_ANDAMENTO"
 STATUS_ESCALA_ENCERRADA = "ENCERRADA"
@@ -313,8 +317,6 @@ def _limpar_codigo_mapa(valor: Any) -> str | None:
     if valor is None:
         return None
     try:
-        import math
-
         if isinstance(valor, float) and math.isnan(valor):
             return None
     except (TypeError, ValueError):
@@ -323,6 +325,90 @@ def _limpar_codigo_mapa(valor: Any) -> str | None:
     if not texto or texto.lower() in ("none", "null", "nan", "nat"):
         return None
     return texto
+
+
+def _json_safe_value(value: Any) -> Any:
+    """Converte valores pandas/DB (Timestamp, Timedelta, NaT, date) para JSON."""
+    if value is None:
+        return None
+
+    try:
+        import pandas as pd
+
+        if value is pd.NaT:
+            return None
+        if isinstance(value, float) and pd.isna(value):
+            return None
+        if isinstance(value, pd.Timedelta):
+            total = int(value.total_seconds())
+            if total < 0:
+                return None
+            # TIME do MySQL costuma vir como Timedelta do dia (ex.: 17:00).
+            total = total % (24 * 3600)
+            h, rem = divmod(total, 3600)
+            m, s = divmod(rem, 60)
+            return f"{h:02d}:{m:02d}:{s:02d}" if s else f"{h:02d}:{m:02d}"
+        if isinstance(value, pd.Timestamp):
+            if pd.isna(value):
+                return None
+            return value.to_pydatetime().strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        pass
+
+    if isinstance(value, float) and math.isnan(value):
+        return None
+
+    if isinstance(value, timedelta):
+        total = int(value.total_seconds())
+        if total < 0:
+            return None
+        total = total % (24 * 3600)
+        h, rem = divmod(total, 3600)
+        m, s = divmod(rem, 60)
+        return f"{h:02d}:{m:02d}:{s:02d}" if s else f"{h:02d}:{m:02d}"
+
+    if isinstance(value, time):
+        return value.strftime("%H:%M:%S") if value.second else value.strftime("%H:%M")
+
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+
+    if isinstance(value, date):
+        return value.strftime("%Y-%m-%d")
+
+    if isinstance(value, dict):
+        return {str(k): _json_safe_value(v) for k, v in value.items()}
+
+    if isinstance(value, (list, tuple)):
+        return [_json_safe_value(v) for v in value]
+
+    if hasattr(value, "item") and callable(getattr(value, "item", None)):
+        try:
+            return _json_safe_value(value.item())
+        except Exception:
+            pass
+
+    if isinstance(value, (str, int, bool)):
+        return value
+
+    if isinstance(value, float):
+        return value
+
+    # Fallback seguro — nunca deixa Timedelta/objeto estranho no jsonify.
+    return str(value)
+
+
+def _sanitizar_mapa_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    safe = _json_safe_value(payload)
+    if not isinstance(safe, dict):
+        return {}
+    if "codigo_mapa" in safe:
+        safe["codigo_mapa"] = _limpar_codigo_mapa(safe.get("codigo_mapa"))
+    if "itens" not in safe or safe["itens"] is None:
+        safe["itens"] = []
+    elif not isinstance(safe["itens"], list):
+        safe["itens"] = []
+    return safe
 
 
 def _rotulo_mapa(codigo_mapa: Any = None, cod_map: Any = None) -> str:
@@ -477,7 +563,13 @@ def listar_mapas(dal, data: str | None = None) -> list[dict[str, Any]] | MapaErr
                COALESCE(e_map.descricao, e_hdr.descricao, e_item.descricao) AS empresa,
                CAST(COALESCE(l_hdr.codigo_linha, l_item.codigo_linha) AS CHAR) AS linha,
                t.descricao AS turno,
-               u.nome AS despachante
+               u.nome AS despachante,
+               (
+                 SELECT COUNT(*)
+                 FROM tb_item_map i_cnt
+                 INNER JOIN tb_viagem v_cnt ON v_cnt.id_item_registro = i_cnt.id_item
+                 WHERE i_cnt.idmap = m.id_registro
+               ) AS total_viagens
         FROM tb_map m
         INNER JOIN tb_turno t ON t.id_turno = m.id_turno
         INNER JOIN tb_usuario u ON u.id_usuario = m.id_usuario
@@ -497,9 +589,14 @@ def listar_mapas(dal, data: str | None = None) -> list[dict[str, Any]] | MapaErr
     if df.empty:
         return []
     registros = df.to_dict(orient="records")
+    out: list[dict[str, Any]] = []
     for row in registros:
-        row["codigo_mapa"] = _limpar_codigo_mapa(row.get("codigo_mapa"))
-    return registros
+        safe = _json_safe_value(row)
+        if not isinstance(safe, dict):
+            continue
+        safe["codigo_mapa"] = _limpar_codigo_mapa(safe.get("codigo_mapa"))
+        out.append(safe)
+    return out
 
 
 def obter_indicadores(
@@ -629,8 +726,8 @@ def obter_mapa_completo(dal, id_registro: int) -> dict[str, Any] | MapaError:
                u.nome AS despachante,
                u.matricula AS matricula_despachante
         FROM tb_map m
-        INNER JOIN tb_turno t ON t.id_turno = m.id_turno
-        INNER JOIN tb_usuario u ON u.id_usuario = m.id_usuario
+        LEFT JOIN tb_turno t ON t.id_turno = m.id_turno
+        LEFT JOIN tb_usuario u ON u.id_usuario = m.id_usuario
         LEFT JOIN tb_empresa e_map ON e_map.id_empresa = m.id_empresa
         LEFT JOIN tb_linha l_hdr ON l_hdr.id_linha = m.id_linha
         LEFT JOIN tb_empresa e_hdr ON e_hdr.id_empresa = l_hdr.id_empresa
@@ -638,7 +735,7 @@ def obter_mapa_completo(dal, id_registro: int) -> dict[str, Any] | MapaError:
         """,
         (id_registro,),
     )
-    if cab.empty:
+    if cab is None or getattr(cab, "empty", True):
         return MapaError("MAPA não encontrado.", "nao_encontrado")
 
     itens_df = dal.read(
@@ -648,13 +745,13 @@ def obter_mapa_completo(dal, id_registro: int) -> dict[str, Any] | MapaError:
                l.id_linha AS id_linha,
                l.codigo_linha,
                l.descricao AS linha,
-               e.id_empresa AS id_empresa,
+               COALESCE(e.id_empresa, v.id_empresa) AS id_empresa,
                e.descricao AS empresa,
                mot.nome AS motorista, mot.matricula AS matricula_motorista
         FROM tb_item_map i
-        INNER JOIN tb_veiculo v ON v.id_veiculo = i.id_veiculo
-        INNER JOIN tb_linha l ON l.id_linha = i.id_linha
-        INNER JOIN tb_empresa e ON e.id_empresa = l.id_empresa
+        LEFT JOIN tb_veiculo v ON v.id_veiculo = i.id_veiculo
+        LEFT JOIN tb_linha l ON l.id_linha = i.id_linha
+        LEFT JOIN tb_empresa e ON e.id_empresa = l.id_empresa
         LEFT JOIN tb_motorista mot ON mot.id_motorista = i.id_motorista
         WHERE i.idmap = ?
         ORDER BY i.id_item
@@ -663,28 +760,42 @@ def obter_mapa_completo(dal, id_registro: int) -> dict[str, Any] | MapaError:
     )
 
     itens: list[dict[str, Any]] = []
-    for _, item_row in itens_df.iterrows():
-        item = item_row.to_dict()
-        id_item = int(item["id_item"])
-        item["id_mapa_item"] = id_item
-        st = str(item.get("status_escala") or STATUS_ESCALA_EM_ANDAMENTO).strip().upper()
-        item["status_escala"] = st or STATUS_ESCALA_EM_ANDAMENTO
-        _enriquecer_campos_horas_item(item)
-        viagens_df = dal.read(
-            """
-            SELECT * FROM tb_viagem
-            WHERE id_item_registro = ?
-            ORDER BY id_viagem
-            """,
-            (id_item,),
-        )
-        viagens = (
-            viagens_df.to_dict(orient="records") if not viagens_df.empty else []
-        )
-        for v in viagens:
-            v["id_mapa_item"] = int(v.get("id_item_registro") or id_item)
-        item["viagens"] = viagens
-        itens.append(item)
+    if itens_df is not None and not getattr(itens_df, "empty", True):
+        for _, item_row in itens_df.iterrows():
+            item = item_row.to_dict()
+            try:
+                id_item = int(item["id_item"])
+            except (TypeError, ValueError, KeyError):
+                logger.warning(
+                    "Item de mapa com id_item inválido (mapa=%s): %s",
+                    id_registro,
+                    item.get("id_item"),
+                )
+                continue
+            item["id_mapa_item"] = id_item
+            st = str(item.get("status_escala") or STATUS_ESCALA_EM_ANDAMENTO).strip().upper()
+            item["status_escala"] = st or STATUS_ESCALA_EM_ANDAMENTO
+            _enriquecer_campos_horas_item(item)
+            viagens_df = dal.read(
+                """
+                SELECT * FROM tb_viagem
+                WHERE id_item_registro = ?
+                ORDER BY id_viagem
+                """,
+                (id_item,),
+            )
+            viagens = (
+                viagens_df.to_dict(orient="records")
+                if viagens_df is not None and not getattr(viagens_df, "empty", True)
+                else []
+            )
+            for v in viagens:
+                try:
+                    v["id_mapa_item"] = int(v.get("id_item_registro") or id_item)
+                except (TypeError, ValueError):
+                    v["id_mapa_item"] = id_item
+            item["viagens"] = viagens
+            itens.append(item)
 
     resultado = cab.iloc[0].to_dict()
     data_ok = _coerce_mapa_date(resultado.get("data"))
@@ -700,17 +811,32 @@ def obter_mapa_completo(dal, id_registro: int) -> dict[str, Any] | MapaError:
             resultado["id_empresa"] = id_emp_res
 
     codigo = _limpar_codigo_mapa(resultado.get("codigo_mapa"))
-    if not codigo and resultado.get("id_empresa") is not None:
-        codigo = _assegurar_codigo_mapa_registro(dal, int(id_registro))
+    id_emp_cab = resultado.get("id_empresa")
+    try:
+        id_emp_ok = (
+            id_emp_cab is not None
+            and str(id_emp_cab).strip() not in ("", "None", "nan", "0")
+            and int(id_emp_cab) > 0
+        )
+    except (TypeError, ValueError):
+        id_emp_ok = False
+    if not codigo and id_emp_ok:
+        try:
+            codigo = _assegurar_codigo_mapa_registro(dal, int(id_registro))
+        except Exception as exc:  # noqa: BLE001 — legado nunca derruba o GET
+            logger.exception(
+                "Falha ao assegurar codigo_mapa do mapa %s: %s", id_registro, exc
+            )
+            codigo = None
     resultado["codigo_mapa"] = codigo
     resultado["itens"] = itens
-    return resultado
+    return _sanitizar_mapa_payload(resultado)
 
 
 def _resolver_ou_criar_veiculo_mapa(
     dal, payload: dict[str, Any], id_empresa: int
 ) -> int | MapaError:
-    """Valida frota do cabeçalho; cria veículo se não existir; exige mesma empresa."""
+    """Valida frota; cria veículo se não existir. Empresa do mapa é opcional no carro."""
     frota_raw = payload.get("numero_frota")
     if frota_raw is None or str(frota_raw).strip() == "":
         frota_raw = payload.get("veiculo")
@@ -731,12 +857,6 @@ def _resolver_ou_criar_veiculo_mapa(
         row = existente.iloc[0]
         if int(row.get("ativo") or 0) not in (1, True):
             return MapaError(f"Veículo {frota} está inativo.", "validacao")
-        id_emp_vei = row["id_empresa"]
-        if id_emp_vei is None or int(id_emp_vei) != int(id_empresa):
-            return MapaError(
-                f"Veículo {frota} não pertence à empresa selecionada.",
-                "validacao",
-            )
         return int(row["id_veiculo"])
 
     criado = criar_veiculo(dal, numero_frota=frota, id_empresa=int(id_empresa))
@@ -1937,36 +2057,16 @@ def obter_banco_horas_motorista(
     }
 
 
-def _validar_frota_prefixo_veiculo(
-    dal, id_veiculo: int, id_linha: int
-) -> MapaError | None:
-    """Confere prefixo/faixa da frota com a empresa da linha."""
-    lin = dal.read(
-        """
-        SELECT e.descricao AS empresa
-        FROM tb_linha l
-        INNER JOIN tb_empresa e ON e.id_empresa = l.id_empresa
-        WHERE l.id_linha = ?
-        LIMIT 1
-        """,
-        (int(id_linha),),
-    )
-    if lin.empty:
-        return MapaError("Linha não encontrada.", "nao_encontrado")
+def _validar_veiculo_ativo(dal, id_veiculo: int) -> MapaError | None:
+    """Carro ativo independente da empresa (empresa fica no Mapa/Linha/Guia)."""
     vei = dal.read(
-        "SELECT numero_frota FROM tb_veiculo WHERE id_veiculo = ? LIMIT 1",
+        "SELECT id_veiculo, ativo, numero_frota FROM tb_veiculo WHERE id_veiculo = ?",
         (int(id_veiculo),),
     )
     if vei.empty:
         return MapaError("Veículo não encontrado.", "validacao")
-    from .cadastros_service import CadastroError, _validar_frota_empresa
-
-    validado = _validar_frota_empresa(
-        str(vei.iloc[0]["numero_frota"] or ""),
-        str(lin.iloc[0]["empresa"] or ""),
-    )
-    if isinstance(validado, CadastroError):
-        return MapaError(validado.mensagem, validado.codigo)
+    if int(vei.iloc[0].get("ativo") or 0) not in (1, True):
+        return MapaError("Veículo está inativo.", "validacao")
     return None
 
 
@@ -1986,35 +2086,6 @@ def _resolver_id_linha_item(dal, payload: dict[str, Any]) -> int | MapaError:
     if df.empty:
         return MapaError("Linha não encontrada.", "nao_encontrado")
     return int(df.iloc[0]["id_linha"])
-
-
-def _validar_veiculo_empresa_da_linha(
-    dal, id_veiculo: int, id_linha: int
-) -> MapaError | None:
-    lin = dal.read(
-        "SELECT id_empresa FROM tb_linha WHERE id_linha = ?",
-        (int(id_linha),),
-    )
-    if lin.empty:
-        return MapaError("Linha não encontrada.", "nao_encontrado")
-    id_emp_linha = int(lin.iloc[0]["id_empresa"])
-
-    vei = dal.read(
-        "SELECT id_veiculo, id_empresa, ativo FROM tb_veiculo WHERE id_veiculo = ?",
-        (int(id_veiculo),),
-    )
-    if vei.empty:
-        return MapaError("Veículo não encontrado.", "validacao")
-    if int(vei.iloc[0].get("ativo") or 0) not in (1, True):
-        return MapaError("Veículo está inativo.", "validacao")
-    id_emp_vei = vei.iloc[0]["id_empresa"]
-    if id_emp_vei is not None and str(id_emp_vei) not in ("", "None", "nan"):
-        if int(id_emp_vei) != id_emp_linha:
-            return MapaError(
-                "Veículo não pertence à empresa da linha.",
-                "validacao",
-            )
-    return None
 
 
 def _exigir_horarios_item(
@@ -2061,13 +2132,9 @@ def criar_item_map(
     if isinstance(id_veiculo, MapaError):
         return id_veiculo
 
-    err_emp = _validar_veiculo_empresa_da_linha(dal, int(id_veiculo), int(id_linha))
-    if err_emp is not None:
-        return err_emp
-
-    err_frota = _validar_frota_prefixo_veiculo(dal, int(id_veiculo), int(id_linha))
-    if err_frota is not None:
-        return err_frota
+    err_vei = _validar_veiculo_ativo(dal, int(id_veiculo))
+    if err_vei is not None:
+        return err_vei
 
     id_motorista = _resolver_id_motorista(dal, payload)
     if isinstance(id_motorista, MapaError):
@@ -2184,13 +2251,9 @@ def atualizar_item_map(
     if isinstance(id_veiculo, MapaError):
         return id_veiculo
 
-    err_emp = _validar_veiculo_empresa_da_linha(dal, int(id_veiculo), int(id_linha))
-    if err_emp is not None:
-        return err_emp
-
-    err_frota = _validar_frota_prefixo_veiculo(dal, int(id_veiculo), int(id_linha))
-    if err_frota is not None:
-        return err_frota
+    err_vei = _validar_veiculo_ativo(dal, int(id_veiculo))
+    if err_vei is not None:
+        return err_vei
 
     id_motorista = _resolver_id_motorista(dal, payload)
     if isinstance(id_motorista, MapaError):

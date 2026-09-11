@@ -49,8 +49,16 @@ vi.mock('@/api/guia', () => ({
   listGuias: vi.fn(),
   createGuia: vi.fn(),
   deleteGuia: vi.fn(),
+  getGuia: vi.fn(),
   getGuiaByNumero: vi.fn(),
   updateGuia: vi.fn(),
+  criarTrechoGuia: vi.fn(),
+  atualizarTrechoGuia: vi.fn(),
+  iniciarTrechoGuia: vi.fn(),
+  concluirTrechoGuia: vi.fn(),
+  cancelarTrechoGuia: vi.fn(),
+  encerrarGuia: vi.fn(),
+  registrarAlteracaoGuia: vi.fn(),
   registrarAjusteManual: vi.fn(),
   salvarRoletaLeitura: vi.fn(),
   sugerirRoletaInicial: vi.fn(),
@@ -88,6 +96,14 @@ const guiaSample = {
   observacao: null,
   linha_codigo: '024',
   turno_descricao: 'manhã',
+  status: 'ABERTA' as const,
+  trechos: [] as Array<{
+    id_trecho: number;
+    id_guia: number;
+    sentido: string;
+    status: string;
+    versao?: number;
+  }>,
 };
 
 const consolidadoOk = {
@@ -101,6 +117,7 @@ const consolidadoOk = {
     ida: { jae: 36, riocard: 10 },
     volta: { jae: 50, riocard: 8 },
     total_viagens: 2,
+    total_pendente: 0,
     ultima_leitura: '08:42',
   },
   viagens: [
@@ -110,6 +127,7 @@ const consolidadoOk = {
       id_viagem: 1,
       id_guia: 10,
       mapa: 'Mapa 024',
+      linha: '024',
       veiculo: '102345',
       data: '10/09/2026',
       turno: 'manhã',
@@ -137,6 +155,7 @@ const consolidadoOk = {
       id_viagem: 1,
       id_guia: 10,
       mapa: 'Mapa 024',
+      linha: '024',
       veiculo: '102345',
       data: '10/09/2026',
       turno: 'manhã',
@@ -167,6 +186,10 @@ describe('GuiaScreen', () => {
     vi.clearAllMocks();
     navigateMock.mockReset();
     vi.mocked(guiaApi.listGuias).mockResolvedValue(consolidadoOk);
+    vi.mocked(guiaApi.getGuia).mockResolvedValue({
+      ok: true,
+      guia: guiaSample,
+    });
     vi.mocked(guiaApi.getHistoricoRoleta).mockResolvedValue({
       ok: true,
       historico: [],
@@ -232,12 +255,11 @@ describe('GuiaScreen', () => {
     });
 
     expect(screen.getAllByText('Sincronizado').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('36').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getAllByText('50').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText(/última leitura/i)).toBeInTheDocument();
+    expect(screen.getByText(/concluídas/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/viagem 01, ida/i)).toBeInTheDocument();
-    expect(screen.getAllByText('Ja E').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText('RioCard').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('Concluída').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole('button', { name: /filtrar/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /registrar próxima viagem/i })).toBeInTheDocument();
     expect(guiaApi.listGuias).toHaveBeenCalled();
   });
 
@@ -324,7 +346,7 @@ describe('GuiaScreen', () => {
     });
   });
 
-  it('abre editor Ja E da viagem', async () => {
+  it('abre editor Ja E da viagem pelo detalhe', async () => {
     const user = userEvent.setup();
     vi.mocked(guiaApi.salvarRoletaLeitura).mockResolvedValue({
       ok: true,
@@ -340,12 +362,39 @@ describe('GuiaScreen', () => {
       mensagem: 'Leitura registrada com sucesso.',
     });
     renderWithProviders(<GuiaScreen />);
-    const editors = await screen.findAllByLabelText(/editar ja e/i);
-    await user.click(editors[0]);
+    await user.click(await screen.findByLabelText(/viagem 01, ida/i));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByLabelText(/editar ja e/i));
     expect(await screen.findByText(/ja e — ida/i)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Salvar' }));
     await waitFor(() => {
       expect(guiaApi.salvarRoletaLeitura).toHaveBeenCalled();
+    });
+  });
+
+  it('Registrar próxima viagem abre diálogo na guia aberta', async () => {
+    const user = userEvent.setup();
+    vi.mocked(guiaApi.criarTrechoGuia).mockResolvedValue({
+      ok: true,
+      trecho: {
+        id_trecho: 99,
+        id_guia: 10,
+        sentido: 'VOLTA',
+        status: 'PLANEJADO',
+      },
+      mensagem: 'Trecho criado.',
+    });
+    renderWithProviders(<GuiaScreen />);
+    await user.click(
+      await screen.findByRole('button', { name: /registrar próxima viagem/i }),
+    );
+    expect(await screen.findByText(/cria um novo trecho/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Confirmar' }));
+    await waitFor(() => {
+      expect(guiaApi.criarTrechoGuia).toHaveBeenCalledWith(
+        10,
+        expect.objectContaining({ sentido: expect.stringMatching(/IDA|VOLTA/) }),
+      );
     });
   });
 

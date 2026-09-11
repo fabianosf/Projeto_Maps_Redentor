@@ -326,12 +326,17 @@ def _validar_payload(
     if isinstance(obs, GuiaError):
         return obs
 
-    numero_frota = str(body.get("numero_frota", body.get("carro", ""))).strip()
+    numero_frota = str(body.get("numero_frota", body.get("carro", ""))).strip().upper()
     matricula_motorista = str(
         body.get("matricula_motorista", body.get("motorista", ""))
     ).strip()
-    if numero_frota and (not numero_frota.isdigit() or len(numero_frota) > 5):
-        return GuiaError("Carro deve conter até 5 dígitos numéricos.", "validacao")
+    if numero_frota:
+        from .cadastros_service import CadastroError, validar_frota
+
+        vf = validar_frota(numero_frota)
+        if isinstance(vf, CadastroError):
+            return GuiaError(vf.mensagem, vf.codigo)
+        numero_frota = vf[0]
     if matricula_motorista and (
         not matricula_motorista.isdigit() or len(matricula_motorista) > 5
     ):
@@ -428,7 +433,6 @@ def criar_guia(dal, body: dict[str, Any]) -> dict[str, Any] | GuiaError:
     from .guia_jornada_service import (
         STATUS_ABERTA,
         STATUS_ENCERRADA,
-        criar_trecho_inicial,
         validar_abertura_jornada,
     )
 
@@ -500,22 +504,8 @@ def criar_guia(dal, body: dict[str, Any]) -> dict[str, Any] | GuiaError:
         (dados["numero"],),
     )
     id_guia = int(row.iloc[0]["id_guia"])
-    trecho = criar_trecho_inicial(
-        dal,
-        id_guia,
-        id_linha=dados.get("id_linha"),
-        id_veiculo=dados.get("id_veiculo"),
-        data_sql=dados["data_sql"],
-        hor_ini=dados.get("hor_ini"),
-        hor_fim=dados.get("hor_fim"),
-        chegada_ponto=chegada or None,
-        jae_ini=dados.get("roleta01_ini"),
-        jae_fim=dados.get("roleta01_fim"),
-        riocard_ini=dados.get("roleta2_ini"),
-        riocard_fim=dados.get("roleta2_fim"),
-    )
-    if isinstance(trecho, GuiaError):
-        return trecho
+    # Jornada do motorista NÃO cria trechos Ida/Volta nem coloca recursos em trânsito.
+    # Trechos são criados explicitamente pelo despachante com SAÍDA/CHEGADA reais.
     from .guia_jornada_service import obter_guia_completa
 
     completo = obter_guia_completa(dal, id_guia)

@@ -722,13 +722,13 @@ export function UsuariosScreen() {
         <div className="page bg-screen">
           <PageHeader
             title="Cadastro de Usuário"
-            onBack={() => navigate('/configuracao')}
+            onBack={() => navigate('/mais')}
           />
           <AlertDialog
             open
             message="Acesso restrito a Administradores e Inspetores."
             confirmLabel="OK"
-            onConfirm={() => navigate('/configuracao')}
+            onConfirm={() => navigate('/mais')}
           />
         </div>
       </AppShell>
@@ -740,7 +740,7 @@ export function UsuariosScreen() {
       <div className="page bg-screen">
         <PageHeader
           title="Cadastro de Usuário"
-          onBack={() => navigate('/configuracao')}
+          onBack={() => navigate('/mais')}
         />
 
         <div className="page-body bg-screen">

@@ -23,7 +23,7 @@ def cadastros_mestres():
 @cadastros_bp.post("/veiculos")
 @require_mapa_access
 def post_veiculo():
-    """Cadastra veículo (frota) vinculado à empresa — usado no Novo carro do MAPA."""
+    """Cadastra veículo (frota) — cadastro independente; id_empresa opcional."""
     body = request.get_json(silent=True) or {}
     numero_frota = str(body.get("numero_frota", body.get("frota", ""))).strip()
     id_empresa = body.get("id_empresa")

@@ -1,17 +1,27 @@
 import type { ReactNode } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 type Props = {
   title: string;
   onBack?: () => void;
   rightSlot?: ReactNode;
+  className?: string;
 };
 
-/** Cabeçalho azul — voltar como ícone simples (sem caixa/borda). */
-export function PageHeader({ title, onBack, rightSlot }: Props) {
+/**
+ * Cabeçalho azul institucional.
+ * Voltar = ícone simples sem caixa/borda.
+ */
+export function OpsPageHeader({ title, onBack, rightSlot, className }: Props) {
   return (
-    <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-0.5 bg-primary px-1.5 text-primary-foreground shadow-sm">
+    <header
+      className={cn(
+        'sticky top-0 z-20 flex h-14 shrink-0 items-center gap-0.5 bg-primary px-1.5 text-primary-foreground shadow-sm',
+        className,
+      )}
+    >
       {onBack ? (
         <Button
           type="button"

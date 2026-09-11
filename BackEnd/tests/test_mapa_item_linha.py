@@ -104,17 +104,17 @@ def test_veiculo_repetido_mesmo_mapa(client):
     assert r2.get_json()["codigo"] == "conflito_veiculo"
 
 
-def test_veiculo_outra_empresa_da_linha(client):
+def test_veiculo_outra_empresa_da_linha_permitido(client):
+    """Carro ativo de outra empresa pode ser usado na linha/mapa da empresa atual."""
     auth_client(client, "1")
     cri = client.post("/api/v1/mapas", json=_payload_mapa())
     id_reg = cri.get_json()["mapa"]["id_registro"]
-    # linha 1 = empresa 1; veiculo 2 = empresa 2
+    # linha 1 = empresa 1; veiculo 2 = empresa 2 (C47000)
     resp = client.post(
         f"/api/v1/mapas/{id_reg}/itens",
         json=_payload_item(id_linha=1, id_veiculo=2),
     )
-    assert resp.status_code == 400
-    assert "empresa" in resp.get_json()["mensagem"].lower()
+    assert resp.status_code == 201, resp.get_json()
 
 
 def test_item_sem_motorista_ou_horario(client):
@@ -134,20 +134,16 @@ def test_item_sem_motorista_ou_horario(client):
     assert resp.status_code == 400
 
 
-def test_item_frota_incompativel_com_empresa(client, dal):
-    """Backend rejeita veículo cuja frota não casa com a empresa da linha."""
+def test_item_frota_generica_aceita(client):
+    """Frota '100' (antes rejeitada por prefixo) é válida no formato genérico."""
     auth_client(client, "1")
-    # veiculo 3 frota '100' na empresa Futuro — falha validação de prefixo/faixa
     cri = client.post("/api/v1/mapas", json=_payload_mapa())
     id_reg = cri.get_json()["mapa"]["id_registro"]
     resp = client.post(
         f"/api/v1/mapas/{id_reg}/itens",
         json=_payload_item(id_veiculo=3),
     )
-    assert resp.status_code == 400
-    msg = resp.get_json()["mensagem"].lower()
-    assert "c30" in msg or "frota" in msg or "inválid" in msg or "formato" in msg
-
+    assert resp.status_code == 201, resp.get_json()
 
 def test_motorista_repetido_mesmo_mapa(client, dal):
     auth_client(client, "1")

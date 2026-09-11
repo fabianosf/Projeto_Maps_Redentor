@@ -502,15 +502,27 @@ def _montar_card(
     else:
         mapa_label = None
 
+    linha_label = None
+    if linha_cod is not None and str(linha_cod).strip():
+        linha_label = str(linha_cod).strip()
+    elif guia is not None and guia.get("linha_descricao"):
+        linha_label = str(guia.get("linha_descricao")).strip() or None
+
     return {
         "key": key,
         "viagem_label": f"Viagem {seq:02d}",
         "id_viagem": id_viagem,
         "id_guia": gid,
+        "id_trecho": None,
+        "trecho_status": None,
+        "trecho_versao": None,
         "id_mapa": _as_int(viagem.get("id_mapa")) if viagem else None,
         "cod_map": cod_map,
         "codigo_mapa": codigo_mapa,
-        "mapa": mapa_label,        "veiculo": veiculo or "—",
+        "mapa": mapa_label,
+        "linha": linha_label,
+        "codigo_linha": linha_cod,
+        "veiculo": veiculo or "—",
         "numero_frota": veiculo or None,
         "id_veiculo": id_veiculo,
         "motorista": motorista_nome,
@@ -602,6 +614,7 @@ def consultar_guia_consolidada(
                 "ida": {"jae": 0, "riocard": 0},
                 "volta": {"jae": 0, "riocard": 0},
                 "total_viagens": 0,
+                "total_pendente": 0,
                 "ultima_leitura": None,
             },
             "viagens": [],
@@ -694,6 +707,94 @@ def consultar_guia_consolidada(
     for i, c in enumerate(filtrados, start=1):
         c["viagem_label"] = f"Viagem {i:02d}"
 
+    # Enriquece cards com trecho da jornada (quando tabela existir).
+    ids_guia = sorted(
+        {
+            int(c["id_guia"])
+            for c in filtrados
+            if _as_int(c.get("id_guia")) is not None
+        }
+    )
+    trechos_por_guia: dict[int, list[dict[str, Any]]] = {}
+    if ids_guia:
+        try:
+            placeholders = ",".join(["?"] * len(ids_guia))
+            df_t = dal.read(
+                f"""
+                SELECT id_trecho, id_guia, sentido, status, versao, seq,
+                       id_linha, id_veiculo, hor_ini, hor_fim
+                FROM tb_guia_trecho
+                WHERE id_guia IN ({placeholders})
+                ORDER BY seq ASC, id_trecho ASC
+                """,
+                tuple(ids_guia),
+            )
+            if df_t is not None and not getattr(df_t, "empty", True):
+                for row in df_t.to_dict(orient="records"):
+                    gid_t = _as_int(row.get("id_guia"))
+                    if gid_t is None:
+                        continue
+                    trechos_por_guia.setdefault(gid_t, []).append(_safe_row(row))
+        except Exception:
+            trechos_por_guia = {}
+
+    def _match_trecho(card: dict[str, Any]) -> dict[str, Any] | None:
+        gid_c = _as_int(card.get("id_guia"))
+        if gid_c is None:
+            return None
+        sent = str(card.get("sentido") or "").strip().upper()
+        candidatos = [
+            t
+            for t in trechos_por_guia.get(gid_c, [])
+            if str(t.get("sentido") or "").strip().upper() == sent
+        ]
+        if not candidatos:
+            candidatos = list(trechos_por_guia.get(gid_c, []))
+        if not candidatos:
+            return None
+        # Preferência: EM_TRANSITO > PLANEJADO > demais (último seq).
+        ordem = {"EM_TRANSITO": 0, "PLANEJADO": 1, "CONCLUIDO": 2, "CANCELADO": 3}
+        candidatos.sort(
+            key=lambda t: (
+                ordem.get(str(t.get("status") or "").upper(), 9),
+                -int(t.get("seq") or 0),
+                -int(t.get("id_trecho") or 0),
+            )
+        )
+        return candidatos[0]
+
+    total_pendente = 0
+    for c in filtrados:
+        tmatch = _match_trecho(c)
+        if tmatch:
+            c["id_trecho"] = _as_int(tmatch.get("id_trecho"))
+            c["trecho_status"] = str(tmatch.get("status") or "").upper() or None
+            c["trecho_versao"] = _as_int(tmatch.get("versao"))
+            st = str(c["trecho_status"] or "")
+            if st in ("PLANEJADO", "EM_TRANSITO"):
+                total_pendente += 1
+            continue
+        # Sem trecho: pendente se não há leitura finalizada.
+        jae_b = c.get("jae") or {}
+        rio_b = c.get("riocard") or {}
+        jae_ok = (
+            jae_b.get("status_leitura") == "finalizada"
+            or (
+                jae_b.get("leitura_ini") is not None
+                and jae_b.get("leitura_fim") is not None
+            )
+        )
+        rio_ok = (
+            rio_b.get("status_leitura") == "finalizada"
+            or (
+                rio_b.get("leitura_ini") is not None
+                and rio_b.get("leitura_fim") is not None
+            )
+        )
+        tem_leitura = bool(jae_b) or bool(rio_b)
+        if not tem_leitura or not (jae_ok or rio_ok):
+            total_pendente += 1
+
     emb_ida_jae = 0
     emb_ida_rio = 0
     emb_volta_jae = 0
@@ -752,6 +853,7 @@ def consultar_guia_consolidada(
             "embarques_ida": emb_ida_jae,
             "embarques_volta": emb_volta_jae,
             "total_viagens": len(filtrados),
+            "total_pendente": total_pendente,
             "ultima_leitura": ultima,
         },
         "viagens": filtrados,

@@ -171,6 +171,16 @@ export async function cancelarTrechoGuia(
   });
 }
 
+export async function excluirTrechoGuia(
+  idTrecho: number,
+  body?: { versao?: number },
+): Promise<{ ok: true; mensagem?: string }> {
+  return apiFetch(`/guia/trechos/${idTrecho}`, {
+    method: 'DELETE',
+    body: body ?? {},
+  });
+}
+
 /** Ajuste manual com auditoria — não sobrescreve roleta original. */
 export async function registrarAjusteManual(
   idGuia: number,

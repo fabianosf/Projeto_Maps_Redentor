@@ -448,6 +448,14 @@ class SqliteTestDal:
             [
                 ("QTD_MAX_TENTATIVAS", "3"),
                 ("BLOQUEIO_TENTATIVAS_LOGIN", "1"),
+                ("FROTA_REGEX", r"^(47|30|13)[0-9]{3}$"),
+                ("FROTA_MAX_LEN", "5"),
+                ("FROTA_EXEMPLO", "47123"),
+                (
+                    "FROTA_MENSAGEM",
+                    "Informe um carro válido: 47xxx, 30xxx ou 13xxx. "
+                    "Exemplos: 47123, 30123 ou 13123.",
+                ),
             ],
         )
 

@@ -1,22 +1,10 @@
-﻿import { useCallback, useEffect, useRef, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  AlertTriangle,
-  ArrowLeft,
-  ArrowRight,
   Bus,
   CalendarDays,
-  CheckCircle2,
-  ChevronRight,
-  CircleAlert,
   Clock3,
-  Filter,
-  Home,
-  LayoutGrid,
-  Map,
-  MoreHorizontal,
   Plus,
-  Radio,
   Search,
 } from 'lucide-react';
 import { getCadastros } from '@/api/cadastros';
@@ -32,6 +20,8 @@ import {
   iniciarTrechoGuia,
   concluirTrechoGuia,
   cancelarTrechoGuia,
+  criarTrechoGuia,
+  atualizarTrechoGuia,
   listEscalasGuia,
   listGuias,
   registrarAjusteManual,
@@ -48,6 +38,13 @@ import { FormField } from '@/components/FormField';
 import { LoadingState } from '@/components/LoadingState';
 import { PageHeader } from '@/components/PageHeader';
 import { StatusBadge } from '@/components/StatusBadge';
+import {
+  AlertPanel,
+  FilterChipsBar,
+  OpsCard,
+  PrimaryActionButton,
+  StatusSeal,
+} from '@/components/ops';
 import { DatePickerField } from '@/components/forms/DatePickerField';
 import { Button } from '@/components/ui/button';
 import {
@@ -89,7 +86,17 @@ import type {
 } from '@/types/guia';
 import { SCREEN_BG } from '@/theme/tokens';
 import { parseDateBR, toDateBR } from '@/utils/appFormat';
-import { formatDataChip, labelStatusGuia } from '@/utils/guiaView';
+import {
+  agruparViagensOperacionais,
+  contarPendentesOperacionais,
+  formatDataChip,
+  labelProximaAcao,
+  labelStatusGuia,
+  labelStatusOperacional,
+  statusOperacionalViagem,
+  stripeClassStatusOperacional,
+  type ProximaAcaoTipo,
+} from '@/utils/guiaView';
 import { canAccessMapas } from '@/utils/perfilAccess';
 import { onlyDigits } from '@/utils/validation';
 
@@ -156,6 +163,73 @@ function extractHHMM(value: string | null | undefined): string {
   if (!value) return '';
   const m = String(value).match(/(\d{2}):(\d{2})/);
   return m ? `${m[1]}:${m[2]}` : '';
+}
+
+function GuiaViagemOpsCard({
+  viagem,
+  acao,
+  destaque,
+  onOpen,
+  onPrimary,
+}: {
+  viagem: GuiaViagemCard;
+  acao?: ProximaAcaoTipo;
+  destaque?: boolean;
+  onOpen: () => void;
+  onPrimary?: () => void;
+}) {
+  const op = statusOperacionalViagem(viagem);
+  const sealTone =
+    op === 'concluida' ? 'success' : op === 'em_transito' ? 'info' : 'warning';
+  return (
+    <OpsCard
+      stripeClass={stripeClassStatusOperacional(op)}
+      onClick={onOpen}
+      aria-label={`${viagem.viagem_label}, ${viagem.sentido}, ${labelStatusOperacional(op)}`}
+      className={destaque ? 'border-primary/30 ring-1 ring-primary/20' : undefined}
+      primaryAction={
+        acao && onPrimary ? (
+          <PrimaryActionButton onClick={onPrimary}>
+            {labelProximaAcao(acao)}
+          </PrimaryActionButton>
+        ) : null
+      }
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-bold text-slate-900">
+            <span className="tabular-nums">
+              {viagem.viagem_label.replace(/^Viagem\s+/i, '')}
+            </span>
+            <span className="mx-1.5 text-slate-300">·</span>
+            <span>{viagem.veiculo}</span>
+          </p>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-600">
+            <span className="inline-flex items-center gap-0.5">
+              <Clock3 className="h-3 w-3" aria-hidden />
+              {viagem.horario}
+            </span>
+            <span
+              className={
+                viagem.sentido === 'ida'
+                  ? 'font-semibold text-sky-700'
+                  : 'font-semibold text-teal-700'
+              }
+            >
+              {viagem.sentido === 'ida' ? 'Ida' : 'Volta'}
+            </span>
+          </p>
+        </div>
+        <StatusSeal
+          label={labelStatusOperacional(op)}
+          tone={sealTone}
+          icon={
+            op === 'concluida' ? 'ok' : op === 'em_transito' ? 'tempo' : 'pendente'
+          }
+        />
+      </div>
+    </OpsCard>
+  );
 }
 
 function emptyForm() {
@@ -334,7 +408,7 @@ export function GuiaScreen() {
   const [pasIda, setPasIda] = useState('');
   const [pasVolta, setPasVolta] = useState('');
   const [ocorrencias, setOcorrencias] = useState('');
-  const [confirmadoEscala, setConfirmadoEscala] = useState(false);
+  const [, setConfirmadoEscala] = useState(false);
   const [mapasOpcoes, setMapasOpcoes] = useState<GuiaMapaOpcao[]>([]);
   const [escalasOpcoes, setEscalasOpcoes] = useState<GuiaEscalaOpcao[]>([]);
   const [idMapaSel, setIdMapaSel] = useState('');
@@ -359,6 +433,12 @@ export function GuiaScreen() {
   const [encerrarOpen, setEncerrarOpen] = useState(false);
   const [encerrarHorFim, setEncerrarHorFim] = useState('');
   const [viagemDetalheOpen, setViagemDetalheOpen] = useState(false);
+  const [detalheTrecho, setDetalheTrecho] = useState<GuiaTrecho | null>(null);
+  const [detalheHorSaida, setDetalheHorSaida] = useState('');
+  const [detalheHorChegada, setDetalheHorChegada] = useState('');
+  const [detalheOcorrencias, setDetalheOcorrencias] = useState('');
+  const [proximaViagemOpen, setProximaViagemOpen] = useState(false);
+  const [proximaSentido, setProximaSentido] = useState<SentidoViagem>('ida');
   const [historicoJaE, setHistoricoJaE] = useState<GuiaRoletaHistoricoItem[]>([]);
   const [historicoRio, setHistoricoRio] = useState<GuiaRoletaHistoricoItem[]>([]);
   const [historicoLoading, setHistoricoLoading] = useState(false);
@@ -555,6 +635,37 @@ export function GuiaScreen() {
   const filtrosAtivos =
     filtroSentido !== 'todos' || filtroOrigem !== 'todos' || filtroPendentes;
 
+  const gruposViagens = useMemo(
+    () => agruparViagensOperacionais(viagens),
+    [viagens],
+  );
+
+  const filtroChips = useMemo(() => {
+    const chips: { id: string; label: string; onClear: () => void }[] = [];
+    if (filtroSentido !== 'todos') {
+      chips.push({
+        id: 'sentido',
+        label: filtroSentido === 'ida' ? 'Ida' : 'Volta',
+        onClear: () => setFiltroSentido('todos'),
+      });
+    }
+    if (filtroOrigem !== 'todos') {
+      chips.push({
+        id: 'origem',
+        label: `Origem: ${filtroOrigem}`,
+        onClear: () => setFiltroOrigem('todos'),
+      });
+    }
+    if (filtroPendentes) {
+      chips.push({
+        id: 'pendentes',
+        label: 'Só pendentes',
+        onClear: () => setFiltroPendentes(false),
+      });
+    }
+    return chips;
+  }, [filtroSentido, filtroOrigem, filtroPendentes]);
+
   const abrirNovo = () => {
     navigate('/guia/nova');
   };
@@ -650,8 +761,127 @@ export function GuiaScreen() {
     setIdGuia(card.id_guia ?? null);
     setAjusteSentido(card.sentido);
     setAjusteEmbarques(String(card.embarques ?? ''));
+    setDetalheHorSaida(card.horario_saida ?? extractHHMM(card.horario) ?? '');
+    setDetalheHorChegada(card.horario_chegada ?? '');
+    setDetalheOcorrencias(card.ocorrencias || card.observacao || '');
+    setDetalheTrecho(null);
     setViagemDetalheOpen(true);
     void carregarHistoricoViagem(card);
+    if (card.id_guia != null) {
+      void (async () => {
+        try {
+          const data = await getGuia(card.id_guia!);
+          if (!aliveRef.current) return;
+          const trechos = data.guia.trechos ?? [];
+          const sent = card.sentido.toUpperCase();
+          let match: GuiaTrecho | undefined;
+          if (card.id_trecho != null) {
+            match = trechos.find((t) => t.id_trecho === card.id_trecho);
+          }
+          if (!match) {
+            match = trechos.find(
+              (t) => String(t.sentido || '').toUpperCase() === sent,
+            );
+          }
+          if (!match && trechos.length) {
+            match = [...trechos].sort(
+              (a, b) => Number(b.seq ?? 0) - Number(a.seq ?? 0),
+            )[0];
+          }
+          setDetalheTrecho(match ?? null);
+          if (match?.hor_ini) setDetalheHorSaida(extractHHMM(match.hor_ini));
+          if (match?.hor_fim) setDetalheHorChegada(extractHHMM(match.hor_fim));
+          setGuiaStatus(data.guia.status ?? null);
+          setGuiaTrechos(trechos);
+        } catch {
+          /* detalhe ainda abre sem trecho */
+        }
+      })();
+    }
+  };
+
+  const guiaAbertaDoDia = (): Guia | null => {
+    const abertas = guias.filter(
+      (g) => String(g.status || '').toUpperCase() !== 'ENCERRADA',
+    );
+    if (!abertas.length) return null;
+    return abertas[0];
+  };
+
+  const abrirRegistrarProximaViagem = () => {
+    const guia = guiaAbertaDoDia();
+    if (!guia) {
+      navigate('/guia/nova');
+      return;
+    }
+    const lastSent = viagens[viagens.length - 1]?.sentido;
+    setProximaSentido(lastSent === 'ida' ? 'volta' : 'ida');
+    setProximaViagemOpen(true);
+  };
+
+  const confirmarProximaViagem = async () => {
+    const guia = guiaAbertaDoDia();
+    if (!guia || busy) return;
+    setBusy(true);
+    try {
+      const data = await criarTrechoGuia(guia.id_guia, {
+        sentido: proximaSentido === 'ida' ? 'IDA' : 'VOLTA',
+        id_linha: guia.id_linha ?? undefined,
+        id_veiculo: guia.id_veiculo ?? undefined,
+        numero_frota: guia.numero_frota ?? undefined,
+      });
+      setProximaViagemOpen(false);
+      setInfoMsg(data.mensagem ?? 'Próxima viagem registrada.');
+      await carregarLista();
+    } catch (err) {
+      setInfoMsg(apiMsg(err, 'Não foi possível registrar a próxima viagem.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const salvarDetalheViagem = async () => {
+    if (!cardAtivo || busy) return;
+    setBusy(true);
+    try {
+      if (detalheTrecho) {
+        await atualizarTrechoGuia(detalheTrecho.id_trecho, {
+          hor_ini: detalheHorSaida.trim() || undefined,
+          hor_fim: detalheHorChegada.trim() || undefined,
+          versao: detalheTrecho.versao ?? undefined,
+          motivo: 'Atualização de horários no detalhe da viagem',
+        });
+      }
+      if (cardAtivo.id_guia != null) {
+        const det = await getGuia(cardAtivo.id_guia);
+        const g = det.guia;
+        await updateGuia(cardAtivo.id_guia, {
+          numero: g.numero,
+          data:
+            toDateBR(g.hor_ini ?? g.hor_fim ?? g.data ?? undefined) || dataFiltro,
+          id_empresa: g.id_empresa ?? undefined,
+          id_linha: g.id_linha ?? undefined,
+          id_turno: g.id_turno ?? undefined,
+          id_veiculo: g.id_veiculo ?? undefined,
+          id_item_map: g.id_item_map ?? undefined,
+          numero_frota: g.numero_frota ?? undefined,
+          matricula_motorista: g.matricula_motorista ?? undefined,
+          hor_ini: extractHHMM(g.hor_ini) || undefined,
+          hor_fim: extractHHMM(g.hor_fim) || undefined,
+          roleta01_ini: g.roleta01_ini ?? undefined,
+          roleta01_fim: g.roleta01_fim ?? undefined,
+          roleta2_ini: g.roleta2_ini ?? undefined,
+          roleta2_fim: g.roleta2_fim ?? undefined,
+          observacao: detalheOcorrencias.trim().slice(0, OBS_MAX),
+        });
+      }
+      setInfoMsg('Viagem atualizada.');
+      await carregarLista();
+    } catch (err) {
+      setInfoMsg(apiMsg(err, 'Não foi possível salvar o detalhe.'));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const pesquisarPorNumero = async (numero: string) => {
@@ -834,19 +1064,58 @@ export function GuiaScreen() {
     }
     setBusy(true);
     try {
-      const data =
-        acao === 'iniciar'
-          ? await iniciarTrechoGuia(trecho.id_trecho, {
-              versao: trecho.versao ?? undefined,
-            })
-          : await concluirTrechoGuia(trecho.id_trecho, {
-              versao: trecho.versao ?? undefined,
-            });
-      if (idGuia != null) {
-        const det = await getGuia(idGuia);
-        aplicarGuia(det.guia, 'edit');
+      if (acao === 'iniciar') {
+        const saida =
+          detalheHorSaida.trim() ||
+          window.prompt('SAÍDA real (HH:MM)', '') ||
+          '';
+        if (!saida.trim()) {
+          setInfoMsg('Informe a SAÍDA real do trecho.');
+          setBusy(false);
+          return;
+        }
+        const data = await iniciarTrechoGuia(trecho.id_trecho, {
+          hor_ini: saida.trim(),
+          versao: trecho.versao ?? undefined,
+        });
+        if (idGuia != null) {
+          const det = await getGuia(idGuia);
+          aplicarGuia(det.guia, 'edit');
+        }
+        setInfoMsg(data.mensagem ?? 'Trecho iniciado.');
+      } else {
+        const chegada =
+          detalheHorChegada.trim() ||
+          window.prompt('CHEGADA real (HH:MM)', '') ||
+          '';
+        if (!chegada.trim()) {
+          setInfoMsg('Informe a CHEGADA real do trecho.');
+          setBusy(false);
+          return;
+        }
+        const data = await concluirTrechoGuia(trecho.id_trecho, {
+          hor_fim: chegada.trim(),
+          versao: trecho.versao ?? undefined,
+        });
+        if (idGuia != null) {
+          const det = await getGuia(idGuia);
+          aplicarGuia(det.guia, 'edit');
+        }
+        setInfoMsg(data.mensagem ?? 'Trecho concluído.');
       }
-      setInfoMsg(data.mensagem ?? (acao === 'iniciar' ? 'Trecho iniciado.' : 'Trecho concluído.'));
+      if (detalheTrecho && detalheTrecho.id_trecho === trecho.id_trecho) {
+        try {
+          const det = await getGuia(idGuia ?? trecho.id_guia);
+          const t = (det.guia.trechos ?? []).find(
+            (x) => x.id_trecho === trecho.id_trecho,
+          );
+          setDetalheTrecho(t ?? null);
+          setGuiaTrechos(det.guia.trechos ?? []);
+        } catch {
+          /* ignore */
+        }
+      }
+      await carregarLista();
     } catch (err) {
       setInfoMsg(apiMsg(err, 'Não foi possível atualizar o trecho.'));
     } finally {
@@ -924,6 +1193,7 @@ export function GuiaScreen() {
       await salvarRoletaLeitura({
         id_viagem: cardAtivo.id_viagem,
         id_guia: cardAtivo.id_guia,
+        id_trecho: cardAtivo.id_trecho ?? detalheTrecho?.id_trecho,
         id_veiculo: cardAtivo.id_veiculo,
         sentido: cardAtivo.sentido,
         fonte: roletaFonte,
@@ -1010,14 +1280,6 @@ export function GuiaScreen() {
     }
   };
 
-  const navItems = [
-    { key: 'inicio', label: 'Início', icon: Home, path: '/principal' },
-    { key: 'mapas', label: 'Mapas', icon: Map, path: '/mapas' },
-    { key: 'guia', label: 'Guia', icon: LayoutGrid, path: '/guia', active: true },
-    { key: 'registros', label: 'Registros', icon: Radio, path: '/entrada-saida' },
-    { key: 'mais', label: 'Mais', icon: MoreHorizontal, path: '/configuracao' },
-  ];
-
   return (
     <AppShell className="bg-screen">
       <div className="page flex min-h-dvh flex-col bg-screen text-slate-900">
@@ -1035,11 +1297,11 @@ export function GuiaScreen() {
           }
         />
 
-        <div className="page-body flex min-h-0 flex-1 flex-col gap-3 pb-24">
+        <div className="page-body flex min-h-0 flex-1 flex-col gap-3 pb-[calc(var(--main-tab-bar)+env(safe-area-inset-bottom,0px)+5.5rem)]">
           <div className="flex gap-2">
             <button
               type="button"
-              className="flex min-h-11 flex-1 items-center gap-2 rounded-xl border border-slate-300 bg-slate-100/90 px-3 text-left text-sm font-medium text-slate-800"
+              className="flex min-h-11 flex-1 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-left text-sm font-medium text-slate-800"
               aria-label={`Data selecionada: ${formatDataChip(dataFiltro)}`}
               onClick={() => {
                 const next = window.prompt('Data (dd/mm/aaaa)', dataFiltro);
@@ -1054,21 +1316,6 @@ export function GuiaScreen() {
               <CalendarDays className="h-4 w-4 shrink-0 text-slate-600" aria-hidden />
               <span className="truncate">{formatDataChip(dataFiltro)}</span>
             </button>
-            <button
-              type="button"
-              className={cn(
-                'inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 text-sm font-medium',
-                filtrosAtivos
-                  ? 'border-primary/40 bg-primary/10 text-primary'
-                  : 'border-slate-300 bg-slate-100/90 text-slate-800',
-              )}
-              aria-label="Filtrar viagens"
-              aria-pressed={filtrosAtivos}
-              onClick={() => setFiltroOpen(true)}
-            >
-              <Filter className="h-4 w-4" aria-hidden />
-              Filtrar
-            </button>
           </div>
 
           {listLoading || cadLoading ? (
@@ -1082,52 +1329,55 @@ export function GuiaScreen() {
           ) : (
             <>
               <section
-                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-                aria-label="Resumo do mapa e turno"
+                className="surface-card rounded-2xl px-3.5 py-3"
+                aria-label="Resumo da guia"
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h2 className="text-base font-bold text-slate-900">
+                  <div className="min-w-0">
+                    <h2 className="truncate text-base font-bold text-slate-900">
                       {resumo.titulo_mapa}
-                      {resumo.turno ? ` • ${resumo.turno}` : ''}
+                      {resumo.turno ? (
+                        <span className="font-semibold text-slate-600">
+                          {' '}
+                          · {resumo.turno}
+                        </span>
+                      ) : null}
                     </h2>
-                    <div className="mt-1 flex items-center gap-1.5 text-sm">
-                      {syncStatus === 'sincronizado' ? (
-                        <>
-                          <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden />
-                          <span className="font-medium text-emerald-700">
-                            {labelStatusGuia(syncStatus)}
-                          </span>
-                        </>
-                      ) : syncStatus === 'atualizando' ? (
-                        <>
-                          <Clock3 className="h-4 w-4 text-sky-600" aria-hidden />
-                          <span className="font-medium text-sky-700">
-                            {labelStatusGuia(syncStatus)}
-                          </span>
-                        </>
-                      ) : syncStatus === 'pendente' || syncStatus === 'manual' ? (
-                        <>
-                          <CircleAlert className="h-4 w-4 text-amber-600" aria-hidden />
-                          <span className="font-medium text-amber-700">
-                            {labelStatusGuia(syncStatus)}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <AlertTriangle className="h-4 w-4 text-red-600" aria-hidden />
-                          <span className="font-medium text-red-700">
-                            {labelStatusGuia(syncStatus)}
-                          </span>
-                        </>
-                      )}
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <StatusSeal
+                        label={labelStatusGuia(syncStatus)}
+                        tone={
+                          syncStatus === 'sincronizado'
+                            ? 'success'
+                            : syncStatus === 'atualizando'
+                              ? 'info'
+                              : 'warning'
+                        }
+                        icon={
+                          syncStatus === 'sincronizado'
+                            ? 'ok'
+                            : syncStatus === 'atualizando'
+                              ? 'tempo'
+                              : 'alerta'
+                        }
+                      />
+                      <StatusSeal
+                        label={`${resumo.total_viagens} viagem${resumo.total_viagens === 1 ? '' : 's'}`}
+                        tone="neutral"
+                        icon="viagem"
+                      />
+                      <StatusSeal
+                        label={`${resumo.total_pendente ?? contarPendentesOperacionais(viagens)} pendente${(resumo.total_pendente ?? contarPendentesOperacionais(viagens)) === 1 ? '' : 's'}`}
+                        tone="warning"
+                        icon="pendente"
+                      />
                     </div>
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex shrink-0 gap-1">
                     <Button
                       type="button"
                       size="icon"
-                      variant="outline"
+                      variant="ghost"
                       className="h-9 w-9"
                       aria-label="Pesquisar guia"
                       onClick={() => {
@@ -1140,6 +1390,7 @@ export function GuiaScreen() {
                     <Button
                       type="button"
                       size="icon"
+                      variant="ghost"
                       className="h-9 w-9"
                       aria-label="Nova guia"
                       onClick={abrirNovo}
@@ -1148,221 +1399,130 @@ export function GuiaScreen() {
                     </Button>
                   </div>
                 </div>
-
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  <div className="rounded-xl bg-sky-50 p-3">
-                    <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-sky-800">
-                      <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-                      Ida
-                    </div>
-                    <p className="mt-2 text-xs font-semibold text-slate-600">Ja E</p>
-                    <p className="text-2xl font-bold tabular-nums text-slate-900">
-                      {resumo.ida?.jae ?? 0}
-                    </p>
-                    <p className="text-[11px] text-slate-500">passageiros</p>
-                    <p className="mt-2 text-xs font-semibold text-slate-600">RioCard</p>
-                    <p className="text-2xl font-bold tabular-nums text-slate-900">
-                      {resumo.ida?.riocard ?? 0}
-                    </p>
-                    <p className="text-[11px] text-slate-500">passageiros</p>
-                  </div>
-                  <div className="rounded-xl bg-teal-50 p-3">
-                    <div className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-teal-800">
-                      <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
-                      Volta
-                    </div>
-                    <p className="mt-2 text-xs font-semibold text-slate-600">Ja E</p>
-                    <p className="text-2xl font-bold tabular-nums text-slate-900">
-                      {resumo.volta?.jae ?? 0}
-                    </p>
-                    <p className="text-[11px] text-slate-500">passageiros</p>
-                    <p className="mt-2 text-xs font-semibold text-slate-600">RioCard</p>
-                    <p className="text-2xl font-bold tabular-nums text-slate-900">
-                      {resumo.volta?.riocard ?? 0}
-                    </p>
-                    <p className="text-[11px] text-slate-500">passageiros</p>
-                  </div>
-                </div>
-
-                <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3 text-sm text-slate-600">
-                  <Clock3 className="h-4 w-4 shrink-0" aria-hidden />
-                  <span>
-                    Última leitura {resumo.ultima_leitura ?? '—'}
-                  </span>
-                </div>
               </section>
+
+              <FilterChipsBar
+                chips={filtroChips}
+                filterActive={filtrosAtivos}
+                onOpenFilters={() => setFiltroOpen(true)}
+              />
 
               {syncStatus !== 'sincronizado' ? (
-                <div
-                  className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-3"
-                  role="alert"
-                >
-                  <AlertTriangle className="h-5 w-5 shrink-0 text-red-600" aria-hidden />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold text-red-800">
-                      {syncStatus === 'falha'
-                        ? 'Falha de sincronização'
-                        : syncStatus === 'divergencia'
-                          ? 'Divergência para revisar'
-                          : syncStatus === 'manual'
-                            ? 'Há ajuste(s) manual(is)'
-                            : syncStatus === 'atualizando'
-                              ? 'Atualizando leituras'
-                              : 'Pendências na Guia'}
-                    </p>
-                    <p className="text-xs text-slate-600">
-                      Status consolidado a partir de Mapa, Viagens e Roleta.
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="shrink-0 bg-red-600 hover:bg-red-700"
-                    onClick={() => setAlertaDetalheOpen(true)}
-                  >
-                    Ver detalhes
-                  </Button>
-                </div>
+                <AlertPanel
+                  tone={
+                    syncStatus === 'falha' || syncStatus === 'divergencia'
+                      ? 'danger'
+                      : 'warning'
+                  }
+                  title={
+                    syncStatus === 'falha'
+                      ? 'Falha de sincronização'
+                      : syncStatus === 'divergencia'
+                        ? 'Divergência para revisar'
+                        : syncStatus === 'manual'
+                          ? 'Há ajuste(s) manual(is)'
+                          : syncStatus === 'atualizando'
+                            ? 'Atualizando leituras'
+                            : 'Pendências na Guia'
+                  }
+                  description="Status consolidado a partir de Mapa, Viagens e Roleta."
+                  action={
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="border-slate-300 bg-white"
+                      onClick={() => setAlertaDetalheOpen(true)}
+                    >
+                      Ver
+                    </Button>
+                  }
+                />
               ) : null}
 
-              <section aria-label="Lista de viagens">
-                <h2 className="mb-2 text-base font-bold text-slate-900">Viagens</h2>
-                {viagens.length === 0 ? (
-                  <EmptyState
-                    title="Nenhuma viagem"
-                    description={
-                      filtrosAtivos
-                        ? 'Nenhum registro com os filtros atuais.'
-                        : 'Não há viagens/guias para a data selecionada.'
-                    }
-                    action={
-                      <Button type="button" onClick={abrirNovo}>
-                        Nova guia
-                      </Button>
-                    }
-                  />
-                ) : (
-                  <ul className="flex flex-col gap-2">
-                    {viagens.map((v) => (
-                      <li key={v.key}>
-                        <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                          <button
-                            type="button"
-                            onClick={() => abrirDetalhe(v)}
-                            className="flex w-full items-center gap-3 text-left"
-                            aria-label={`${v.viagem_label}, ${v.sentido}`}
-                          >
-                            <div className="min-w-0 flex-1">
-                              <p className="font-bold text-slate-900">{v.viagem_label}</p>
-                              <p className="truncate text-xs text-slate-500">
-                                {v.veiculo}
-                                {v.mapa ? ` · ${v.mapa}` : ''}
-                              </p>
-                            </div>
-                            <div className="shrink-0 space-y-1">
-                              <span
-                                className={cn(
-                                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold',
-                                  v.sentido === 'ida'
-                                    ? 'bg-sky-100 text-sky-800'
-                                    : 'bg-teal-100 text-teal-800',
-                                )}
-                              >
-                                {v.sentido === 'ida' ? (
-                                  <ArrowRight className="h-3 w-3" aria-hidden />
-                                ) : (
-                                  <ArrowLeft className="h-3 w-3" aria-hidden />
-                                )}
-                                {v.sentido === 'ida' ? 'Ida' : 'Volta'}
-                              </span>
-                              <p className="flex items-center gap-1 text-xs text-slate-600">
-                                <Clock3 className="h-3 w-3" aria-hidden />
-                                {v.horario}
-                              </p>
-                            </div>
-                            <StatusBadge
-                              label={labelStatusGuia(v.status)}
-                              tone={
-                                v.status === 'sincronizado'
-                                  ? 'success'
-                                  : v.status === 'falha' || v.status === 'divergencia'
-                                    ? 'danger'
-                                    : 'warning'
-                              }
-                              icon={
-                                v.status === 'sincronizado'
-                                  ? 'ok'
-                                  : v.status === 'falha' || v.status === 'divergencia'
-                                    ? 'alerta'
-                                    : 'pendente'
-                              }
-                              className="normal-case tracking-normal"
-                            />
-                            <ChevronRight
-                              className="h-5 w-5 shrink-0 text-slate-400"
-                              aria-hidden
-                            />
-                          </button>
-                          <div className="mt-2 grid grid-cols-2 gap-1.5">
-                            <RoletaMini
-                              titulo="Ja E"
-                              bloco={v.jae}
-                              onEdit={() => abrirRoleta(v, 'jae')}
-                            />
-                            <RoletaMini
-                              titulo="RioCard"
-                              bloco={v.riocard}
-                              onEdit={() => abrirRoleta(v, 'riocard')}
-                            />
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
+              {viagens.length === 0 ? (
+                <EmptyState
+                  title="Nenhuma viagem"
+                  description={
+                    filtrosAtivos
+                      ? 'Nenhum registro com os filtros atuais.'
+                      : 'Não há viagens/guias para a data selecionada.'
+                  }
+                  action={
+                    <Button type="button" onClick={abrirNovo}>
+                      Nova guia
+                    </Button>
+                  }
+                />
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {gruposViagens.proxima ? (
+                    <section aria-label="Próxima ação" className="space-y-2">
+                      <h3 className="px-0.5 text-[13px] font-bold uppercase tracking-wide text-primary">
+                        Próxima ação
+                      </h3>
+                      <GuiaViagemOpsCard
+                        viagem={gruposViagens.proxima.viagem}
+                        acao={gruposViagens.proxima.acao}
+                        destaque
+                        onOpen={() => abrirDetalhe(gruposViagens.proxima!.viagem)}
+                        onPrimary={() =>
+                          abrirDetalhe(gruposViagens.proxima!.viagem)
+                        }
+                      />
+                    </section>
+                  ) : null}
+
+                  {(
+                    [
+                      ['Em trânsito', gruposViagens.emTransito],
+                      ['Pendentes', gruposViagens.pendentes],
+                      ['Concluídas', gruposViagens.concluidas],
+                    ] as const
+                  ).map(([titulo, lista]) =>
+                    lista.length === 0 ? null : (
+                      <section
+                        key={titulo}
+                        aria-label={titulo}
+                        className="space-y-2"
+                      >
+                        <h3 className="px-0.5 text-[13px] font-bold uppercase tracking-wide text-slate-600">
+                          {titulo}
+                          <span className="ml-1 font-semibold tabular-nums text-slate-400">
+                            ({lista.length})
+                          </span>
+                        </h3>
+                        <ul className="flex flex-col gap-2">
+                          {lista.map((v) => (
+                            <li key={v.key}>
+                              <GuiaViagemOpsCard
+                                viagem={v}
+                                onOpen={() => abrirDetalhe(v)}
+                              />
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    ),
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>
 
-        <nav
-          className="fixed bottom-0 left-1/2 z-30 flex w-full max-w-phone -translate-x-1/2 border-t border-slate-200 bg-white/95 px-1 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur"
-          aria-label="Navegação principal"
-        >
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = Boolean(item.active);
-            return (
-              <button
-                key={item.key}
-                type="button"
-                className={cn(
-                  'flex flex-1 flex-col items-center gap-0.5 py-1 text-[10px] font-medium',
-                  active ? 'text-primary' : 'text-slate-500',
-                )}
-                aria-current={active ? 'page' : undefined}
-                onClick={() => {
-                  if (!active) navigate(item.path);
-                }}
-              >
-                <span
-                  className={cn(
-                    'flex h-8 w-8 items-center justify-center rounded-full',
-                    active && 'bg-primary text-primary-foreground',
-                  )}
-                >
-                  <Icon className="h-4 w-4" aria-hidden />
-                </span>
-                {item.label}
-                {active ? (
-                  <span className="mt-0.5 h-0.5 w-8 rounded-full bg-primary" aria-hidden />
-                ) : (
-                  <span className="mt-0.5 h-0.5 w-8" aria-hidden />
-                )}
-              </button>
-            );
-          })}
-        </nav>
+        <div className="pointer-events-none fixed bottom-[calc(var(--main-tab-bar)+env(safe-area-inset-bottom,0px))] left-1/2 z-30 w-full max-w-phone -translate-x-1/2 px-3 pb-2">
+          <Button
+            type="button"
+            className="pointer-events-auto h-12 w-full rounded-xl text-sm font-bold shadow-lg"
+            aria-label="Registrar próxima viagem"
+            onClick={abrirRegistrarProximaViagem}
+            disabled={busy || listLoading}
+          >
+            <Bus className="mr-2 h-4 w-4" aria-hidden />
+            Registrar próxima viagem
+          </Button>
+        </div>
 
         <AlertDialog
           open={infoMsg !== null}
@@ -1523,6 +1683,7 @@ export function GuiaScreen() {
             if (!open) {
               setHistoricoJaE([]);
               setHistoricoRio([]);
+              setDetalheTrecho(null);
             }
           }}
         >
@@ -1546,13 +1707,26 @@ export function GuiaScreen() {
                     {cardAtivo.sentido === 'ida' ? 'Ida' : 'Volta'}
                   </span>
                   <StatusBadge
-                    label={labelStatusGuia(cardAtivo.status)}
+                    label={labelStatusOperacional(
+                      statusOperacionalViagem({
+                        ...cardAtivo,
+                        trecho_status:
+                          detalheTrecho?.status ?? cardAtivo.trecho_status,
+                      }),
+                    )}
                     tone={
-                      cardAtivo.status === 'sincronizado'
+                      statusOperacionalViagem({
+                        ...cardAtivo,
+                        trecho_status:
+                          detalheTrecho?.status ?? cardAtivo.trecho_status,
+                      }) === 'concluida'
                         ? 'success'
-                        : cardAtivo.status === 'falha' ||
-                            cardAtivo.status === 'divergencia'
-                          ? 'danger'
+                        : statusOperacionalViagem({
+                              ...cardAtivo,
+                              trecho_status:
+                                detalheTrecho?.status ?? cardAtivo.trecho_status,
+                            }) === 'em_transito'
+                          ? 'warning'
                           : 'warning'
                     }
                     className="normal-case tracking-normal"
@@ -1560,12 +1734,17 @@ export function GuiaScreen() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
-                  <ReadonlyField label="Horário" value={cardAtivo.horario} />
-                  <ReadonlyField
-                    label="Saída / Chegada"
-                    value={`${cardAtivo.horario_saida ?? '—'} / ${cardAtivo.horario_chegada ?? '—'}`}
-                  />
                   <ReadonlyField label="Veículo" value={cardAtivo.veiculo} />
+                  <ReadonlyField
+                    label="Linha"
+                    value={
+                      cardAtivo.linha ||
+                      (cardAtivo.codigo_linha != null
+                        ? String(cardAtivo.codigo_linha)
+                        : null) ||
+                      cardAtivo.mapa
+                    }
+                  />
                   <ReadonlyField
                     label="Motorista"
                     value={
@@ -1586,7 +1765,27 @@ export function GuiaScreen() {
                       cardAtivo.riocard?.nome_usuario
                     }
                   />
-                  <ReadonlyField label="Mapa" value={cardAtivo.mapa} />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <FormField
+                    label="Saída"
+                    name="detalhe_hor_saida"
+                    type="time"
+                    value={detalheHorSaida}
+                    onChange={(e) => setDetalheHorSaida(e.target.value)}
+                    className={halfFieldClass}
+                    disabled={busy || !detalheTrecho}
+                  />
+                  <FormField
+                    label="Chegada"
+                    name="detalhe_hor_chegada"
+                    type="time"
+                    value={detalheHorChegada}
+                    onChange={(e) => setDetalheHorChegada(e.target.value)}
+                    className={halfFieldClass}
+                    disabled={busy || !detalheTrecho}
+                  />
                 </div>
 
                 <p className="text-center text-[13px] font-semibold uppercase tracking-wide text-slate-700">
@@ -1612,13 +1811,70 @@ export function GuiaScreen() {
                 </div>
 
                 <div>
-                  <p className={`${labelClass} mb-1`}>Ocorrências</p>
-                  <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
-                    {cardAtivo.ocorrencias ||
-                      cardAtivo.observacao ||
-                      '—'}
-                  </p>
+                  <Label className={labelClass} htmlFor="detalhe_ocorrencias">
+                    Ocorrências
+                  </Label>
+                  <textarea
+                    id="detalhe_ocorrencias"
+                    value={detalheOcorrencias}
+                    onChange={(e) =>
+                      setDetalheOcorrencias(e.target.value.slice(0, OBS_MAX))
+                    }
+                    disabled={busy}
+                    rows={3}
+                    className={cn(
+                      fieldClass,
+                      'mt-1.5 min-h-[4rem] w-full resize-y px-3 py-2 text-sm',
+                    )}
+                  />
                 </div>
+
+                {detalheTrecho && podeAlterarEscala ? (
+                  <div className="flex flex-wrap gap-2">
+                    {String(detalheTrecho.status).toUpperCase() === 'PLANEJADO' ? (
+                      <>
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={busy}
+                          onClick={() => void acaoTrecho(detalheTrecho, 'iniciar')}
+                        >
+                          Iniciar trecho
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          disabled={busy}
+                          onClick={() => void acaoTrecho(detalheTrecho, 'cancelar')}
+                        >
+                          Cancelar
+                        </Button>
+                      </>
+                    ) : null}
+                    {String(detalheTrecho.status).toUpperCase() === 'EM_TRANSITO' ? (
+                      <>
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={busy}
+                          onClick={() => void acaoTrecho(detalheTrecho, 'concluir')}
+                        >
+                          Concluir trecho
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          disabled={busy}
+                          onClick={() => void acaoTrecho(detalheTrecho, 'cancelar')}
+                        >
+                          Cancelar
+                        </Button>
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <div>
                   <p className={`${labelClass} mb-1`}>Histórico</p>
@@ -1684,12 +1940,69 @@ export function GuiaScreen() {
               </Button>
               <Button
                 type="button"
+                variant="outline"
+                className="flex-1"
+                disabled={busy}
+                onClick={() => void salvarDetalheViagem()}
+              >
+                Salvar
+              </Button>
+              <Button
+                type="button"
                 className="flex-1"
                 onClick={() => setViagemDetalheOpen(false)}
               >
                 Fechar
               </Button>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={proximaViagemOpen} onOpenChange={setProximaViagemOpen}>
+          <DialogContent className="max-w-[380px] border-slate-400/50 bg-screen p-5">
+            <DialogHeader>
+              <DialogTitle className="text-center text-[16px] uppercase tracking-wide">
+                Registrar próxima viagem
+              </DialogTitle>
+            </DialogHeader>
+            <p className="mt-2 text-sm text-slate-600">
+              Cria um novo trecho na guia aberta do dia
+              {guiaAbertaDoDia()?.numero
+                ? ` (${guiaAbertaDoDia()?.numero})`
+                : ''}
+              .
+            </p>
+            <div className="mt-3 flex w-full flex-col gap-1.5">
+              <Label className={labelClass}>Sentido</Label>
+              <Select
+                value={proximaSentido}
+                onValueChange={(v) => setProximaSentido(v as SentidoViagem)}
+              >
+                <SelectTrigger className={selectTriggerClass} aria-label="Sentido">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ida">Ida</SelectItem>
+                  <SelectItem value="volta">Volta</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter className="mt-4 gap-2 sm:justify-center">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setProximaViagemOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                disabled={busy}
+                onClick={() => void confirmarProximaViagem()}
+              >
+                Confirmar
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 

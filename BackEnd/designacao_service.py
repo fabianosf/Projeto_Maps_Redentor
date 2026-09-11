@@ -244,20 +244,13 @@ def _validar_contexto(
     if id_veiculo is not None:
         vei = dal.read(
             """
-            SELECT id_veiculo, id_empresa FROM tb_veiculo
+            SELECT id_veiculo FROM tb_veiculo
             WHERE id_veiculo = ? AND ativo = 1
             """,
             (id_veiculo,),
         )
         if vei.empty:
             return ServiceError("Veículo inválido ou inativo.", "validacao")
-        emp_v = vei.iloc[0].get("id_empresa")
-        if emp_v is not None and str(emp_v) not in ("", "None", "nan"):
-            if int(emp_v) != id_empresa:
-                return ServiceError(
-                    "Veículo não pertence à empresa da designação.",
-                    "validacao",
-                )
     return None
 
 

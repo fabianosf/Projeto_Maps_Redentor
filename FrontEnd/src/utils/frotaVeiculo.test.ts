@@ -1,85 +1,85 @@
-import { describe, expect, it } from 'vitest';
+/**
+ * Validação de frota: 47xxx | 30xxx | 13xxx (independente da empresa).
+ */
+import { afterEach, describe, expect, it } from 'vitest';
 import {
+  configurarRegraFrota,
   erroFrotaDuranteDigitacao,
   mascaraGuiaFrotaEmpresa,
   normalizarFrotaDigitada,
   placeholderFrotaEmpresa,
   prefixoFrotaEmpresa,
+  validarFrota,
   validarFrotaParaEmpresa,
 } from '@/utils/frotaVeiculo';
 
+const MSG = /47xxx/;
+
 describe('frotaVeiculo', () => {
-  it('normaliza para maiúsculas e limita a 6 caracteres', () => {
-    expect(normalizarFrotaDigitada('c3011')).toBe('C3011');
-    expect(normalizarFrotaDigitada('c30114x')).toBe('C30114');
+  afterEach(() => {
+    configurarRegraFrota(null);
   });
 
-  it('prefixo fixo por empresa', () => {
-    expect(prefixoFrotaEmpresa('Redentor')).toBe('C47');
-    expect(prefixoFrotaEmpresa('Futuro')).toBe('C30');
-    expect(prefixoFrotaEmpresa('Barra')).toBe('D13');
+  it('normaliza só dígitos e limita a 5', () => {
+    expect(normalizarFrotaDigitada('47-123')).toBe('47123');
+    expect(normalizarFrotaDigitada('47 123x')).toBe('47123');
+    expect(normalizarFrotaDigitada('C471234')).toBe('47123');
   });
 
-  it('placeholders e máscaras-guia', () => {
-    expect(placeholderFrotaEmpresa('Redentor')).toBe('Ex.: C47654');
-    expect(placeholderFrotaEmpresa('Futuro')).toBe('Ex.: C30114');
-    expect(placeholderFrotaEmpresa('Barra')).toBe('Ex.: D13450');
-    expect(mascaraGuiaFrotaEmpresa('Redentor')).toBe('C47___');
-    expect(mascaraGuiaFrotaEmpresa('Futuro')).toBe('C30___');
-    expect(mascaraGuiaFrotaEmpresa('Barra')).toBe('D13___');
+  it('não amarra prefixo à empresa', () => {
+    expect(prefixoFrotaEmpresa('Redentor')).toBeNull();
+    expect(prefixoFrotaEmpresa('Futuro')).toBeNull();
+    expect(prefixoFrotaEmpresa('Barra')).toBeNull();
   });
 
-  it('C47654 aceito somente para Redentor', () => {
-    expect(validarFrotaParaEmpresa('C47654', 'Redentor')).toBeNull();
-    expect(validarFrotaParaEmpresa('C47654', 'Futuro')).toMatch(/C30/);
-    expect(validarFrotaParaEmpresa('C47654', 'Barra')).toMatch(/D13/);
+  it('placeholder genérico', () => {
+    expect(placeholderFrotaEmpresa('Redentor')).toBe('Ex.: 47123');
+    expect(placeholderFrotaEmpresa('Futuro')).toBe('Ex.: 47123');
+    expect(mascaraGuiaFrotaEmpresa('Barra')).toBeNull();
   });
 
-  it('C30114 aceito somente para Futuro', () => {
-    expect(validarFrotaParaEmpresa('C30114', 'Futuro')).toBeNull();
-    expect(validarFrotaParaEmpresa('C30114', 'Redentor')).toMatch(/C47/);
-    expect(validarFrotaParaEmpresa('C30114', 'Barra')).toMatch(/D13/);
+  it('aceita 47xxx, 30xxx e 13xxx em qualquer empresa', () => {
+    expect(validarFrota('47123')).toBeNull();
+    expect(validarFrota('30123')).toBeNull();
+    expect(validarFrota('13123')).toBeNull();
+    expect(validarFrotaParaEmpresa('47123', 'Futuro')).toBeNull();
+    expect(validarFrotaParaEmpresa('30123', 'Redentor')).toBeNull();
+    expect(validarFrotaParaEmpresa('13123', 'Barra')).toBeNull();
   });
 
-  it('D13450 aceito somente para Barra', () => {
-    expect(validarFrotaParaEmpresa('D13450', 'Barra')).toBeNull();
-    expect(validarFrotaParaEmpresa('D13450', 'Futuro')).toMatch(/C30/);
-    expect(validarFrotaParaEmpresa('D13450', 'Redentor')).toMatch(/C47/);
+  it('rejeita letras, tamanho, prefixo e especiais', () => {
+    expect(validarFrota('C47123')).toMatch(MSG);
+    expect(validarFrota('D13123')).toMatch(MSG);
+    expect(validarFrota('4712')).toMatch(MSG);
+    expect(validarFrota('471234')).toMatch(MSG);
+    expect(validarFrota('12123')).toMatch(MSG);
+    expect(validarFrota('99123')).toMatch(MSG);
+    expect(validarFrota('47-123')).toMatch(MSG);
+    expect(validarFrota('47 123')).toMatch(MSG);
+    expect(validarFrota('')).toMatch(MSG);
   });
 
-  it('C30450 rejeitado para Barra (é padrão Futuro)', () => {
-    expect(validarFrotaParaEmpresa('C30450', 'Barra')).toMatch(/D13/);
-    expect(validarFrotaParaEmpresa('C30450', 'Futuro')).toBeNull();
-    expect(validarFrotaParaEmpresa('C30450', 'Redentor')).toMatch(/C47/);
+  it('erro durante digitação em prefixo inválido', () => {
+    expect(erroFrotaDuranteDigitacao('47')).toBeNull();
+    expect(erroFrotaDuranteDigitacao('471')).toBeNull();
+    expect(erroFrotaDuranteDigitacao('30')).toBeNull();
+    expect(erroFrotaDuranteDigitacao('13')).toBeNull();
+    expect(erroFrotaDuranteDigitacao('12')).toMatch(MSG);
+    expect(erroFrotaDuranteDigitacao('99')).toMatch(MSG);
+    expect(erroFrotaDuranteDigitacao('47123')).toBeNull();
+    expect(erroFrotaDuranteDigitacao('12123')).toMatch(MSG);
   });
 
-  it('rejeita prefixos genéricos fora do padrão', () => {
-    expect(validarFrotaParaEmpresa('C12345', 'Futuro')).toMatch(/C30/);
-    expect(validarFrotaParaEmpresa('D12345', 'Barra')).toMatch(/D13/);
-    expect(validarFrotaParaEmpresa('C47544', 'Futuro')).toMatch(/C30/);
-    expect(validarFrotaParaEmpresa('C40000', 'Redentor')).toMatch(/C47/);
-  });
-
-  it('mensagens específicas por empresa', () => {
-    expect(validarFrotaParaEmpresa('', 'Redentor')).toBe(
-      'Informe no formato C47 + 3 números. Ex.: C47654.',
-    );
-    expect(validarFrotaParaEmpresa('X', 'Futuro')).toBe(
-      'Informe no formato C30 + 3 números. Ex.: C30114.',
-    );
-    expect(validarFrotaParaEmpresa('C30', 'Barra')).toBe(
-      'Informe no formato D13 + 3 números. Ex.: D13450.',
-    );
-  });
-
-  it('durante digitação: parcial compatível sem erro; incompatível com erro', () => {
-    expect(erroFrotaDuranteDigitacao('', 'Futuro')).toBeNull();
-    expect(erroFrotaDuranteDigitacao('C', 'Futuro')).toBeNull();
-    expect(erroFrotaDuranteDigitacao('C30', 'Futuro')).toBeNull();
-    expect(erroFrotaDuranteDigitacao('C301', 'Futuro')).toBeNull();
-    expect(erroFrotaDuranteDigitacao('D', 'Futuro')).toMatch(/C30/);
-    expect(erroFrotaDuranteDigitacao('C47', 'Futuro')).toMatch(/C30/);
-    expect(erroFrotaDuranteDigitacao('C30114', 'Futuro')).toBeNull();
-    expect(erroFrotaDuranteDigitacao('C47654', 'Futuro')).toMatch(/C30/);
+  it('configurarRegraFrota aplica regra da API', () => {
+    configurarRegraFrota({
+      regex: '^99[0-9]{3}$',
+      max_len: 5,
+      exemplo: '99123',
+      mensagem: 'Use 99xxx.',
+      placeholder: 'Ex.: 99123',
+    });
+    expect(validarFrota('99123')).toBeNull();
+    expect(validarFrota('47123')).toBe('Use 99xxx.');
+    expect(placeholderFrotaEmpresa('Redentor')).toBe('Ex.: 99123');
   });
 });

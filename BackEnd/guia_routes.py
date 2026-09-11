@@ -27,6 +27,7 @@ from .guia_jornada_service import (
     concluir_trecho,
     criar_trecho,
     encerrar_guia,
+    excluir_trecho,
     iniciar_trecho,
     obter_guia_completa,
     registrar_troca_recurso,
@@ -307,8 +308,9 @@ def post_trecho(id_guia: int):
             "leituras_obrigatorias",
             "carro_em_transito",
             "trecho_em_transito",
+            "saida_obrigatoria",
         ):
-            status = 409
+            status = 409 if resultado.codigo != "saida_obrigatoria" else 400
         return json_error(resultado.mensagem, status, resultado.codigo)
     return jsonify({"ok": True, "trecho": resultado, "mensagem": "Trecho registrado."}), 201
 
@@ -414,6 +416,31 @@ def post_cancelar_trecho(id_trecho: int):
     return jsonify(
         {"ok": True, "trecho": resultado, "mensagem": "Trecho cancelado."}
     ), 200
+
+
+@guia_bp.delete("/trechos/<int:id_trecho>")
+@require_session
+def delete_trecho(id_trecho: int):
+    if g.auth_usuario.codigo_perfil not in PERFIS_MAPA:
+        return json_error(
+            "Sem permissão para excluir trecho.", 403, "sem_permissao"
+        )
+    body = request.get_json(silent=True) or {}
+    erro = excluir_trecho(
+        g.dal, id_trecho, body, int(g.auth_usuario.id_usuario)
+    )
+    if erro:
+        status = 404 if erro.codigo == "nao_encontrado" else 400
+        if erro.codigo in (
+            "guia_encerrada",
+            "trecho_em_transito",
+            "trecho_concluido",
+            "trecho_com_saida",
+            "conflito_versao",
+        ):
+            status = 409
+        return json_error(erro.mensagem, status, erro.codigo)
+    return jsonify({"ok": True, "mensagem": "Trecho excluído."}), 200
 
 
 @guia_bp.post("/<int:id_guia>/alteracao")

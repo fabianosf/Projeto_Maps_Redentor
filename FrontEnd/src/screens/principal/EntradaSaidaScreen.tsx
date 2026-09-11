@@ -228,7 +228,7 @@ export function EntradaSaidaScreen() {
           ? { id_destino: linhaSelecionada.id_local_destino }
           : {}),
       });
-      navigate('/principal');
+      navigate('/registros');
     } catch (err) {
       setInfoMsg(apiMsg(err, 'Não foi possível registrar chegada/saída.'));
     } finally {
@@ -238,7 +238,7 @@ export function EntradaSaidaScreen() {
 
   const cancelar = () => {
     if (window.history.length > 1) navigate(-1);
-    else navigate('/principal');
+    else navigate('/registros');
   };
 
   if (loading) {

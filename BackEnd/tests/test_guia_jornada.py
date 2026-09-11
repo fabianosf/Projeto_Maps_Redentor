@@ -27,18 +27,16 @@ def _payload_abertura(**overrides):
     return base
 
 
-def test_abrir_guia_cria_status_e_trecho(client):
+def test_abrir_guia_cria_status_sem_trecho(client):
     auth_client(client, "1")
     resp = client.post("/api/v1/guia", json=_payload_abertura(numero="JORN01"))
     assert resp.status_code == 201, resp.get_json()
     guia = resp.get_json()["guia"]
     assert guia.get("status") == "ABERTA"
     assert guia.get("hor_fim") in (None, "")
-    assert isinstance(guia.get("trechos"), list)
-    assert len(guia["trechos"]) >= 1
-    t0 = guia["trechos"][0]
-    assert t0.get("id_linha") == 1
-    assert t0.get("id_veiculo") == 3
+    assert guia.get("trechos") == [] or guia.get("trechos") is None or len(guia.get("trechos") or []) == 0
+    disp = (guia.get("motorista_disponibilidade") or {}).get("disponibilidade")
+    assert disp == "DISPONIVEL"
 
 
 def test_varios_trechos_mesma_guia(client):
@@ -87,8 +85,8 @@ def test_varios_trechos_mesma_guia(client):
     det = client.get(f"/api/v1/guia/{id_guia}")
     assert det.status_code == 200
     trechos = det.get_json()["guia"]["trechos"]
-    assert len(trechos) >= 3  # inicial + 2
-
+    assert len(trechos) == 2
+    assert {t.get("sentido") for t in trechos} == {"IDA", "VOLTA"}
 
 def test_troca_carro_mesma_empresa_com_auditoria(client, dal):
     auth_client(client, "1")
@@ -115,9 +113,9 @@ def test_troca_carro_mesma_empresa_com_auditoria(client, dal):
     assert guia["alteracoes"][0]["campo"] == "veiculo"
 
 
-def test_troca_empresa_exige_encerrar(client, dal):
+def test_troca_veiculo_outra_empresa_ok_abrir_guia_exige_encerrar(client, dal):
     auth_client(client, "1")
-    # Veículo Redentor (empresa 2 no seed de teste)
+    # Veículo empresa 1 (id 3 frota 100)
     cri = client.post(
         "/api/v1/guia",
         json=_payload_abertura(numero="JORN04", id_empresa=1, id_veiculo=3),
@@ -125,17 +123,17 @@ def test_troca_empresa_exige_encerrar(client, dal):
     assert cri.status_code == 201, cri.get_json()
     id_guia = int(cri.get_json()["guia"]["id_guia"])
 
-    # Tentar carro de outra empresa via alteração
+    # Troca para carro cadastrado em outra empresa — permitido
     alt = client.post(
         f"/api/v1/guia/{id_guia}/alteracao",
         json={
             "campo": "veiculo",
             "numero_frota": "C47000",  # id_veiculo 2, empresa 2
-            "motivo": "Tentativa de mudar para Redentor",
+            "motivo": "Troca para carro Redentor ativo",
         },
     )
-    assert alt.status_code == 409
-    assert alt.get_json().get("codigo") == "empresa_diferente"
+    assert alt.status_code == 200, alt.get_json()
+    assert str(alt.get_json()["guia"].get("numero_frota") or "").upper() == "C47000"
 
     # Abrir outra guia na outra empresa com mesmo motorista sem encerrar
     outra = client.post(

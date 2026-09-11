@@ -110,14 +110,13 @@ def test_linha_outra_empresa_rejeitada(client):
     assert "empresa" in resp.get_json()["mensagem"].lower()
 
 
-def test_veiculo_outra_empresa_rejeitado(client):
+def test_veiculo_outra_empresa_permitido(client):
     auth_client(client, "1")
     resp = client.post(
         "/api/v1/designacoes",
         json=_payload_criar(id_empresa=1, id_veiculo=2),  # veiculo 2 = empresa 2
     )
-    assert resp.status_code == 400
-    assert "empresa" in resp.get_json()["mensagem"].lower()
+    assert resp.status_code in (200, 201), resp.get_json()
 
 
 def test_me_expoe_designacao_ativa(client):
