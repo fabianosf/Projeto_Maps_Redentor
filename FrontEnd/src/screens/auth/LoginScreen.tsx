@@ -5,28 +5,22 @@
   type FormEvent,
   type KeyboardEvent,
 } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
-import { Lock, User } from 'lucide-react';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Loader2, Lock, User } from 'lucide-react';
 import { cancelLogin, login } from '@/api/auth';
 import { ApiRequestError } from '@/api/client';
 import { AlertDialog } from '@/components/AlertDialog';
-import { AppShell } from '@/components/AppShell';
+import { AuthShell } from '@/components/auth/AuthShell';
+import { DsAlert } from '@/components/auth/DsAlert';
 import { FormField } from '@/components/FormField';
 import { LoadingState } from '@/components/LoadingState';
-import { PageHeader } from '@/components/PageHeader';
 import { PasswordToggle } from '@/components/shared/PasswordToggle';
-import { Logo } from '@/components/shared/Logo';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
 import { useFocusInput } from '@/hooks/useFocusInput';
 import { useScreenBg } from '@/hooks/useScreenBg';
-import { actionBtn3dMd } from '@/lib/actionBtn3d';
-import { SCREEN_BG } from '@/theme/tokens';
-import {
-  isValidMatricula,
-} from '@/utils/validation';
-
-const LOGIN_BG = SCREEN_BG;
+import { AUTH_BG } from '@/theme/tokens';
+import { isValidMatricula } from '@/utils/validation';
 
 const MATRICULA_INVALIDA = 'Matrícula inválida!';
 const SENHA_INVALIDA = 'Senha inválida!';
@@ -57,9 +51,23 @@ export function LoginScreen() {
   const [senha, setSenha] = useState('');
   const [showSenha, setShowSenha] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [errMat, setErrMat] = useState<string | null>(null);
+  const [errSenha, setErrSenha] = useState<string | null>(null);
+  const [banner, setBanner] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalState>(MODAL_CLOSED);
 
   const showError = useCallback((message: string, clearField: FocusField | null) => {
+    if (clearField === 'matricula') {
+      setErrMat(message);
+      setErrSenha(null);
+    } else if (clearField === 'senha') {
+      setErrSenha(message);
+      setErrMat(null);
+    } else {
+      setBanner(message);
+      setErrMat(null);
+      setErrSenha(null);
+    }
     setModal({ open: true, message, clearField });
   }, []);
 
@@ -68,16 +76,19 @@ export function LoginScreen() {
     setModal(MODAL_CLOSED);
     if (field === 'matricula') {
       setMatricula('');
+      setErrMat(null);
       window.setTimeout(() => matriculaRef.current?.focus(), 0);
     } else if (field === 'senha') {
       setSenha('');
       setShowSenha(false);
+      setErrSenha(null);
       window.setTimeout(() => senhaRef.current?.focus(), 0);
     }
   }, [modal.clearField, matriculaRef]);
 
   const submitLogin = async () => {
     if (submitting) return;
+    setBanner(null);
 
     const mat = matricula.trim();
     if (!isValidMatricula(mat)) {
@@ -89,6 +100,8 @@ export function LoginScreen() {
       return;
     }
 
+    setErrMat(null);
+    setErrSenha(null);
     setSubmitting(true);
     try {
       const data = await login(mat, senha);
@@ -166,88 +179,105 @@ export function LoginScreen() {
     }
   };
 
-  useScreenBg(LOGIN_BG);
+  useScreenBg(AUTH_BG);
 
   if (loading) return <LoadingState />;
   if (user) return <Navigate to="/principal" replace />;
 
   return (
-    <AppShell className="bg-screen">
-      <div className="page flex min-h-dvh flex-col bg-screen">
-        <PageHeader title="LOGIN" />
+    <AuthShell subtitle="Acesse com sua matrícula operacional">
+      <div className={uiCard}>
+        <form className="field-stack" onSubmit={onSubmit} autoComplete="off" noValidate>
+          {banner ? <DsAlert tone="error">{banner}</DsAlert> : null}
 
-        <div className="page-body-center flex-1 bg-screen">
-          <div className="form-stack">
-            <Logo />
+          <FormField
+            ref={matriculaRef}
+            label="Matrícula"
+            name="matricula"
+            type="text"
+            inputMode="numeric"
+            placeholder="Até 5 dígitos"
+            autoComplete="username"
+            value={matricula}
+            onChange={(e) => {
+              setMatricula(e.target.value);
+              if (errMat) setErrMat(null);
+            }}
+            onKeyDown={onMatriculaKeyDown}
+            leftIcon={<User className="h-4 w-4" />}
+            error={errMat ?? undefined}
+            enterKeyHint="next"
+          />
 
-            <form
-              className="field-stack surface-card mt-2 p-4"
-              onSubmit={onSubmit}
-              autoComplete="off"
-              noValidate
+          <FormField
+            ref={senhaRef}
+            label="Senha"
+            name="senha"
+            type={showSenha ? 'text' : 'password'}
+            placeholder="••••••••"
+            autoComplete="current-password"
+            value={senha}
+            onChange={(e) => {
+              setSenha(e.target.value);
+              if (errSenha) setErrSenha(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void submitLogin();
+              }
+            }}
+            leftIcon={<Lock className="h-4 w-4" />}
+            rightSlot={
+              <PasswordToggle
+                visible={showSenha}
+                onToggle={() => setShowSenha((v) => !v)}
+              />
+            }
+            error={errSenha ?? undefined}
+            enterKeyHint="done"
+          />
+
+          <div className="flex justify-end">
+            <Link
+              to="/recuperar-senha"
+              className="min-h-touch text-sm font-semibold text-primary underline-offset-2 hover:underline"
             >
-              <FormField
-                ref={matriculaRef}
-                label="Matrícula"
-                name="matricula"
-                type="text"
-                inputMode="numeric"
-                placeholder="Matrícula"
-                autoComplete="username"
-                value={matricula}
-                onChange={(e) => setMatricula(e.target.value)}
-                onKeyDown={onMatriculaKeyDown}
-                leftIcon={<User className="h-4 w-4" />}
-                enterKeyHint="next"
-              />
-
-              <FormField
-                ref={senhaRef}
-                label="Senha"
-                name="senha"
-                type={showSenha ? 'text' : 'password'}
-                placeholder="••••••••"
-                autoComplete="current-password"
-                value={senha}
-                onChange={(e) => setSenha(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    void submitLogin();
-                  }
-                }}
-                leftIcon={<Lock className="h-4 w-4" />}
-                rightSlot={
-                  <PasswordToggle
-                    visible={showSenha}
-                    onToggle={() => setShowSenha((v) => !v)}
-                  />
-                }
-                enterKeyHint="done"
-              />
-
-              <div className="mt-3 flex flex-col gap-3">
-                <Button type="submit" className={actionBtn3dMd}>
-                  Confirmar
-                </Button>
-                <Button
-                  type="button"
-                  className={actionBtn3dMd}
-                  onClick={handleCancelar}
-                >
-                  Cancelar
-                </Button>
-              </div>
-            </form>
+              Esqueci minha senha
+            </Link>
           </div>
-        </div>
 
-        <AlertDialog
-          open={modal.open}
-          message={modal.message}
-          onConfirm={handleModalOk}
-        />
+          <div className="flex flex-col gap-3 pt-1">
+            <Button type="submit" className="ds-cta" disabled={submitting}>
+              {submitting ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+                  Entrando…
+                </>
+              ) : (
+                'Entrar'
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="ds-cta"
+              onClick={handleCancelar}
+              disabled={submitting}
+            >
+              Cancelar
+            </Button>
+          </div>
+        </form>
       </div>
-    </AppShell>
+
+      <AlertDialog
+        open={modal.open}
+        message={modal.message}
+        onConfirm={handleModalOk}
+      />
+    </AuthShell>
   );
 }
+
+const uiCard = 'surface-card p-6';

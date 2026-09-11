@@ -13,7 +13,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { StatusBadge } from '@/components/StatusBadge';
 import { useAuth } from '@/context/AuthContext';
 import { useScreenBg } from '@/hooks/useScreenBg';
-import { SCREEN_BG } from '@/theme/tokens';
+import { AUTH_BG } from '@/theme/tokens';
 import {
   canAccessBancoHoras,
   canAccessMapas,
@@ -35,14 +35,14 @@ function formatHoje(): string {
 export function TelaPrincipalScreen() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  useScreenBg(SCREEN_BG);
+  useScreenBg(AUTH_BG);
 
   const podeMapas = canAccessMapas(user?.codigo_perfil);
   const podeBancoHoras = canAccessBancoHoras(user?.codigo_perfil);
 
   return (
-    <AppShell className="bg-screen">
-      <div className="page box-border flex min-h-dvh flex-col bg-screen text-slate-900">
+    <AppShell className="bg-background">
+      <div className="page box-border flex min-h-dvh flex-col bg-background text-foreground">
         <PageHeader title="Início" />
 
         <div className="page-body flex-1 gap-4 pb-tabbar">

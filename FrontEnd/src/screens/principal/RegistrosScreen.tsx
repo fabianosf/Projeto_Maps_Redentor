@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { StatusBadge } from '@/components/StatusBadge';
 import { useAuth } from '@/context/AuthContext';
 import { useScreenBg } from '@/hooks/useScreenBg';
-import { SCREEN_BG } from '@/theme/tokens';
+import { AUTH_BG } from '@/theme/tokens';
 import { canAccessBancoHoras } from '@/utils/perfilAccess';
 
 /**
@@ -16,13 +16,13 @@ import { canAccessBancoHoras } from '@/utils/perfilAccess';
 export function RegistrosScreen() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  useScreenBg(SCREEN_BG);
+  useScreenBg(AUTH_BG);
 
   const podeBancoHoras = canAccessBancoHoras(user?.codigo_perfil);
 
   return (
-    <AppShell className="bg-screen">
-      <div className="page flex min-h-dvh flex-col bg-screen text-slate-900">
+    <AppShell className="bg-background">
+      <div className="page flex min-h-dvh flex-col bg-background text-foreground">
         <PageHeader title="Registros" />
 
         <div className="page-body flex-1 gap-4 pb-tabbar">

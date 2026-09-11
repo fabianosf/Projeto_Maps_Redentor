@@ -36,6 +36,10 @@ const config: Config = {
           DEFAULT: 'hsl(var(--warning))',
           foreground: 'hsl(var(--warning-foreground))',
         },
+        info: {
+          DEFAULT: 'hsl(var(--info))',
+          foreground: 'hsl(var(--info-foreground))',
+        },
         muted: {
           DEFAULT: 'hsl(var(--muted))',
           foreground: 'hsl(var(--muted-foreground))',
@@ -51,10 +55,14 @@ const config: Config = {
         'table-head': 'hsl(var(--table-head))',
         'table-zebra': 'hsl(var(--table-zebra))',
       },
+      boxShadow: {
+        card: 'var(--shadow-card)',
+      },
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
+        xl: 'calc(var(--radius) + 4px)',
       },
       fontFamily: {
         sans: ['Calibri', 'Segoe UI', 'system-ui', '-apple-system', 'sans-serif'],

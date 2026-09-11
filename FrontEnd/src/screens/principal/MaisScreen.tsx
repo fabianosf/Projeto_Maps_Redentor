@@ -7,7 +7,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { StatusBadge } from '@/components/StatusBadge';
 import { useAuth } from '@/context/AuthContext';
 import { useScreenBg } from '@/hooks/useScreenBg';
-import { SCREEN_BG } from '@/theme/tokens';
+import { AUTH_BG } from '@/theme/tokens';
 import {
   canAccessCadastroUsuario,
   canAccessConfiguracao,
@@ -19,7 +19,7 @@ import {
 export function MaisScreen() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  useScreenBg(SCREEN_BG);
+  useScreenBg(AUTH_BG);
 
   const podeConfig = canAccessConfiguracao(user?.codigo_perfil);
   const podeUsuarios = canAccessCadastroUsuario(user?.codigo_perfil);
@@ -29,8 +29,8 @@ export function MaisScreen() {
   }, [logout]);
 
   return (
-    <AppShell className="bg-screen">
-      <div className="page flex min-h-dvh flex-col bg-screen text-slate-900">
+    <AppShell className="bg-background">
+      <div className="page flex min-h-dvh flex-col bg-background text-foreground">
         <PageHeader title="Mais" />
 
         <div className="page-body flex-1 gap-4 pb-tabbar">

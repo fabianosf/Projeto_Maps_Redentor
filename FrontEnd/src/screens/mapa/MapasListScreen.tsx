@@ -227,7 +227,7 @@ export function MapasListScreen() {
   const novoMapa = () => navigate('/mapas/novo');
 
   return (
-    <AppShell className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-screen text-slate-900">
+    <AppShell className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-screen text-foreground">
       <PageHeader
         title="Mapas"
         onBack={() => navigate('/principal')}

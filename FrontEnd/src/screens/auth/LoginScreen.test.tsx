@@ -44,8 +44,10 @@ describe('LoginScreen', () => {
     const user = userEvent.setup();
     renderWithProviders(<LoginScreen />);
 
-    await user.click(screen.getByRole('button', { name: /confirmar/i }));
-    expect(await screen.findByText('Matrícula inválida!')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /entrar/i }));
+    expect(
+      (await screen.findAllByText('Matrícula inválida!')).length,
+    ).toBeGreaterThan(0);
     expect(loginMock).not.toHaveBeenCalled();
   });
 
@@ -54,8 +56,10 @@ describe('LoginScreen', () => {
     renderWithProviders(<LoginScreen />);
 
     await user.type(screen.getByLabelText(/matrícula/i), '123');
-    await user.click(screen.getByRole('button', { name: /confirmar/i }));
-    expect(await screen.findByText('Senha inválida!')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /entrar/i }));
+    expect(
+      (await screen.findAllByText('Senha inválida!')).length,
+    ).toBeGreaterThan(0);
     expect(loginMock).not.toHaveBeenCalled();
   });
 

@@ -5,6 +5,7 @@ import { MainTabLayout } from '@/layouts/MainTabLayout';
 import { ProtectedRoute } from '@/routes/ProtectedRoute';
 import { LoginScreen } from '@/screens/auth/LoginScreen';
 import { PrimeiroAcessoScreen } from '@/screens/auth/PrimeiroAcessoScreen';
+import { RecuperarSenhaScreen } from '@/screens/auth/RecuperarSenhaScreen';
 
 export default function App() {
   return (
@@ -12,9 +13,9 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginScreen />} />
         <Route path="/primeiro-acesso" element={<PrimeiroAcessoScreen />} />
+        <Route path="/recuperar-senha" element={<RecuperarSenhaScreen />} />
 
         <Route element={<ProtectedRoute />}>
-          {/* Keep-alive das abas vive em MainTabLayout (não usa Outlet por tela). */}
           <Route path="*" element={<MainTabLayout />} />
         </Route>
 

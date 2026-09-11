@@ -1282,7 +1282,7 @@ export function GuiaScreen() {
 
   return (
     <AppShell className="bg-screen">
-      <div className="page flex min-h-dvh flex-col bg-screen text-slate-900">
+      <div className="page flex min-h-dvh flex-col bg-screen text-foreground">
         <PageHeader
           title="Guia"
           onBack={() => navigate('/principal')}

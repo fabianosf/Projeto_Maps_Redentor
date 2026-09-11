@@ -1,15 +1,19 @@
 import logoMapa3d from '@/assets/logo-mapa-3d.png';
 
-/** Logo da Tela 01 — círculo transparente sobre o fundo da tela. */
-export function Logo() {
+/** Logo RedMapa — identidade no topo das telas de autenticação. */
+export function Logo({ compact = false }: { compact?: boolean }) {
   return (
     <div className="flex w-full flex-col items-center bg-transparent">
       <img
         src={logoMapa3d}
-        alt="RedMapa - Mapa"
-        width={160}
-        height={160}
-        className="mx-auto mb-6 h-auto w-40 max-w-[160px] bg-transparent object-contain"
+        alt="RedMapa"
+        width={compact ? 112 : 144}
+        height={compact ? 112 : 144}
+        className={
+          compact
+            ? 'mx-auto mb-2 h-auto w-28 max-w-[112px] bg-transparent object-contain'
+            : 'mx-auto mb-3 h-auto w-36 max-w-[144px] bg-transparent object-contain'
+        }
         draggable={false}
       />
     </div>

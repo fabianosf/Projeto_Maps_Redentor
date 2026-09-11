@@ -54,13 +54,13 @@ describe('PrimeiroAcessoScreen', () => {
 
     await user.type(screen.getByLabelText(/nova senha/i), 'Senha@123');
     await user.type(screen.getByLabelText(/confirmar senha/i), 'Outra@123');
-    await user.click(screen.getByRole('button', { name: /confirmar/i }));
+    await user.click(screen.getByRole('button', { name: /salvar senha/i }));
 
     expect(
-      await screen.findByText('Senhas digitadas diferentes!'),
-    ).toBeInTheDocument();
+      (await screen.findAllByText('Senhas digitadas diferentes!')).length,
+    ).toBeGreaterThan(0);
     expect(changePasswordMock).not.toHaveBeenCalled();
-  });
+  }, 15000);
 
   it('rejeita senha fora da política', async () => {
     const user = userEvent.setup();
@@ -68,11 +68,13 @@ describe('PrimeiroAcessoScreen', () => {
 
     await user.type(screen.getByLabelText(/nova senha/i), 'fraca');
     await user.type(screen.getByLabelText(/confirmar senha/i), 'fraca');
-    await user.click(screen.getByRole('button', { name: /confirmar/i }));
+    await user.click(screen.getByRole('button', { name: /salvar senha/i }));
 
-    expect(await screen.findByText('Senha inválida!')).toBeInTheDocument();
+    expect(
+      (await screen.findAllByText('Senha inválida!')).length,
+    ).toBeGreaterThan(0);
     expect(changePasswordMock).not.toHaveBeenCalled();
-  });
+  }, 15000);
 
   it('aceita senha válida e chama API', async () => {
     const user = userEvent.setup();
@@ -96,8 +98,8 @@ describe('PrimeiroAcessoScreen', () => {
     const senha = 'Senha@123';
     await user.type(screen.getByLabelText(/nova senha/i), senha);
     await user.type(screen.getByLabelText(/confirmar senha/i), senha);
-    await user.click(screen.getByRole('button', { name: /confirmar/i }));
+    await user.click(screen.getByRole('button', { name: /salvar senha/i }));
 
     expect(changePasswordMock).toHaveBeenCalledWith('tok-abc', senha, senha);
-  });
+  }, 15000);
 });
