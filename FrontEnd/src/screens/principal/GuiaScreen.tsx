@@ -35,6 +35,7 @@ import { AppShell } from '@/components/AppShell';
 import { EmptyState } from '@/components/EmptyState';
 import { ErrorState } from '@/components/ErrorState';
 import { FormField } from '@/components/FormField';
+import { RegistrarSaidaPanel } from '@/components/guia/RegistrarSaidaPanel';
 import { LoadingState } from '@/components/LoadingState';
 import { PageHeader } from '@/components/PageHeader';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -171,16 +172,29 @@ function GuiaViagemOpsCard({
   destaque,
   onOpen,
   onPrimary,
+  primaryRef,
 }: {
   viagem: GuiaViagemCard;
   acao?: ProximaAcaoTipo;
   destaque?: boolean;
   onOpen: () => void;
   onPrimary?: () => void;
+  primaryRef?: React.Ref<HTMLButtonElement>;
 }) {
   const op = statusOperacionalViagem(viagem);
   const sealTone =
     op === 'concluida' ? 'success' : op === 'em_transito' ? 'info' : 'warning';
+  const motoristaTxt =
+    viagem.matricula_motorista && viagem.motorista
+      ? `${viagem.matricula_motorista} — ${viagem.motorista}`
+      : viagem.motorista || viagem.matricula_motorista || null;
+  const saidaReal = viagem.horario_saida_real || null;
+  const desp = viagem.despachante_saida
+    ? viagem.matricula_despachante_saida
+      ? `${viagem.matricula_despachante_saida} — ${viagem.despachante_saida}`
+      : viagem.despachante_saida
+    : null;
+
   return (
     <OpsCard
       stripeClass={stripeClassStatusOperacional(op)}
@@ -189,7 +203,7 @@ function GuiaViagemOpsCard({
       className={destaque ? 'border-primary/30 ring-1 ring-primary/20' : undefined}
       primaryAction={
         acao && onPrimary ? (
-          <PrimaryActionButton onClick={onPrimary}>
+          <PrimaryActionButton ref={primaryRef} onClick={onPrimary}>
             {labelProximaAcao(acao)}
           </PrimaryActionButton>
         ) : null
@@ -197,17 +211,17 @@ function GuiaViagemOpsCard({
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-slate-900">
+          <p className="truncate text-sm font-bold text-foreground">
             <span className="tabular-nums">
               {viagem.viagem_label.replace(/^Viagem\s+/i, '')}
             </span>
-            <span className="mx-1.5 text-slate-300">·</span>
+            <span className="mx-1.5 text-border">·</span>
             <span>{viagem.veiculo}</span>
           </p>
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-600">
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-0.5">
               <Clock3 className="h-3 w-3" aria-hidden />
-              {viagem.horario}
+              {saidaReal ? `Saída ${saidaReal}` : viagem.horario}
             </span>
             <span
               className={
@@ -219,6 +233,12 @@ function GuiaViagemOpsCard({
               {viagem.sentido === 'ida' ? 'Ida' : 'Volta'}
             </span>
           </p>
+          {op === 'em_transito' ? (
+            <div className="mt-1.5 space-y-0.5 text-[11px] leading-snug text-slate-600">
+              {motoristaTxt ? <p>Motorista: {motoristaTxt}</p> : null}
+              {desp ? <p>Despachante: {desp}</p> : null}
+            </div>
+          ) : null}
         </div>
         <StatusSeal
           label={labelStatusOperacional(op)}
@@ -417,6 +437,9 @@ export function GuiaScreen() {
   );
   const [escalasLoading, setEscalasLoading] = useState(false);
   const [alteracaoOpen, setAlteracaoOpen] = useState(false);
+  const [saidaOpen, setSaidaOpen] = useState(false);
+  const [saidaViagem, setSaidaViagem] = useState<GuiaViagemCard | null>(null);
+  const saidaTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [altCarro, setAltCarro] = useState('');
   const [altMotorista, setAltMotorista] = useState('');
   const [altHorIni, setAltHorIni] = useState('');
@@ -1465,10 +1488,17 @@ export function GuiaScreen() {
                         viagem={gruposViagens.proxima.viagem}
                         acao={gruposViagens.proxima.acao}
                         destaque
+                        primaryRef={saidaTriggerRef}
                         onOpen={() => abrirDetalhe(gruposViagens.proxima!.viagem)}
-                        onPrimary={() =>
-                          abrirDetalhe(gruposViagens.proxima!.viagem)
-                        }
+                        onPrimary={() => {
+                          const p = gruposViagens.proxima!;
+                          if (p.acao === 'registrar_saida') {
+                            setSaidaViagem(p.viagem);
+                            setSaidaOpen(true);
+                            return;
+                          }
+                          abrirDetalhe(p.viagem);
+                        }}
                       />
                     </section>
                   ) : null}
@@ -1493,14 +1523,33 @@ export function GuiaScreen() {
                           </span>
                         </h3>
                         <ul className="flex flex-col gap-2">
-                          {lista.map((v) => (
-                            <li key={v.key}>
-                              <GuiaViagemOpsCard
-                                viagem={v}
-                                onOpen={() => abrirDetalhe(v)}
-                              />
-                            </li>
-                          ))}
+                          {lista.map((v) => {
+                            const acaoLista =
+                              titulo === 'Em trânsito'
+                                ? ('registrar_chegada' as const)
+                                : titulo === 'Pendentes'
+                                  ? ('registrar_saida' as const)
+                                  : undefined;
+                            return (
+                              <li key={v.key}>
+                                <GuiaViagemOpsCard
+                                  viagem={v}
+                                  acao={acaoLista}
+                                  onOpen={() => abrirDetalhe(v)}
+                                  onPrimary={
+                                    acaoLista === 'registrar_saida'
+                                      ? () => {
+                                          setSaidaViagem(v);
+                                          setSaidaOpen(true);
+                                        }
+                                      : acaoLista === 'registrar_chegada'
+                                        ? () => abrirDetalhe(v)
+                                        : undefined
+                                  }
+                                />
+                              </li>
+                            );
+                          })}
                         </ul>
                       </section>
                     ),
@@ -1528,6 +1577,37 @@ export function GuiaScreen() {
           open={infoMsg !== null}
           message={infoMsg ?? ''}
           onConfirm={() => setInfoMsg(null)}
+        />
+
+        <RegistrarSaidaPanel
+          open={saidaOpen}
+          onOpenChange={setSaidaOpen}
+          viagem={saidaViagem}
+          triggerRef={saidaTriggerRef}
+          onSuccess={() => {
+            setInfoMsg('Saída registrada. Viagem em trânsito.');
+            void carregarLista();
+          }}
+          onTrocaMotorista={(guia, viagem) => {
+            const idItem = guia.id_item_map ?? viagem.id_item_map;
+            if (idItem == null) {
+              setInfoMsg(
+                'Troca de motorista exige escala vinculada (id_item_map).',
+              );
+              return;
+            }
+            setIdItemMap(String(idItem));
+            setAltCarro(
+              String(viagem.numero_frota || viagem.veiculo || guia.numero_frota || ''),
+            );
+            setAltMotorista(String(viagem.matricula_motorista || guia.matricula_motorista || ''));
+            setAltHorIni('');
+            setAltHorFim('');
+            setAltChegada('');
+            setAltJustificativa('');
+            setSaidaOpen(false);
+            setAlteracaoOpen(true);
+          }}
         />
 
         <Dialog open={filtroOpen} onOpenChange={setFiltroOpen}>

@@ -490,6 +490,8 @@ def _montar_card(
     matricula_mot = viagem.get("matricula_motorista") if viagem else None
     if guia and not matricula_mot:
         matricula_mot = guia.get("matricula_motorista")
+    if guia and not motorista_nome:
+        motorista_nome = guia.get("motorista_nome")
 
     if codigo_mapa:
         mapa_label = codigo_mapa
@@ -508,6 +510,16 @@ def _montar_card(
     elif guia is not None and guia.get("linha_descricao"):
         linha_label = str(guia.get("linha_descricao")).strip() or None
 
+    empresa_label = None
+    id_empresa = None
+    id_item_map = None
+    id_motorista = None
+    if guia is not None:
+        empresa_label = str(guia.get("empresa_descricao") or "").strip() or None
+        id_empresa = _as_int(guia.get("id_empresa"))
+        id_item_map = _as_int(guia.get("id_item_map"))
+        id_motorista = _as_int(guia.get("id_motorista"))
+
     return {
         "key": key,
         "viagem_label": f"Viagem {seq:02d}",
@@ -522,12 +534,20 @@ def _montar_card(
         "mapa": mapa_label,
         "linha": linha_label,
         "codigo_linha": linha_cod,
+        "empresa": empresa_label,
+        "id_empresa": id_empresa,
+        "id_item_map": id_item_map,
+        "id_motorista": id_motorista,
         "veiculo": veiculo or "—",
         "numero_frota": veiculo or None,
         "id_veiculo": id_veiculo,
         "motorista": motorista_nome,
         "matricula_motorista": matricula_mot,
         "responsavel": responsavel,
+        "despachante_saida": None,
+        "matricula_despachante_saida": None,
+        "horario_saida_real": None,
+        "horario_chegada_real": None,
         "ocorrencias": obs_guia,
         "observacao": obs_guia,
         "data": data_br,
@@ -721,11 +741,14 @@ def consultar_guia_consolidada(
             placeholders = ",".join(["?"] * len(ids_guia))
             df_t = dal.read(
                 f"""
-                SELECT id_trecho, id_guia, sentido, status, versao, seq,
-                       id_linha, id_veiculo, hor_ini, hor_fim
-                FROM tb_guia_trecho
-                WHERE id_guia IN ({placeholders})
-                ORDER BY seq ASC, id_trecho ASC
+                SELECT t.id_trecho, t.id_guia, t.sentido, t.status, t.versao, t.seq,
+                       t.id_linha, t.id_veiculo, t.hor_ini, t.hor_fim, t.id_usuario,
+                       u.nome AS despachante_saida,
+                       u.matricula AS matricula_despachante_saida
+                FROM tb_guia_trecho t
+                LEFT JOIN tb_usuario u ON u.id_usuario = t.id_usuario
+                WHERE t.id_guia IN ({placeholders})
+                ORDER BY t.seq ASC, t.id_trecho ASC
                 """,
                 tuple(ids_guia),
             )
@@ -770,6 +793,18 @@ def consultar_guia_consolidada(
             c["id_trecho"] = _as_int(tmatch.get("id_trecho"))
             c["trecho_status"] = str(tmatch.get("status") or "").upper() or None
             c["trecho_versao"] = _as_int(tmatch.get("versao"))
+            saida_real = _hhmm(tmatch.get("hor_ini"))
+            cheg_real = _hhmm(tmatch.get("hor_fim"))
+            if saida_real:
+                c["horario_saida_real"] = saida_real
+            if cheg_real:
+                c["horario_chegada_real"] = cheg_real
+            desp = str(tmatch.get("despachante_saida") or "").strip() or None
+            mat_desp = str(tmatch.get("matricula_despachante_saida") or "").strip() or None
+            if desp:
+                c["despachante_saida"] = desp
+            if mat_desp:
+                c["matricula_despachante_saida"] = mat_desp
             st = str(c["trecho_status"] or "")
             if st in ("PLANEJADO", "EM_TRANSITO"):
                 total_pendente += 1

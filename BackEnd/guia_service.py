@@ -120,14 +120,17 @@ def _row_guia(dal, id_guia: int) -> Optional[dict[str, Any]]:
     df = dal.read(
         """
         SELECT g.*, v.numero_frota, m.matricula AS matricula_motorista,
+               m.nome AS motorista_nome,
                t.descricao AS turno_descricao,
                l.codigo_linha AS linha_codigo,
-               l.descricao AS linha_descricao
+               l.descricao AS linha_descricao,
+               e.descricao AS empresa_descricao
         FROM tb_guia g
         LEFT JOIN tb_veiculo v ON v.id_veiculo = g.id_veiculo
         LEFT JOIN tb_motorista m ON m.id_motorista = g.id_motorista
         LEFT JOIN tb_turno t ON t.id_turno = g.id_turno
         LEFT JOIN tb_linha l ON l.id_linha = g.id_linha
+        LEFT JOIN tb_empresa e ON e.id_empresa = g.id_empresa
         WHERE g.id_guia = ?
         """,
         (id_guia,),
@@ -177,14 +180,17 @@ def listar_guias(dal, data_br: Optional[str] = None) -> list[dict[str, Any]] | G
     df = dal.read(
         f"""
         SELECT g.*, v.numero_frota, m.matricula AS matricula_motorista,
+               m.nome AS motorista_nome,
                t.descricao AS turno_descricao,
                l.codigo_linha AS linha_codigo,
-               l.descricao AS linha_descricao
+               l.descricao AS linha_descricao,
+               e.descricao AS empresa_descricao
         FROM tb_guia g
         LEFT JOIN tb_veiculo v ON v.id_veiculo = g.id_veiculo
         LEFT JOIN tb_motorista m ON m.id_motorista = g.id_motorista
         LEFT JOIN tb_turno t ON t.id_turno = g.id_turno
         LEFT JOIN tb_linha l ON l.id_linha = g.id_linha
+        LEFT JOIN tb_empresa e ON e.id_empresa = g.id_empresa
         {where}
         ORDER BY COALESCE(g.hor_ini, g.data) ASC, g.id_guia ASC
         """,

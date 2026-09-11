@@ -1,4 +1,4 @@
-import type { ReactNode, MouseEvent } from 'react';
+import type { ReactNode, SyntheticEvent } from 'react';
 import { cn } from '@/lib/utils';
 
 type Props = {
@@ -26,7 +26,7 @@ export function OpsCard({
   'aria-label': ariaLabel,
   disabled,
 }: Props) {
-  const stopAction = (e: MouseEvent) => {
+  const stopAction = (e: SyntheticEvent) => {
     e.stopPropagation();
   };
 

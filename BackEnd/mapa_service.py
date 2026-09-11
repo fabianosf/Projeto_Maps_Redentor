@@ -1477,6 +1477,20 @@ def _format_hhmm_from_minutos(minutos: int) -> str:
     return f"{h:02d}:{mm:02d}"
 
 
+def _format_hhmm_signed(minutos: int) -> str:
+    sign = "-" if minutos < 0 else "+"
+    return f"{sign}{_format_hhmm_from_minutos(abs(int(minutos)))}"
+
+
+def _hhmm_str(value: Any) -> str | None:
+    dt = _as_datetime(value)
+    if dt is None:
+        texto = str(value or "").strip()
+        m = re.search(r"(\d{2}):(\d{2})", texto)
+        return f"{m.group(1)}:{m.group(2)}" if m else (texto or None)
+    return dt.strftime("%H:%M")
+
+
 def _intervalos_sobrepoem(
     a0: datetime, a1: datetime | None, b0: datetime, b1: datetime | None
 ) -> bool:
@@ -1899,7 +1913,13 @@ def dar_baixa_item_map(
 
 
 def obter_banco_horas_motorista(
-    dal, id_motorista: int, data_ref: date
+    dal,
+    id_motorista: int,
+    data_ref: date,
+    *,
+    id_empresa: int | None = None,
+    id_linha: int | None = None,
+    situacao: str | None = None,
 ) -> dict[str, Any] | MapaError:
     """
     Controle operacional do dia: períodos por veículo + totais.
@@ -1921,10 +1941,20 @@ def obter_banco_horas_motorista(
         """
         SELECT i.*,
                v.numero_frota,
-               m.data AS data_mapa
+               m.data AS data_mapa,
+               m.id_empresa,
+               m.id_linha AS id_linha_mapa,
+               e.descricao AS empresa_descricao,
+               l.codigo_linha,
+               l.descricao AS linha_descricao,
+               u.nome AS responsavel_registro,
+               u.matricula AS matricula_responsavel
         FROM tb_item_map i
         INNER JOIN tb_veiculo v ON v.id_veiculo = i.id_veiculo
         INNER JOIN tb_map m ON m.id_registro = i.idmap
+        LEFT JOIN tb_empresa e ON e.id_empresa = m.id_empresa
+        LEFT JOIN tb_linha l ON l.id_linha = COALESCE(i.id_linha, m.id_linha)
+        LEFT JOIN tb_usuario u ON u.id_usuario = m.id_usuario
         WHERE i.id_motorista = ?
         ORDER BY i.id_item
         """,
@@ -1962,13 +1992,77 @@ def obter_banco_horas_motorista(
                 if not (ini < dia_fim and fim_ref >= dia_ini):
                     continue
 
+            if id_empresa is not None:
+                try:
+                    if int(item.get("id_empresa") or -1) != int(id_empresa):
+                        continue
+                except (TypeError, ValueError):
+                    continue
+            if id_linha is not None:
+                try:
+                    lid = item.get("id_linha")
+                    if lid is None:
+                        lid = item.get("id_linha_mapa")
+                    if int(lid or -1) != int(id_linha):
+                        continue
+                except (TypeError, ValueError):
+                    continue
+
+            situacao_norm = (situacao or "").strip().lower()
+            if situacao_norm in ("encerrada", "em_andamento"):
+                if situacao_norm == "encerrada" and status != STATUS_ESCALA_ENCERRADA:
+                    continue
+                if situacao_norm == "em_andamento" and status == STATUS_ESCALA_ENCERRADA:
+                    continue
+
             frota = str(item.get("numero_frota") or item.get("id_veiculo") or "")
+            previsto_ini = _as_datetime(item.get("hor_ini_jor"))
+            previsto_fim = _as_datetime(item.get("hor_fim_jor"))
+            # Viagens da escala — horários reais/planejados sem inventar chegada.
+            viagens: list[dict[str, Any]] = []
+            viagens_df = dal.read(
+                """
+                SELECT id_viagem, horario_saida, horario_chegada,
+                       qtd_pas_ida, qtd_pas_volta, placa
+                FROM tb_viagem
+                WHERE id_item_registro = ?
+                ORDER BY horario_saida ASC, id_viagem ASC
+                """,
+                (int(item["id_item"]),),
+            )
+            if viagens_df is not None and not getattr(viagens_df, "empty", True):
+                for _, vr in viagens_df.iterrows():
+                    vrow = vr.to_dict()
+                    viagens.append(
+                        {
+                            "id_viagem": int(vrow["id_viagem"]),
+                            "horario_saida": _hhmm_str(vrow.get("horario_saida")),
+                            "horario_chegada": _hhmm_str(vrow.get("horario_chegada")),
+                            "qtd_pas_ida": vrow.get("qtd_pas_ida"),
+                            "qtd_pas_volta": vrow.get("qtd_pas_volta"),
+                        }
+                    )
+
             base = {
                 "id_item": int(item["id_item"]),
                 "idmap": int(item["idmap"]),
                 "id_veiculo": int(item["id_veiculo"]),
                 "numero_frota": frota,
+                "id_empresa": int(item["id_empresa"]) if item.get("id_empresa") is not None else None,
+                "empresa": item.get("empresa_descricao"),
+                "id_linha": int(item["id_linha"]) if item.get("id_linha") is not None else None,
+                "codigo_linha": item.get("codigo_linha"),
+                "linha": item.get("linha_descricao") or item.get("codigo_linha"),
                 "inicio_real": ini.strftime("%Y-%m-%d %H:%M:%S"),
+                "jornada_prevista_ini": (
+                    previsto_ini.strftime("%Y-%m-%d %H:%M:%S") if previsto_ini else None
+                ),
+                "jornada_prevista_fim": (
+                    previsto_fim.strftime("%Y-%m-%d %H:%M:%S") if previsto_fim else None
+                ),
+                "responsavel_registro": item.get("responsavel_registro"),
+                "matricula_responsavel": item.get("matricula_responsavel"),
+                "viagens": viagens,
                 "status_escala": status or STATUS_ESCALA_EM_ANDAMENTO,
             }
 
@@ -1989,11 +2083,20 @@ def obter_banco_horas_motorista(
                 else:
                     intervalos_fechados.append((ini, fim, int(item["id_item"])))
                 # Soma sem duplicar: usa união simples via merge de intervalos
+                saldo = None
+                if previsto_ini and previsto_fim:
+                    previsto_min = _duracao_minutos(previsto_ini, previsto_fim)
+                    saldo = minutos - previsto_min
                 base.update(
                     {
                         "fim_real": fim.strftime("%Y-%m-%d %H:%M:%S"),
                         "duracao_trabalhada_minutos": minutos,
                         "duracao_trabalhada_hhmm": _format_hhmm_from_minutos(minutos),
+                        "saldo_diario_minutos": saldo,
+                        "saldo_diario_hhmm": (
+                            _format_hhmm_signed(saldo) if saldo is not None else None
+                        ),
+                        "situacao": "encerrada",
                     }
                 )
                 encerradas.append(base)
@@ -2001,10 +2104,14 @@ def obter_banco_horas_motorista(
                 est = _duracao_minutos(ini, agora) if agora >= ini else 0
                 base.update(
                     {
+                        # Nunca preencher fim com fim previsto da escala.
                         "fim_real": None,
                         "duracao_estimada_minutos": est,
                         "duracao_estimada_hhmm": _format_hhmm_from_minutos(est),
                         "estimativa": True,
+                        "saldo_diario_minutos": None,
+                        "saldo_diario_hhmm": None,
+                        "situacao": "em_andamento",
                     }
                 )
                 em_andamento = base
@@ -2038,22 +2145,92 @@ def obter_banco_horas_motorista(
             )
 
     motorista = mot.iloc[0].to_dict()
+    situacao_dia = "sem_registro"
+    if encerradas and em_andamento:
+        situacao_dia = "mista"
+    elif encerradas:
+        situacao_dia = "encerrada"
+    elif em_andamento:
+        situacao_dia = "em_andamento"
+
+    saldo_total = None
+    for esc in encerradas:
+        s = esc.get("saldo_diario_minutos")
+        if s is None:
+            continue
+        saldo_total = (saldo_total or 0) + int(s)
+
     return {
         "controle": "operacional",
-        "aviso": "Controle operacional — não é integração oficial de folha de pagamento.",
+        "aviso": "Controle operacional — não é integração oficial de folha de pagamento. Chegadas nunca são geradas pelo fim previsto da escala.",
         "motorista": {
             "id_motorista": int(motorista["id_motorista"]),
             "matricula": motorista.get("matricula"),
             "nome": motorista.get("nome"),
         },
         "data": dia,
+        "situacao": situacao_dia,
         "escalas_encerradas": encerradas,
         "escala_em_andamento": em_andamento,
         "total_minutos_encerrados": total_encerrado,
         "total_encerrado_hhmm": _format_hhmm_from_minutos(total_encerrado),
         "total_minutos_estimativa_andamento": total_estimado,
         "total_estimativa_andamento_hhmm": _format_hhmm_from_minutos(total_estimado),
+        "saldo_diario_minutos": saldo_total,
+        "saldo_diario_hhmm": (
+            _format_hhmm_signed(saldo_total) if saldo_total is not None else None
+        ),
         "alertas": alertas,
+    }
+
+
+def listar_banco_horas_periodo(
+    dal,
+    id_motorista: int,
+    data_ini: date,
+    data_fim: date,
+    *,
+    id_empresa: int | None = None,
+    id_linha: int | None = None,
+    situacao: str | None = None,
+) -> dict[str, Any] | MapaError:
+    """Histórico diário no período — um registro por dia com movimento."""
+    if data_fim < data_ini:
+        return MapaError("Período inválido: data fim anterior à data início.", "validacao")
+    if (data_fim - data_ini).days > 62:
+        return MapaError("Período máximo de 62 dias.", "validacao")
+
+    dias: list[dict[str, Any]] = []
+    cursor = data_ini
+    while cursor <= data_fim:
+        dia = obter_banco_horas_motorista(
+            dal,
+            id_motorista,
+            cursor,
+            id_empresa=id_empresa,
+            id_linha=id_linha,
+            situacao=situacao,
+        )
+        if isinstance(dia, MapaError):
+            return dia
+        if dia["escalas_encerradas"] or dia["escala_em_andamento"]:
+            dias.append(dia)
+        cursor += timedelta(days=1)
+
+    mot = dias[0]["motorista"] if dias else None
+    if mot is None:
+        base = obter_banco_horas_motorista(dal, id_motorista, data_ini)
+        if isinstance(base, MapaError):
+            return base
+        mot = base["motorista"]
+
+    return {
+        "controle": "operacional",
+        "aviso": "Controle operacional — não é integração oficial de folha de pagamento.",
+        "motorista": mot,
+        "data_ini": data_ini.strftime("%Y-%m-%d"),
+        "data_fim": data_fim.strftime("%Y-%m-%d"),
+        "dias": dias,
     }
 
 

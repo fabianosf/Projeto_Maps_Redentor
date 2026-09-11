@@ -41,12 +41,14 @@ function stubLocation(pathname: string): Location {
 
 /**
  * Layout autenticado com barra inferior e painéis keep-alive por aba.
- * Trocar de aba não desmonta o painel — preserva formulários e contexto.
+ * Painéis inativos usam hidden + inert (sem aria-hidden) para não esconder
+ * ancestrais que possam conter o foco de um modal portaled.
  */
 export function MainTabLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const activeTab = resolveMainTab(location.pathname);
+  const panelRefs = useRef<Partial<Record<MainTabId, HTMLDivElement | null>>>({});
 
   const lastByTab = useRef<Partial<Record<MainTabId, Location>>>({
     inicio: stubLocation('/principal'),
@@ -77,9 +79,32 @@ export function MainTabLayout() {
     }
   }, [location.pathname, navigate]);
 
+  // Aplica inert em painéis inativos sem aria-hidden (evita conflito com foco).
+  useEffect(() => {
+    for (const tab of MAIN_TABS) {
+      const el = panelRefs.current[tab.id];
+      if (!el) continue;
+      const active = tab.id === activeTab;
+      if (active) {
+        el.removeAttribute('inert');
+        el.removeAttribute('aria-hidden');
+      } else {
+        el.setAttribute('inert', '');
+        el.removeAttribute('aria-hidden');
+      }
+    }
+  }, [activeTab, visited]);
+
   const onSelectTab = (tabId: MainTabId) => {
+    // Transfere o foco para a barra antes de ocultar o painel ativo.
+    const bar = document.querySelector<HTMLElement>(
+      `[aria-label="Navegação principal"] [aria-label="${
+        MAIN_TABS.find((t) => t.id === tabId)?.label ?? ''
+      }"]`,
+    );
+    bar?.focus();
+
     if (tabId === activeTab) {
-      // Segundo toque na aba ativa: volta à raiz do módulo
       const root = defaultPathForTab(tabId);
       if (location.pathname !== root) navigate(root);
       return;
@@ -101,11 +126,14 @@ export function MainTabLayout() {
           return (
             <div
               key={tab.id}
+              ref={(node) => {
+                panelRefs.current[tab.id] = node;
+              }}
               className={cn(
                 'main-tab-panel min-h-0 flex-1 flex-col',
                 isActive ? 'flex' : 'hidden',
               )}
-              aria-hidden={!isActive}
+              hidden={!isActive}
               data-tab={tab.id}
               data-active={isActive ? 'true' : 'false'}
             >

@@ -12,6 +12,8 @@ export interface Guia {
   id_item_map?: number | null;
   numero_frota?: string | null;
   matricula_motorista?: string | null;
+  motorista_nome?: string | null;
+  empresa_descricao?: string | null;
   /** DATETIME no banco; front usa HH:MM extraído. */
   hor_ini?: string | null;
   hor_fim?: string | null;
@@ -35,6 +37,7 @@ export interface Guia {
   alteracoes?: GuiaAlteracao[];
   auditorias?: GuiaAuditoria[];
   motorista_disponibilidade?: MotoristaDisponibilidade | null;
+  veiculo_disponibilidade?: MotoristaDisponibilidade | null;
 }
 
 /** Trecho/viagem dentro da mesma Guia (jornada). */
@@ -145,6 +148,10 @@ export interface GuiaViagemCard {
   /** Código/descrição da linha para lista compacta. */
   linha?: string | null;
   codigo_linha?: string | number | null;
+  empresa?: string | null;
+  id_empresa?: number | null;
+  id_item_map?: number | null;
+  id_motorista?: number | null;
   veiculo: string;
   numero_frota?: string | null;
   id_veiculo?: number | null;
@@ -152,6 +159,11 @@ export interface GuiaViagemCard {
   matricula_motorista?: string | null;
   /** Usuário que registrou leitura (Ja E / RioCard). */
   responsavel?: string | null;
+  /** Despachante que registrou a saída real do trecho. */
+  despachante_saida?: string | null;
+  matricula_despachante_saida?: string | null;
+  horario_saida_real?: string | null;
+  horario_chegada_real?: string | null;
   ocorrencias?: string | null;
   observacao?: string | null;
   data: string;

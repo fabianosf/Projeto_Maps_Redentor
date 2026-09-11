@@ -36,16 +36,57 @@ const TabsTrigger = React.forwardRef<
 ));
 TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
 
+/**
+ * Conteúdo de aba: forceMount + hidden/inert (sem aria-hidden no ancestral com foco).
+ */
 const TabsContent = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content>
->(({ className, ...props }, ref) => (
-  <TabsPrimitive.Content
-    ref={ref}
-    className={cn('mt-3 focus-visible:outline-none', className)}
-    {...props}
-  />
-));
+>(({ className, forceMount = true, ...props }, ref) => {
+  const localRef = React.useRef<HTMLDivElement | null>(null);
+
+  const setRefs = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      localRef.current = node;
+      if (typeof ref === 'function') ref(node);
+      else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
+    },
+    [ref],
+  );
+
+  React.useEffect(() => {
+    const el = localRef.current;
+    if (!el) return;
+    const sync = () => {
+      const inactive = el.getAttribute('data-state') === 'inactive';
+      if (inactive) {
+        el.setAttribute('inert', '');
+        el.setAttribute('hidden', '');
+        el.removeAttribute('aria-hidden');
+      } else {
+        el.removeAttribute('inert');
+        el.removeAttribute('hidden');
+        el.removeAttribute('aria-hidden');
+      }
+    };
+    sync();
+    const obs = new MutationObserver(sync);
+    obs.observe(el, { attributes: true, attributeFilter: ['data-state', 'aria-hidden'] });
+    return () => obs.disconnect();
+  }, []);
+
+  return (
+    <TabsPrimitive.Content
+      ref={setRefs}
+      forceMount={forceMount}
+      className={cn(
+        'mt-3 focus-visible:outline-none data-[state=inactive]:hidden',
+        className,
+      )}
+      {...props}
+    />
+  );
+});
 TabsContent.displayName = TabsPrimitive.Content.displayName;
 
 export { Tabs, TabsList, TabsTrigger, TabsContent };

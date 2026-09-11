@@ -919,6 +919,36 @@ def iniciar_trecho(
 
     data_sql = str(guia.get("hor_ini") or guia.get("data") or "")[:10]
     id_mot = _parse_id(guia.get("id_motorista"))
+    # Resolve motorista ativo da escala (veículo + item) — sem matrícula manual.
+    if id_mot is None and _parse_id(guia.get("id_item_map")) is not None:
+        df_esc = dal.read(
+            """
+            SELECT i.id_motorista, mot.matricula, mot.nome
+            FROM tb_item_map i
+            LEFT JOIN tb_motorista mot ON mot.id_motorista = i.id_motorista
+            WHERE i.id_item = ?
+            LIMIT 1
+            """,
+            (int(guia["id_item_map"]),),
+        )
+        if df_esc is not None and not getattr(df_esc, "empty", True):
+            id_mot = _parse_id(df_esc.iloc[0].get("id_motorista"))
+            if id_mot is not None and not guia.get("id_motorista"):
+                dal.update(
+                    "UPDATE tb_guia SET id_motorista = ? WHERE id_guia = ?",
+                    (int(id_mot), int(id_guia)),
+                )
+                guia["id_motorista"] = id_mot
+                guia["matricula_motorista"] = df_esc.iloc[0].get("matricula")
+                guia["motorista_nome"] = df_esc.iloc[0].get("nome")
+
+    if id_mot is None:
+        return GuiaError(
+            "Não há motorista ativo vinculado ao carro nesta escala/turno. "
+            "Registre a troca de motorista com justificativa antes de iniciar.",
+            "motorista_obrigatorio",
+        )
+
     disp = disponibilidade_motorista(
         dal, id_mot, data_sql=data_sql if len(data_sql) >= 10 else None
     )
@@ -931,16 +961,20 @@ def iniciar_trecho(
         )
 
     id_veiculo = _parse_id(trecho.get("id_veiculo")) or _parse_id(guia.get("id_veiculo"))
-    if id_veiculo is not None:
-        disp_v = disponibilidade_veiculo(
-            dal, id_veiculo, excluir_id_trecho=int(id_trecho)
+    if id_veiculo is None:
+        return GuiaError(
+            "Carro da viagem não definido. Ajuste a escala antes de registrar a saída.",
+            "carro_obrigatorio",
         )
-        if disp_v["disponibilidade"] == MOT_EM_TRANSITO:
-            return GuiaError(
-                f"Carro em trânsito (guia {disp_v.get('numero_guia')}). "
-                "Conclua ou cancele o trecho antes.",
-                "carro_em_transito",
-            )
+    disp_v = disponibilidade_veiculo(
+        dal, id_veiculo, excluir_id_trecho=int(id_trecho)
+    )
+    if disp_v["disponibilidade"] == MOT_EM_TRANSITO:
+        return GuiaError(
+            f"Carro em trânsito (guia {disp_v.get('numero_guia')}). "
+            "Conclua ou cancele o trecho antes.",
+            "carro_em_transito",
+        )
 
     hor_ini = str(body.get("hor_ini") or "").strip()
     if not hor_ini:
@@ -953,6 +987,35 @@ def iniciar_trecho(
     ini_dt = _datetime_guia(data_sql, hor_ini)
     if ini_dt is None:
         return GuiaError("SAÍDA do trecho inválida.", "validacao")
+
+    # Snapshot operacional gravado na auditoria (sem expor senha; sem matrícula digitada).
+    mat_mot = str(guia.get("matricula_motorista") or "").strip()
+    nome_mot = str(guia.get("motorista_nome") or "").strip()
+    frota = str(guia.get("numero_frota") or "").strip()
+    if not frota and id_veiculo is not None:
+        df_v = dal.read(
+            "SELECT numero_frota FROM tb_veiculo WHERE id_veiculo = ? LIMIT 1",
+            (int(id_veiculo),),
+        )
+        if df_v is not None and not getattr(df_v, "empty", True):
+            frota = str(df_v.iloc[0].get("numero_frota") or "").strip()
+    desp_nome = ""
+    desp_mat = ""
+    df_u = dal.read(
+        "SELECT nome, matricula FROM tb_usuario WHERE id_usuario = ? LIMIT 1",
+        (int(id_usuario),),
+    )
+    if df_u is not None and not getattr(df_u, "empty", True):
+        desp_nome = str(df_u.iloc[0].get("nome") or "").strip()
+        desp_mat = str(df_u.iloc[0].get("matricula") or "").strip()
+
+    snapshot = (
+        f"Saída real {hor_ini}; carro {frota or id_veiculo}; "
+        f"motorista {mat_mot or id_mot}"
+        + (f" — {nome_mot}" if nome_mot else "")
+        + f"; despachante {desp_mat or id_usuario}"
+        + (f" — {desp_nome}" if desp_nome else "")
+    )
 
     # Lock otimista: só inicia se ainda PLANEJADO; grava SAÍDA real (não COALESCE legado).
     versao_atual = _versao(trecho)
@@ -991,14 +1054,47 @@ def iniciar_trecho(
         campo="status",
         valor_anterior=st,
         valor_novo=TRECHO_EM_TRANSITO,
-        motivo=str(body.get("motivo") or "Início do trecho"),
+        motivo=str(body.get("motivo") or snapshot)[:255],
     )
     if err_a:
         return err_a
 
+    # Snapshot explícito dos vínculos no momento da saída.
+    for campo, ant, novo in (
+        ("motorista_saida", None, f"{mat_mot}|{nome_mot}|{id_mot}"),
+        ("veiculo_saida", None, f"{frota}|{id_veiculo}"),
+        ("despachante_saida", None, f"{desp_mat}|{desp_nome}|{id_usuario}"),
+        ("horario_saida_real", None, hor_ini),
+    ):
+        err_s = _registrar_auditoria(
+            dal,
+            entidade="trecho",
+            id_entidade=int(id_trecho),
+            id_guia=id_guia,
+            id_usuario=int(id_usuario),
+            campo=campo,
+            valor_anterior=ant,
+            valor_novo=novo,
+            motivo="Snapshot operacional da saída",
+        )
+        if err_s:
+            return err_s
+
     for t in listar_trechos(dal, id_guia):
         if int(t.get("id_trecho") or 0) == int(id_trecho):
-            return t
+            out = dict(t)
+            out["snapshot_saida"] = {
+                "horario_saida_real": hor_ini,
+                "numero_frota": frota or None,
+                "id_veiculo": id_veiculo,
+                "id_motorista": id_mot,
+                "matricula_motorista": mat_mot or None,
+                "motorista": nome_mot or None,
+                "id_despachante": int(id_usuario),
+                "matricula_despachante": desp_mat or None,
+                "despachante": desp_nome or None,
+            }
+            return out
     return GuiaError("Trecho não encontrado.", "nao_encontrado")
 
 

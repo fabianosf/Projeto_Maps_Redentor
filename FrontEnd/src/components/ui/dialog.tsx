@@ -22,7 +22,7 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, onPointerDownOutside, onInteractOutside, ...props }, ref) => (
+>(({ className, children, onPointerDownOutside, onInteractOutside, onCloseAutoFocus, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
@@ -46,6 +46,10 @@ const DialogContent = React.forwardRef<
           event.preventDefault();
         }
         onInteractOutside?.(event);
+      }}
+      onCloseAutoFocus={(event) => {
+        // Permite ao consumidor devolver o foco ao acionador.
+        onCloseAutoFocus?.(event);
       }}
       {...props}
     >
