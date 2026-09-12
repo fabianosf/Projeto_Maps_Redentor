@@ -21,6 +21,12 @@ logger = logging.getLogger(__name__)
 STATUS_ESCALA_EM_ANDAMENTO = "EM_ANDAMENTO"
 STATUS_ESCALA_ENCERRADA = "ENCERRADA"
 
+# Sequence/contador atômico de cod_map (única global). Não usar MAX+1 sem lock.
+_COD_MAP_SEQ_NAME = "tb_map_cod_map_seq"
+_COD_MAP_COUNTER_TABLE = "tb_cod_map_seq"
+_COD_MAP_COUNTER_ID = 1
+_cod_map_gerador_pronto = False
+
 
 @dataclass(frozen=True)
 class MapaError:
@@ -64,13 +70,107 @@ def _parse_datetime(value: Any) -> datetime | MapaError:
 
 
 def _parse_datetime_optional(value: Any) -> datetime | None | MapaError:
-    """FIM DE JORNADA — aceita vazio/null."""
+    """FIM DE JORNADA — aceita vazio/null (legado). Preferir `_parse_hora_plantao`."""
     if value is None:
         return None
     texto = str(value).strip()
     if not texto or texto.lower() in ("null", "none"):
         return None
     return _parse_datetime(texto)
+
+
+def _parse_hora_plantao(
+    value: Any, *, obrigatorio: bool = True
+) -> time | None | MapaError:
+    """
+    Aceita HH:mm / HH:mm:ss ou datetime legado; devolve time puro (00:00–23:59).
+    Rejeita horas inexistentes (24:00, 12:99, 99, texto livre).
+    """
+    if isinstance(value, time) and not isinstance(value, datetime):
+        return time(value.hour, value.minute, value.second)
+
+    if isinstance(value, datetime):
+        return time(value.hour, value.minute, value.second)
+
+    if isinstance(value, timedelta):
+        total = int(value.total_seconds()) % (24 * 3600)
+        if total < 0:
+            return MapaError(
+                "Informe um horário válido no formato HH:mm.",
+                "validacao",
+            )
+        h, rem = divmod(total, 3600)
+        m, s = divmod(rem, 60)
+        return time(h, m, s)
+
+    if value is None:
+        if obrigatorio:
+            return MapaError(
+                "Informe um horário válido no formato HH:mm.",
+                "validacao",
+            )
+        return None
+
+    texto = str(value).strip()
+    if not texto or texto.lower() in ("null", "none", "nan"):
+        if obrigatorio:
+            return MapaError(
+                "Informe um horário válido no formato HH:mm.",
+                "validacao",
+            )
+        return None
+
+    # HH:mm ou HH:mm:ss estrito
+    m = re.fullmatch(r"(\d{2}):(\d{2})(?::(\d{2}))?", texto)
+    if m:
+        hh, mm = int(m.group(1)), int(m.group(2))
+        ss = int(m.group(3) or 0)
+        if hh > 23 or mm > 59 or ss > 59:
+            return MapaError(
+                "Informe um horário válido no formato HH:mm.",
+                "validacao",
+            )
+        return time(hh, mm, ss)
+
+    # Legado: datetime embutido — extrai a hora
+    parsed_dt = _parse_datetime(texto)
+    if isinstance(parsed_dt, datetime):
+        return time(parsed_dt.hour, parsed_dt.minute, parsed_dt.second)
+
+    return MapaError(
+        "Informe um horário válido no formato HH:mm.",
+        "validacao",
+    )
+
+
+def _formatar_hora_api(value: Any) -> str | None:
+    """Normaliza valor de plantão para HH:mm na resposta da API."""
+    hora = _parse_hora_plantao(value, obrigatorio=False)
+    if hora is None or isinstance(hora, MapaError):
+        return None
+    return f"{hora.hour:02d}:{hora.minute:02d}"
+
+
+def _hora_plantao_sql(hora: time, data_mapa: date, dal) -> str:
+    """PostgreSQL: TIME. Demais SGBDs: DATETIME combinado com a data do MAPA."""
+    sgbd = _dal_sgbd(dal)
+    if sgbd == "postgresql":
+        return hora.strftime("%H:%M:%S")
+    return datetime.combine(data_mapa, hora).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _validar_plantao(inicio: time, fim: time) -> MapaError | None:
+    """Plantão no mesmo dia civil: fim deve ser estritamente após o início."""
+    if (fim.hour, fim.minute, fim.second) <= (
+        inicio.hour,
+        inicio.minute,
+        inicio.second,
+    ):
+        return MapaError(
+            "Início do plantão deve ser anterior ao fim.",
+            "validacao",
+        )
+    return None
 
 
 def _garantir_locais_padrao(dal) -> tuple[int, int] | MapaError:
@@ -284,12 +384,179 @@ class _AbortMapaTx(Exception):
         super().__init__(erro.mensagem)
 
 
-def _gerar_proximo_cod_map(dal) -> int | MapaError:
-    """Sequência interna legada (única global). Exibição usa codigo_mapa."""
+def _dal_sgbd(dal) -> str:
+    getter = getattr(dal, "get_sgbd", None)
+    if callable(getter):
+        return str(getter() or "").strip().lower()
+    return str(getattr(dal, "sgbd", "") or "").strip().lower()
+
+
+def _is_unique_violation(exc: BaseException) -> bool:
+    """Detecta unique violation (PostgreSQL 23505 / MySQL 1062 / SQLite)."""
+    pgcode = getattr(exc, "pgcode", None)
+    if pgcode == "23505":
+        return True
+    sqlstate = getattr(exc, "sqlstate", None)
+    if sqlstate == "23505":
+        return True
+    name = type(exc).__name__
+    msg = str(exc).lower()
+    if name in {"UniqueViolation", "IntegrityError"} and (
+        "unique" in msg
+        or "duplicate" in msg
+        or "23505" in msg
+        or "1062" in msg
+    ):
+        return True
+    if "duplicate key" in msg or "unique constraint" in msg or "1062" in msg:
+        return True
+    cause = getattr(exc, "__cause__", None) or getattr(exc, "orig", None)
+    if cause is not None and cause is not exc:
+        return _is_unique_violation(cause)
+    return False
+
+
+def _max_cod_map_existente(dal) -> int:
+    """Piso histórico para sync da sequence — não é fonte de unicidade."""
     df = dal.read("SELECT COALESCE(MAX(cod_map), 0) AS max_cod FROM tb_map")
-    proximo = int(df.iloc[0]["max_cod"]) + 1
+    if df is None or df.empty:
+        return 0
+    try:
+        return int(df.iloc[0]["max_cod"] or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _executar_ddl(dal, sql: str) -> None:
+    if hasattr(dal, "execute_query"):
+        dal.execute_query(sql, fetch=False)
+        return
+    # SqliteTestDal / stubs: create cobre DDL simples
+    dal.create(sql)
+
+
+def _sync_cod_map_seq_postgresql(dal) -> None:
+    max_cod = _max_cod_map_existente(dal)
+    if max_cod < 1:
+        dal.read(f"SELECT setval('{_COD_MAP_SEQ_NAME}', 1, false) AS s")
+    else:
+        dal.read(
+            f"SELECT setval('{_COD_MAP_SEQ_NAME}', ?, true) AS s",
+            (max_cod,),
+        )
+
+
+def _assegurar_gerador_cod_map(dal, *, force_sync: bool = False) -> None:
+    """Cria sequence/contador e alinha ao maior cod_map já existente.
+
+    Sem lock de processo: evita deadlock com `dal.transaction()` (ex.: SQLite RLock).
+    Unicidade vem de nextval / FOR UPDATE + UNIQUE(cod_map) com retry.
+    """
+    global _cod_map_gerador_pronto
+    sgbd = _dal_sgbd(dal)
+    if sgbd == "postgresql":
+        if _cod_map_gerador_pronto and not force_sync:
+            return
+        _executar_ddl(
+            dal,
+            f"""
+            CREATE SEQUENCE IF NOT EXISTS {_COD_MAP_SEQ_NAME}
+                AS INTEGER
+                INCREMENT BY 1
+                MINVALUE 1
+                NO CYCLE
+            """,
+        )
+        _sync_cod_map_seq_postgresql(dal)
+        _cod_map_gerador_pronto = True
+        return
+
+    _executar_ddl(
+        dal,
+        f"""
+        CREATE TABLE IF NOT EXISTS {_COD_MAP_COUNTER_TABLE} (
+            id INTEGER NOT NULL PRIMARY KEY,
+            ultimo_seq INTEGER NOT NULL DEFAULT 0
+        )
+        """,
+    )
+    row = dal.read(
+        f"SELECT ultimo_seq FROM {_COD_MAP_COUNTER_TABLE} WHERE id = ?",
+        (_COD_MAP_COUNTER_ID,),
+    )
+    max_cod = _max_cod_map_existente(dal)
+    if row is None or row.empty:
+        dal.create(
+            f"""
+            INSERT INTO {_COD_MAP_COUNTER_TABLE} (id, ultimo_seq)
+            VALUES (?, ?)
+            """,
+            (_COD_MAP_COUNTER_ID, max_cod),
+        )
+        return
+    try:
+        atual = int(row.iloc[0]["ultimo_seq"] or 0)
+    except (TypeError, ValueError):
+        atual = 0
+    if force_sync or max_cod > atual:
+        dal.update(
+            f"""
+            UPDATE {_COD_MAP_COUNTER_TABLE}
+            SET ultimo_seq = ?
+            WHERE id = ?
+            """,
+            (max(max_cod, atual), _COD_MAP_COUNTER_ID),
+        )
+
+
+def _gerar_proximo_cod_map(dal) -> int | MapaError:
+    """
+    Próximo cod_map atômico.
+    PostgreSQL: nextval(sequence). Demais SGBDs: contador com FOR UPDATE.
+    """
+    _assegurar_gerador_cod_map(dal)
+    sgbd = _dal_sgbd(dal)
+
+    if sgbd == "postgresql":
+        df = dal.read(f"SELECT nextval('{_COD_MAP_SEQ_NAME}') AS n")
+        if df is None or df.empty:
+            return MapaError("Falha ao gerar código do MAPA.", "persistencia")
+        try:
+            proximo = int(df.iloc[0]["n"])
+        except (TypeError, ValueError):
+            return MapaError("Falha ao gerar código do MAPA.", "persistencia")
+        if proximo > COD_MAP_MAX:
+            return MapaError("Limite de cod_map esgotado.", "cod_map_esgotado")
+        return proximo
+
+    locked = dal.read(
+        f"""
+        SELECT ultimo_seq FROM {_COD_MAP_COUNTER_TABLE}
+        WHERE id = ? FOR UPDATE
+        """,
+        (_COD_MAP_COUNTER_ID,),
+    )
+    if locked is None or locked.empty:
+        return MapaError("Falha ao inicializar sequência de cod_map.", "persistencia")
+    try:
+        ultimo = int(locked.iloc[0]["ultimo_seq"] or 0)
+    except (TypeError, ValueError):
+        return MapaError("Sequência de cod_map inválida.", "persistencia")
+    # Piso histórico sob lock (dados antigos); unicidade vem do incremento bloqueado.
+    piso = _max_cod_map_existente(dal)
+    proximo = max(ultimo, piso) + 1
     if proximo > COD_MAP_MAX:
         return MapaError("Limite de cod_map esgotado.", "cod_map_esgotado")
+    ok = dal.update(
+        f"""
+        UPDATE {_COD_MAP_COUNTER_TABLE}
+        SET ultimo_seq = ?
+        WHERE id = ?
+        """,
+        (proximo, _COD_MAP_COUNTER_ID),
+    )
+    if not ok:
+        return MapaError("Falha ao atualizar sequência de cod_map.", "persistencia")
     return proximo
 
 
@@ -404,6 +671,9 @@ def _sanitizar_mapa_payload(payload: dict[str, Any]) -> dict[str, Any]:
         return {}
     if "codigo_mapa" in safe:
         safe["codigo_mapa"] = _limpar_codigo_mapa(safe.get("codigo_mapa"))
+    for chave in ("inicio_jornada_des", "fim_jornada_des"):
+        if chave in safe:
+            safe[chave] = _formatar_hora_api(safe.get(chave))
     if "itens" not in safe or safe["itens"] is None:
         safe["itens"] = []
     elif not isinstance(safe["itens"], list):
@@ -489,8 +759,12 @@ def _alocar_proximo_codigo_mapa(
     dal, id_empresa: int
 ) -> tuple[str, int] | MapaError:
     """
-    Próximo código = prefixo + (max(seq persistida, maior código existente) + 1).
-    tb_mapa_seq não regride após exclusão — números nunca são reutilizados.
+    Próximo código = prefixo + sequência por empresa (ex.: Red01, Red02).
+
+    - Com mapas vivos: max(contador persistido, maior sufixo existente) + 1
+      (não reutiliza buracos após exclusão parcial).
+    - Sem mapas da empresa: reinicia em 01 (contador órfão após limpeza total
+      não deve gerar Red20, Red21…).
     """
     emp = dal.read(
         """
@@ -533,7 +807,11 @@ def _alocar_proximo_codigo_mapa(
         return MapaError("Sequência de MAPA inválida.", "persistencia")
 
     seq_existente = _max_seq_codigos_empresa(dal, int(id_empresa), prefixo)
-    seq = max(seq_tabela, seq_existente) + 1
+    if seq_existente <= 0:
+        # Nenhum código vivo desta empresa — reinicia a numeração.
+        seq = 1
+    else:
+        seq = max(seq_tabela, seq_existente) + 1
 
     ok = dal.update(
         "UPDATE tb_mapa_seq SET ultimo_seq = ? WHERE id_empresa = ?",
@@ -879,17 +1157,25 @@ def criar_mapa(dal, id_usuario: int, payload: dict[str, Any]) -> dict[str, Any] 
     if isinstance(data_parsed, MapaError):
         return data_parsed
 
-    inicio = _parse_datetime(payload.get("inicio_jornada_des"))
-    fim = _parse_datetime_optional(payload.get("fim_jornada_des"))
+    inicio = _parse_hora_plantao(payload.get("inicio_jornada_des"), obrigatorio=True)
+    fim = _parse_hora_plantao(payload.get("fim_jornada_des"), obrigatorio=True)
     if isinstance(inicio, MapaError):
         return inicio
     if isinstance(fim, MapaError):
         return fim
-    if fim is not None and inicio >= fim:
-        return MapaError("Início da jornada deve ser anterior ao fim.", "validacao")
+    assert isinstance(inicio, time) and isinstance(fim, time)
+    err_plantao = _validar_plantao(inicio, fim)
+    if err_plantao is not None:
+        return err_plantao
 
     observacao = payload.get("observacao")
-    fim_sql = fim.strftime("%Y-%m-%d %H:%M:%S") if fim is not None else None
+    inicio_sql = _hora_plantao_sql(inicio, data_parsed, dal)
+    fim_sql = _hora_plantao_sql(fim, data_parsed, dal)
+
+    try:
+        _assegurar_gerador_cod_map(dal)
+    except Exception:  # noqa: BLE001
+        logger.exception("Falha ao preparar gerador de cod_map")
 
     last_error: MapaError | None = None
     for _ in range(COD_MAP_INSERT_RETRIES):
@@ -919,7 +1205,7 @@ def criar_mapa(dal, id_usuario: int, payload: dict[str, Any]) -> dict[str, Any] 
                         int(id_empresa),
                         int(id_turno),
                         data_parsed.isoformat(),
-                        inicio.strftime("%Y-%m-%d %H:%M:%S"),
+                        inicio_sql,
                         fim_sql,
                         observacao,
                     ),
@@ -944,14 +1230,36 @@ def criar_mapa(dal, id_usuario: int, payload: dict[str, Any]) -> dict[str, Any] 
         except _AbortMapaTx as abort:
             if abort.erro.codigo == "cod_map_conflito":
                 last_error = abort.erro
+                try:
+                    _assegurar_gerador_cod_map(dal, force_sync=True)
+                except Exception:  # noqa: BLE001
+                    logger.exception("Falha ao ressincronizar sequência de cod_map")
                 continue
             return abort.erro
-        except Exception:
-            last_error = MapaError(
-                "Conflito ao gerar código do MAPA. Tente novamente.",
-                "cod_map_conflito",
+        except Exception as exc:  # noqa: BLE001
+            if _is_unique_violation(exc):
+                last_error = MapaError(
+                    "Conflito ao gerar código do MAPA. Tente novamente.",
+                    "cod_map_conflito",
+                )
+                try:
+                    _assegurar_gerador_cod_map(dal, force_sync=True)
+                except Exception:  # noqa: BLE001
+                    logger.exception("Falha ao ressincronizar sequência de cod_map")
+                continue
+            msg_l = str(exc).lower()
+            # Conexão/transação inconsistente (ex.: set_session) — tenta de novo.
+            if "set_session" in msg_l or "in a transaction" in msg_l:
+                last_error = MapaError(
+                    "Falha ao criar MAPA. Tente novamente.",
+                    "persistencia",
+                )
+                continue
+            logger.exception("Falha inesperada ao criar MAPA")
+            return MapaError(
+                "Falha ao criar MAPA. Tente novamente.",
+                "persistencia",
             )
-            continue
 
         if id_registro is None:
             last_error = MapaError("Falha ao criar MAPA.", "persistencia")
@@ -985,17 +1293,20 @@ def atualizar_mapa(
     if isinstance(data_parsed, MapaError):
         return data_parsed
 
-    inicio = _parse_datetime(payload.get("inicio_jornada_des"))
-    fim = _parse_datetime_optional(payload.get("fim_jornada_des"))
+    inicio = _parse_hora_plantao(payload.get("inicio_jornada_des"), obrigatorio=True)
+    fim = _parse_hora_plantao(payload.get("fim_jornada_des"), obrigatorio=True)
     if isinstance(inicio, MapaError):
         return inicio
     if isinstance(fim, MapaError):
         return fim
-    if fim is not None and inicio >= fim:
-        return MapaError("Início da jornada deve ser anterior ao fim.", "validacao")
+    assert isinstance(inicio, time) and isinstance(fim, time)
+    err_plantao = _validar_plantao(inicio, fim)
+    if err_plantao is not None:
+        return err_plantao
 
     observacao = payload.get("observacao")
-    fim_sql = fim.strftime("%Y-%m-%d %H:%M:%S") if fim is not None else None
+    inicio_sql = _hora_plantao_sql(inicio, data_parsed, dal)
+    fim_sql = _hora_plantao_sql(fim, data_parsed, dal)
 
     ok = dal.update(
         """
@@ -1007,7 +1318,7 @@ def atualizar_mapa(
         (
             int(id_turno),
             data_parsed.isoformat(),
-            inicio.strftime("%Y-%m-%d %H:%M:%S"),
+            inicio_sql,
             fim_sql,
             observacao,
             id_registro,
@@ -1087,6 +1398,52 @@ def excluir_mapa(dal, id_registro: int) -> MapaError | None:
     if not ok:
         return MapaError("MAPA não encontrado.", "nao_encontrado")
     return None
+
+
+def excluir_todos_mapas(dal) -> dict[str, int] | MapaError:
+    """Exclui todos os MAPAs (itens e viagens). Retorna quantidade removida."""
+    df = dal.read("SELECT id_registro FROM tb_map ORDER BY id_registro")
+    if df is None or df.empty:
+        return {"excluidos": 0}
+
+    total = int(len(df))
+
+    def _bulk_delete() -> None:
+        with dal.transaction():
+            # Ordem: viagens → itens → mapas (respeita FKs)
+            dal.delete(
+                """
+                DELETE FROM tb_viagem
+                WHERE id_item_registro IN (SELECT id_item FROM tb_item_map)
+                """
+            )
+            dal.delete("DELETE FROM tb_item_map")
+            dal.delete("DELETE FROM tb_map")
+            # Contadores por empresa voltam a 0 (próximo código = Prefixo01).
+            dal.update("UPDATE tb_mapa_seq SET ultimo_seq = 0")
+
+    try:
+        _bulk_delete()
+    except Exception as exc:  # noqa: BLE001
+        msg = str(exc).lower()
+        # Retry único se o pool entregou conexão com transação residual
+        if "set_session" in msg or "in a transaction" in msg:
+            try:
+                _bulk_delete()
+            except Exception:  # noqa: BLE001
+                logger.exception("Falha ao excluir todos os MAPAs (retry)")
+                return MapaError(
+                    "Falha ao excluir os MAPAs. Tente novamente.",
+                    "persistencia",
+                )
+        else:
+            logger.exception("Falha ao excluir todos os MAPAs")
+            return MapaError(
+                "Falha ao excluir os MAPAs. Tente novamente.",
+                "persistencia",
+            )
+
+    return {"excluidos": total}
 
 
 def _resolver_id_veiculo(dal, payload: dict[str, Any]) -> int | MapaError:
@@ -2920,7 +3277,7 @@ def listar_cadastros_mestres(dal) -> dict[str, list[dict[str, Any]]]:
             SELECT id_motorista, matricula, nome, ativo
             FROM tb_motorista
             WHERE ativo = 1
-            ORDER BY CAST(matricula AS UNSIGNED), matricula
+            ORDER BY matricula
             """,
         ),
     }

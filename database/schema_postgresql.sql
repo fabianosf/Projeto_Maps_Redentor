@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS tb_empresa (
     id_empresa      SERIAL       PRIMARY KEY,
     codigo_empresa  INT          NOT NULL,
     descricao       VARCHAR(100) NOT NULL,
+    prefixo_mapa   VARCHAR(10)  NULL,
     ativo           BOOLEAN      NOT NULL DEFAULT TRUE,
     CONSTRAINT uk_tb_empresa_codigo UNIQUE (codigo_empresa)
 );
@@ -304,14 +305,19 @@ CREATE INDEX IF NOT EXISTS idx_tb_avaria_data ON tb_avaria (data);
 CREATE TABLE IF NOT EXISTS tb_map (
     id_registro         SERIAL       PRIMARY KEY,
     cod_map             INT          NOT NULL,
+    codigo_mapa        VARCHAR(20)  NULL,
     id_usuario          INT          NOT NULL,
-    id_linha            INT          NOT NULL,
+    id_empresa          INT          NULL,
+    id_linha            INT          NULL,
     id_turno            INT          NOT NULL,
     data                DATE         NOT NULL,
-    inicio_jornada_des  TIMESTAMP    NOT NULL,
-    fim_jornada_des     TIMESTAMP    NULL,
+    inicio_jornada_des  TIME         NOT NULL,
+    fim_jornada_des     TIME         NOT NULL,
     observacao          VARCHAR(500) NULL,
     CONSTRAINT uk_tb_map_cod_map UNIQUE (cod_map),
+    CONSTRAINT uk_tb_map_codigo_mapa UNIQUE (codigo_mapa),
+    CONSTRAINT fk_tb_map_empresa
+        FOREIGN KEY (id_empresa) REFERENCES tb_empresa (id_empresa),
     CONSTRAINT fk_tb_map_linha
         FOREIGN KEY (id_linha) REFERENCES tb_linha (id_linha),
     CONSTRAINT fk_tb_map_turno
@@ -320,15 +326,31 @@ CREATE TABLE IF NOT EXISTS tb_map (
         FOREIGN KEY (id_usuario) REFERENCES tb_usuario (id_usuario)
 );
 
+CREATE SEQUENCE IF NOT EXISTS tb_map_cod_map_seq
+    AS INTEGER
+    INCREMENT BY 1
+    MINVALUE 1
+    NO CYCLE;
+
+CREATE TABLE IF NOT EXISTS tb_mapa_seq (
+    id_empresa  INT NOT NULL,
+    ultimo_seq  INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (id_empresa),
+    CONSTRAINT fk_tb_mapa_seq_empresa
+        FOREIGN KEY (id_empresa) REFERENCES tb_empresa (id_empresa)
+);
+
 CREATE INDEX IF NOT EXISTS idx_tb_map_usuario ON tb_map (id_usuario);
 CREATE INDEX IF NOT EXISTS idx_tb_map_linha ON tb_map (id_linha);
 CREATE INDEX IF NOT EXISTS idx_tb_map_turno ON tb_map (id_turno);
 CREATE INDEX IF NOT EXISTS idx_tb_map_data ON tb_map (data);
 CREATE INDEX IF NOT EXISTS idx_tb_map_inicio ON tb_map (inicio_jornada_des);
+CREATE INDEX IF NOT EXISTS idx_tb_map_id_empresa ON tb_map (id_empresa);
 
 CREATE TABLE IF NOT EXISTS tb_item_map (
     id_item        SERIAL    PRIMARY KEY,
     idmap          INT       NOT NULL,
+    id_linha       INT       NULL,
     id_veiculo     INT       NOT NULL,
     id_motorista   INT       NOT NULL,
     hor_ini_jor    TIMESTAMP NULL,
@@ -336,6 +358,8 @@ CREATE TABLE IF NOT EXISTS tb_item_map (
     chegada_ponto  TIMESTAMP NULL,
     CONSTRAINT fk_tb_item_map_map
         FOREIGN KEY (idmap) REFERENCES tb_map (id_registro),
+    CONSTRAINT fk_tb_item_map_linha
+        FOREIGN KEY (id_linha) REFERENCES tb_linha (id_linha),
     CONSTRAINT fk_tb_item_map_veiculo
         FOREIGN KEY (id_veiculo) REFERENCES tb_veiculo (id_veiculo),
     CONSTRAINT fk_tb_item_map_motorista
@@ -343,6 +367,7 @@ CREATE TABLE IF NOT EXISTS tb_item_map (
 );
 
 CREATE INDEX IF NOT EXISTS idx_tb_item_map_idmap ON tb_item_map (idmap);
+CREATE INDEX IF NOT EXISTS idx_tb_item_map_id_linha ON tb_item_map (id_linha);
 CREATE INDEX IF NOT EXISTS idx_tb_item_map_veiculo ON tb_item_map (id_veiculo);
 CREATE INDEX IF NOT EXISTS idx_tb_item_map_motorista ON tb_item_map (id_motorista);
 

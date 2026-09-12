@@ -47,6 +47,12 @@ export async function deleteMapa(idRegistro: number): Promise<MapaDeleteResponse
   });
 }
 
+export async function deleteTodosMapas(): Promise<MapaDeleteResponse & { excluidos?: number }> {
+  return apiFetch<MapaDeleteResponse & { excluidos?: number }>('/mapas', {
+    method: 'DELETE',
+  });
+}
+
 export async function createItem(
   idRegistro: number,
   payload: ItemMapPayload,

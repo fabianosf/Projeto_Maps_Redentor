@@ -20,7 +20,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EmptyState } from '@/components/EmptyState';
 import { FormField } from '@/components/FormField';
 import { LoadingState } from '@/components/LoadingState';
-import { PageHeader } from '@/components/PageHeader';
+import { OpsPageHeader } from '@/components/ops';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -564,8 +564,8 @@ export function MapaDetalheScreen() {
       setChegada('');
       return;
     }
-    const iniMapa = toDateTimeLocal(mapa.inicio_jornada_des) ?? '';
-    const fimMapa = toDateTimeLocal(mapa.fim_jornada_des) ?? '';
+    const iniMapa = toDateTimeLocal(mapa.inicio_jornada_des, mapa.data) ?? '';
+    const fimMapa = toDateTimeLocal(mapa.fim_jornada_des, mapa.data) ?? '';
     setHorIni(iniMapa);
     setHorFim(fimMapa);
     setChegada(iniMapa);
@@ -644,8 +644,8 @@ export function MapaDetalheScreen() {
     setMotoristaDialogMode('novo');
     setEditItemId(null);
     // Pré-preenche jornada do MAPA para o usuário só ajustar se precisar.
-    const iniMapa = toDateTimeLocal(mapa.inicio_jornada_des) ?? '';
-    const fimMapa = toDateTimeLocal(mapa.fim_jornada_des) ?? '';
+    const iniMapa = toDateTimeLocal(mapa.inicio_jornada_des, mapa.data) ?? '';
+    const fimMapa = toDateTimeLocal(mapa.fim_jornada_des, mapa.data) ?? '';
     setHorIni(iniMapa);
     setHorFim(fimMapa);
     setChegada(iniMapa);
@@ -1250,7 +1250,7 @@ export function MapaDetalheScreen() {
     return (
       <AppShell className="bg-screen">
         <div className="page min-h-dvh bg-screen text-slate-900">
-          <PageHeader title="MAPA" onBack={goLista} />
+        <OpsPageHeader title="MAPA" />
           <LoadingState label="Carregando MAPA…" className="min-h-[40vh]" />
         </div>
       </AppShell>
@@ -1261,7 +1261,7 @@ export function MapaDetalheScreen() {
     return (
       <AppShell className="bg-screen">
         <div className="page min-h-dvh bg-screen text-slate-900">
-          <PageHeader title="MAPA" onBack={goLista} />
+        <OpsPageHeader title="MAPA" />
           <EmptyState
             title="MAPA não encontrado"
             description="Volte à lista e tente novamente."
@@ -1277,9 +1277,8 @@ export function MapaDetalheScreen() {
   return (
     <AppShell className="bg-screen">
       <div className="page flex min-h-dvh flex-col bg-screen text-slate-900">
-        <PageHeader
+        <OpsPageHeader
           title="MAPA"
-          onBack={goLista}
           rightSlot={
             <Button
               type="button"
@@ -1287,9 +1286,9 @@ export function MapaDetalheScreen() {
               size="icon"
               aria-label="Editar MAPA"
               onClick={() => navigate(`/mapas/${idRegistro}/editar`)}
-              className="h-11 w-11 min-h-[44px] min-w-[44px] rounded border border-white/70 text-white hover:bg-white/10"
+              className="h-11 w-11 min-h-[44px] min-w-[44px] rounded-full border-0 bg-transparent text-primary-foreground shadow-none hover:bg-primary-foreground/10 focus-visible:ring-2 focus-visible:ring-primary-foreground/80 focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
             >
-              <Pencil className="h-5 w-5" strokeWidth={2.25} />
+              <Pencil className="h-5 w-5" strokeWidth={2.25} aria-hidden />
             </Button>
           }
         />

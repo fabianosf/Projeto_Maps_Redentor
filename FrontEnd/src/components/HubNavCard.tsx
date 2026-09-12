@@ -12,7 +12,7 @@ type Props = {
   className?: string;
 };
 
-/** Card de hub (Registros / Mais / Início) — toque ≥ 44px. */
+/** Atalho em row: ícone circular navy + título + 1 linha. */
 export function HubNavCard({
   title,
   description,
@@ -28,25 +28,26 @@ export function HubNavCard({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        'flex w-full min-h-[4.25rem] items-center gap-3 rounded-2xl border border-slate-200/90 bg-white px-3.5 py-3 text-left shadow-sm transition-colors',
-        'hover:bg-slate-50 active:bg-slate-100',
+        'flex w-full min-h-[4.25rem] items-center gap-3 rounded-xl border border-border/60 bg-surface-card px-3.5 py-3 text-left shadow-sm transition-colors',
+        'hover:bg-surface active:bg-muted',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         'disabled:pointer-events-none disabled:opacity-50',
         className,
       )}
     >
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+      <span className="icon-circle-navy" aria-hidden>
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[15px] font-bold text-slate-900">{title}</span>
+        <span className="block text-[15px] font-bold text-text">{title}</span>
         {description ? (
-          <span className="mt-0.5 block text-[12px] leading-snug text-slate-600">
+          <span className="mt-0.5 block text-[12px] leading-snug text-text-muted">
             {description}
           </span>
         ) : null}
         {meta ? <span className="mt-1.5 block">{meta}</span> : null}
       </span>
-      <ChevronRight className="h-5 w-5 shrink-0 text-slate-400" aria-hidden />
+      <ChevronRight className="h-5 w-5 shrink-0 text-text-muted" aria-hidden />
     </button>
   );
 }

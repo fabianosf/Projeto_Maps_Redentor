@@ -10,7 +10,7 @@ import {
 import { AlertDialog } from '@/components/AlertDialog';
 import { AppShell } from '@/components/AppShell';
 import { FormField } from '@/components/FormField';
-import { PageHeader } from '@/components/PageHeader';
+import { OpsPageHeader } from '@/components/ops';
 import { DatePickerField } from '@/components/forms/DatePickerField';
 import { Button } from '@/components/ui/button';
 import {
@@ -361,10 +361,11 @@ export function NovaGuiaScreen() {
 
   return (
     <AppShell className="bg-screen">
-      <div className="page flex min-h-dvh flex-col bg-screen text-slate-900">
-        <PageHeader title="Nova guia" onBack={() => navigate('/guia')} />
+      <div className="page flex min-h-0 flex-1 flex-col bg-screen text-slate-900">
+        <OpsPageHeader title="Nova guia" />
 
-        <div className="page-body flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-4">
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-3 pt-4">
           <ReadonlyField
             label="NR(Guia)"
             value="Gerado automaticamente ao salvar"
@@ -704,25 +705,28 @@ export function NovaGuiaScreen() {
               )}
             />
           </div>
+          </div>
 
-          <div className="mt-auto flex gap-2 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1"
-              disabled={busy}
-              onClick={() => navigate('/guia')}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              className="flex-1"
-              disabled={busy}
-              onClick={() => void salvar()}
-            >
-              Salvar
-            </Button>
+          <div className="shrink-0 border-t border-slate-400/40 bg-screen px-4 pt-3 pb-tabbar">
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-12 min-h-[44px] flex-1"
+                disabled={busy}
+                onClick={() => navigate('/guia')}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                className="h-12 min-h-[44px] flex-1"
+                disabled={busy}
+                onClick={() => void salvar()}
+              >
+                {busy ? 'Salvando…' : 'Confirmar'}
+              </Button>
+            </div>
           </div>
         </div>
 

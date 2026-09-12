@@ -1,0 +1,98 @@
+/* RedMapa — tokens canônicos (única fonte de hex).
+   Componentes usam var(--…) / classes Tailwind; sem hex solto. */
+
+:root {
+  /* Marca institucional */
+  --brand-navy: #0b2a4a;
+  --brand-navy-deep: #071c33;
+  --brand-cyan: #00a8e0;
+  --brand-gold: #c9a227;
+  --brand-barra: #e87722;
+  --brand-futuro: #2e6bff;
+
+  /* Canais RGB (Tailwind opacity: bg-brand-navy/10 etc.) */
+  --brand-navy-rgb: 11 42 74;
+  --brand-navy-deep-rgb: 7 28 51;
+  --brand-cyan-rgb: 0 168 224;
+  --brand-gold-rgb: 201 162 39;
+  --brand-barra-rgb: 232 119 34;
+  --brand-futuro-rgb: 46 107 255;
+
+  /* Superfícies e texto */
+  --surface: #f4f7fb;
+  --surface-card: #ffffff;
+  --text: #122033;
+  --text-muted: #5b6b7c;
+  --danger: #c63a3a;
+  --ok: #1f9d5a;
+
+  --surface-rgb: 244 247 251;
+  --surface-card-rgb: 255 255 255;
+  --text-rgb: 18 32 51;
+  --text-muted-rgb: 91 107 124;
+  --danger-rgb: 198 58 58;
+  --ok-rgb: 31 157 90;
+
+  /* Filete auth: ouro → ciano */
+  --fillet-auth: linear-gradient(
+    90deg,
+    var(--brand-gold) 0%,
+    var(--brand-cyan) 100%
+  );
+
+  /* Layout */
+  --main-tab-bar: 3.75rem;
+  --radius: 1rem;
+  --radius-lg: 1.25rem;
+  --touch-min: 44px;
+  --btn-height: 48px;
+  --fillet-gold: 3px;
+  --fillet-auth-h: 2px;
+
+  --space-1: 0.5rem;
+  --space-2: 1rem;
+  --space-3: 1.5rem;
+  --space-4: 2rem;
+
+  /* shadcn / Tailwind (HSL canais) */
+  --background: 210 33% 97%;
+  --foreground: 213 39% 14%;
+  --card: 0 0% 100%;
+  --card-foreground: 213 39% 14%;
+  --primary: 210 74% 17%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 210 33% 94%;
+  --secondary-foreground: 210 74% 17%;
+  --muted: 210 25% 94%;
+  --muted-foreground: 210 15% 42%;
+  --accent: 195 100% 94%;
+  --accent-foreground: 210 74% 17%;
+  --destructive: 0 55% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 148 67% 37%;
+  --success-foreground: 0 0% 100%;
+  --warning: 45 68% 47%;
+  --warning-foreground: 213 39% 14%;
+  --info: 195 100% 44%;
+  --info-foreground: 0 0% 100%;
+  --border: 214 20% 86%;
+  --input: 214 20% 86%;
+  --ring: 195 100% 44%;
+  --zebra: 210 25% 97%;
+  --screen: 210 33% 97%;
+  --screen-foreground: 213 39% 14%;
+  --table-head: 210 28% 90%;
+  --table-zebra: 210 28% 96%;
+  --shadow-card: 0 4px 20px color-mix(in srgb, var(--brand-navy) 8%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

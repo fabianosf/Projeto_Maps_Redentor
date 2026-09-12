@@ -14,6 +14,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 MIGRATE_FILE = ROOT / "database" / "schema_migrate_tb_mapa_codigo_empresa.sql"
+MIGRATE_FILE_PG = (
+    ROOT / "database" / "schema_migrate_tb_mapa_codigo_empresa_postgresql.sql"
+)
 
 
 def _split_statements(sql: str) -> list[str]:
@@ -133,14 +136,17 @@ def _backfill_codigos(dal) -> None:
 def main() -> int:
     from BackEnd.dal_factory import create_dal
 
-    if not MIGRATE_FILE.is_file():
-        print(f"Arquivo não encontrado: {MIGRATE_FILE}", file=sys.stderr)
+    dal = create_dal()
+    sgbd = str(dal.get_sgbd() or "").strip().lower()
+    migrate_file = MIGRATE_FILE_PG if sgbd == "postgresql" else MIGRATE_FILE
+
+    if not migrate_file.is_file():
+        print(f"Arquivo não encontrado: {migrate_file}", file=sys.stderr)
         return 1
 
-    sql = MIGRATE_FILE.read_text(encoding="utf-8")
+    sql = migrate_file.read_text(encoding="utf-8")
     statements = [s for s in _split_statements(sql) if not s.upper().startswith("USE ")]
-    dal = create_dal()
-    print(f"Aplicando {MIGRATE_FILE.name} ({len(statements)} statements)...")
+    print(f"Aplicando {migrate_file.name} ({len(statements)} statements) [sgbd={sgbd}]...")
 
     with dal.transaction():
         for i, stmt in enumerate(statements, 1):
@@ -149,6 +155,9 @@ def main() -> int:
             fetch = upper.startswith(("SELECT", "SHOW", "WITH", "SET @"))
             # SET @var := (SELECT ...) precisa execute; SET @sql := IF também
             if upper.startswith("SET "):
+                fetch = False
+            # PostgreSQL: SELECT setval(...) / DO $$ ... $$
+            if sgbd == "postgresql" and upper.startswith("DO "):
                 fetch = False
             try:
                 dal.execute_query(stmt, fetch=fetch)
@@ -165,15 +174,26 @@ def main() -> int:
         "SELECT id_empresa, descricao, prefixo_mapa FROM tb_empresa WHERE ativo = 1 ORDER BY id_empresa"
     )
     print("Empresas:", emp.to_dict(orient="records") if emp is not None and not emp.empty else [])
-    cols = dal.read(
-        """
-        SELECT COLUMN_NAME AS c
-        FROM information_schema.COLUMNS
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = 'tb_map'
-          AND COLUMN_NAME IN ('codigo_mapa', 'id_empresa')
-        """
-    )
+    if sgbd == "postgresql":
+        cols = dal.read(
+            """
+            SELECT column_name AS c
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'tb_map'
+              AND column_name IN ('codigo_mapa', 'id_empresa')
+            """
+        )
+    else:
+        cols = dal.read(
+            """
+            SELECT COLUMN_NAME AS c
+            FROM information_schema.COLUMNS
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'tb_map'
+              AND COLUMN_NAME IN ('codigo_mapa', 'id_empresa')
+            """
+        )
     print(
         "Colunas tb_map:",
         sorted(str(x) for x in cols["c"].tolist()) if cols is not None and not cols.empty else [],

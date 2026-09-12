@@ -1,11 +1,21 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
-const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
+type CardProps = React.HTMLAttributes<HTMLDivElement> & {
+  /** Filete ouro 3px no topo (resumo do dia, destaques). */
+  filletGold?: boolean;
+};
+
+const Card = React.forwardRef<HTMLDivElement, CardProps>(
+  ({ className, filletGold, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('rounded-lg border bg-card text-card-foreground', className)}
+      className={cn(
+        filletGold
+          ? 'card-fillet-gold'
+          : 'rounded-xl border border-border/60 bg-surface-card text-text shadow-card',
+        className,
+      )}
       {...props}
     />
   ),
@@ -21,7 +31,7 @@ CardHeader.displayName = 'CardHeader';
 
 const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
-    <h3 ref={ref} className={cn('text-base font-bold leading-none', className)} {...props} />
+    <h3 ref={ref} className={cn('text-base font-bold leading-none text-text', className)} {...props} />
   ),
 );
 CardTitle.displayName = 'CardTitle';

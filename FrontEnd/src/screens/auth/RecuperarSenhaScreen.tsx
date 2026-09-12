@@ -38,7 +38,7 @@ export function RecuperarSenhaScreen() {
       title="Esqueci minha senha"
       subtitle="Recuperação com apoio do administrador"
     >
-      <div className="surface-card space-y-4 p-6">
+      <div className="auth-card space-y-4 p-6">
         {enviado ? (
           <>
             <DsAlert tone="success" title="Solicitação registrada">
@@ -52,6 +52,7 @@ export function RecuperarSenhaScreen() {
             </DsAlert>
             <Button
               type="button"
+              variant="primary"
               className="ds-cta"
               onClick={() => navigate('/login', { replace: true })}
             >
@@ -81,12 +82,17 @@ export function RecuperarSenhaScreen() {
               error={erro ?? undefined}
             />
 
-            <Button type="submit" className="ds-cta">
+            <Button type="submit" variant="primary" className="ds-cta">
               Continuar
             </Button>
-            <Button type="button" variant="outline" className="ds-cta" asChild>
-              <Link to="/login">Voltar</Link>
-            </Button>
+            <div className="flex justify-center">
+              <Link
+                to="/login"
+                className="link-cyan inline-flex min-h-touch items-center text-sm font-semibold"
+              >
+                Voltar ao login
+              </Link>
+            </div>
           </form>
         )}
       </div>

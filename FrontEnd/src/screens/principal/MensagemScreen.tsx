@@ -120,7 +120,7 @@ export function MensagemScreen() {
   if (loading) {
     return (
       <div className="flex min-h-[100dvh] flex-col bg-screen">
-        <PageHeader title="MENSAGEM" onBack={voltar} />
+        <PageHeader title="MENSAGEM" />
         <p className="p-6 text-center text-sm font-medium text-foreground">Carregando…</p>
       </div>
     );
@@ -128,7 +128,7 @@ export function MensagemScreen() {
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-screen">
-      <PageHeader title="MENSAGEM" onBack={voltar} />
+      <PageHeader title="MENSAGEM" />
 
       <div className="relative flex-1 px-4 pb-4 pt-3">
         <div className="surface-card p-3">

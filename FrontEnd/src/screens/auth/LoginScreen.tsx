@@ -6,13 +6,12 @@
   type KeyboardEvent,
 } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import { Loader2, Lock, User } from 'lucide-react';
-import { cancelLogin, login } from '@/api/auth';
+import { Loader2 } from 'lucide-react';
+import { login } from '@/api/auth';
 import { ApiRequestError } from '@/api/client';
 import { AlertDialog } from '@/components/AlertDialog';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { DsAlert } from '@/components/auth/DsAlert';
-import { FormField } from '@/components/FormField';
 import { LoadingState } from '@/components/LoadingState';
 import { PasswordToggle } from '@/components/shared/PasswordToggle';
 import { Button } from '@/components/ui/button';
@@ -21,6 +20,7 @@ import { useFocusInput } from '@/hooks/useFocusInput';
 import { useScreenBg } from '@/hooks/useScreenBg';
 import { AUTH_BG } from '@/theme/tokens';
 import { isValidMatricula } from '@/utils/validation';
+import { cn } from '@/lib/utils';
 
 const MATRICULA_INVALIDA = 'Matrícula inválida!';
 const SENHA_INVALIDA = 'Senha inválida!';
@@ -43,7 +43,7 @@ const MODAL_CLOSED: ModalState = {
 
 export function LoginScreen() {
   const navigate = useNavigate();
-  const { user, loading, setSessionFromUsuario, clearSession } = useAuth();
+  const { user, loading, setSessionFromUsuario } = useAuth();
   const matriculaRef = useFocusInput<HTMLInputElement>(!loading && !user);
   const senhaRef = useRef<HTMLInputElement>(null);
 
@@ -166,15 +166,10 @@ export function LoginScreen() {
     void submitLogin();
   };
 
-  const handleCancelar = () => {
-    void cancelLogin().catch(() => undefined);
-    clearSession();
-    window.history.back();
-  };
-
   const onMatriculaKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      e.stopPropagation();
       senhaRef.current?.focus();
     }
   };
@@ -185,89 +180,106 @@ export function LoginScreen() {
   if (user) return <Navigate to="/principal" replace />;
 
   return (
-    <AuthShell subtitle="Acesse com sua matrícula operacional">
-      <div className={uiCard}>
-        <form className="field-stack" onSubmit={onSubmit} autoComplete="off" noValidate>
+    <AuthShell loginMark subtitle="Acesse com sua matrícula operacional">
+      <div className="auth-card auth-card--login p-7">
+        <form className="flex flex-col gap-6" onSubmit={onSubmit} autoComplete="off" noValidate>
           {banner ? <DsAlert tone="error">{banner}</DsAlert> : null}
 
-          <FormField
-            ref={matriculaRef}
-            label="Matrícula"
-            name="matricula"
-            type="text"
-            inputMode="numeric"
-            placeholder="Até 5 dígitos"
-            autoComplete="username"
-            value={matricula}
-            onChange={(e) => {
-              setMatricula(e.target.value);
-              if (errMat) setErrMat(null);
-            }}
-            onKeyDown={onMatriculaKeyDown}
-            leftIcon={<User className="h-4 w-4" />}
-            error={errMat ?? undefined}
-            enterKeyHint="next"
-          />
+          <div className="login-field">
+            <label htmlFor="login-matricula" className="login-field-label">
+              Matrícula
+            </label>
+            <input
+              ref={matriculaRef}
+              id="login-matricula"
+              name="matricula"
+              type="text"
+              inputMode="numeric"
+              autoComplete="username"
+              value={matricula}
+              onChange={(e) => {
+                setMatricula(e.target.value);
+                if (errMat) setErrMat(null);
+              }}
+              onKeyDown={onMatriculaKeyDown}
+              enterKeyHint="next"
+              aria-invalid={errMat ? true : undefined}
+              className={cn('login-field-input', errMat && 'login-field-input--error')}
+            />
+            {errMat ? (
+              <span className="field-error" role="alert">
+                {errMat}
+              </span>
+            ) : null}
+          </div>
 
-          <FormField
-            ref={senhaRef}
-            label="Senha"
-            name="senha"
-            type={showSenha ? 'text' : 'password'}
-            placeholder="••••••••"
-            autoComplete="current-password"
-            value={senha}
-            onChange={(e) => {
-              setSenha(e.target.value);
-              if (errSenha) setErrSenha(null);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                void submitLogin();
-              }
-            }}
-            leftIcon={<Lock className="h-4 w-4" />}
-            rightSlot={
-              <PasswordToggle
-                visible={showSenha}
-                onToggle={() => setShowSenha((v) => !v)}
+          <div className="login-field">
+            <label htmlFor="login-senha" className="login-field-label">
+              Senha
+            </label>
+            <div className="relative">
+              <input
+                ref={senhaRef}
+                id="login-senha"
+                name="senha"
+                type={showSenha ? 'text' : 'password'}
+                autoComplete="current-password"
+                value={senha}
+                onChange={(e) => {
+                  setSenha(e.target.value);
+                  if (errSenha) setErrSenha(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void submitLogin();
+                  }
+                }}
+                enterKeyHint="done"
+                aria-invalid={errSenha ? true : undefined}
+                className={cn(
+                  'login-field-input pr-11',
+                  errSenha && 'login-field-input--error',
+                )}
               />
-            }
-            error={errSenha ?? undefined}
-            enterKeyHint="done"
-          />
+              <div className="absolute right-0 top-1/2 -translate-y-1/2">
+                <PasswordToggle
+                  visible={showSenha}
+                  onToggle={() => setShowSenha((v) => !v)}
+                />
+              </div>
+            </div>
+            {errSenha ? (
+              <span className="field-error" role="alert">
+                {errSenha}
+              </span>
+            ) : null}
+          </div>
 
-          <div className="flex justify-end">
+          <div className="-mt-2 flex justify-end">
             <Link
               to="/recuperar-senha"
-              className="min-h-touch text-sm font-semibold text-primary underline-offset-2 hover:underline"
+              className="link-cyan inline-flex min-h-touch items-center text-sm font-semibold"
             >
               Esqueci minha senha
             </Link>
           </div>
 
-          <div className="flex flex-col gap-3 pt-1">
-            <Button type="submit" className="ds-cta" disabled={submitting}>
-              {submitting ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
-                  Entrando…
-                </>
-              ) : (
-                'Entrar'
-              )}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="ds-cta"
-              onClick={handleCancelar}
-              disabled={submitting}
-            >
-              Cancelar
-            </Button>
-          </div>
+          <Button
+            type="submit"
+            variant="primary"
+            className="ds-cta mt-1"
+            disabled={submitting}
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+                Entrando…
+              </>
+            ) : (
+              'Entrar'
+            )}
+          </Button>
         </form>
       </div>
 
@@ -279,5 +291,3 @@ export function LoginScreen() {
     </AuthShell>
   );
 }
-
-const uiCard = 'surface-card p-6';

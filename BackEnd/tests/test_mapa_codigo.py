@@ -85,6 +85,23 @@ def test_nao_reutiliza_codigo_apos_exclusao(client):
     assert c.get_json()["mapa"]["codigo_mapa"] == "Fut03"
 
 
+def test_reinicia_em_01_quando_empresa_sem_mapas(dal):
+    """Contador órfão alto não gera Prefixo20 se não há mapas vivos."""
+    from BackEnd.mapa_service import criar_mapa, excluir_mapa
+
+    m1 = criar_mapa(dal, 1, _payload(id_empresa=2, data="2026-09-20"))
+    assert isinstance(m1, dict)
+    assert m1["codigo_mapa"] == "Red01"
+    excluir_mapa(dal, int(m1["id_registro"]))
+
+    # Simula contador residual após limpeza (como no delete-all antigo).
+    dal.update("UPDATE tb_mapa_seq SET ultimo_seq = 20 WHERE id_empresa = 2")
+
+    m2 = criar_mapa(dal, 1, _payload(id_empresa=2, data="2026-09-21"))
+    assert isinstance(m2, dict), m2
+    assert m2["codigo_mapa"] == "Red01"
+
+
 def test_concorrencia_gera_codigos_unicos(dal):
     """Várias criações paralelas não duplicam codigo_mapa."""
     payloads = [
@@ -156,14 +173,15 @@ def test_legado_sem_codigo_recebe_ao_vincular_empresa(client, dal):
     assert int(upd.get_json()["mapa"]["id_empresa"]) == 3
 
 
-def test_excluir_nao_decrementa_seq(dal):
+def test_excluir_ultimo_mapa_reinicia_em_01(dal):
+    """Sem mapas vivos da empresa, o próximo código volta a Prefixo01."""
     m1 = criar_mapa(dal, 1, _payload(id_empresa=2))
     assert isinstance(m1, dict)
     assert m1["codigo_mapa"] == "Red01"
     excluir_mapa(dal, int(m1["id_registro"]))
     m2 = criar_mapa(dal, 1, _payload(id_empresa=2))
     assert isinstance(m2, dict)
-    assert m2["codigo_mapa"] == "Red02"
+    assert m2["codigo_mapa"] == "Red01"
 
 
 def test_aloca_considera_maior_codigo_existente(dal):

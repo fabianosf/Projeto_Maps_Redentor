@@ -3,33 +3,49 @@
 // ----------------------------
 
 /**
- * Design System RedMapa — tokens canônicos.
- * Espaçamento em múltiplos de 8 px. Não altera contratos de API.
+ * Design System RedMapa — tokens canônicos (JS).
+ * Hex só aqui e em styles/tokens.css — componentes usam classes / CSS vars.
  */
 
-export const SCREEN_BG = '#B9C8D4';
-export const SCREEN_BG_OPS = SCREEN_BG;
-export const AUTH_BG = '#EEF3F8';
-export const SCREEN_BG_ALT = '#E4ECF5';
-export const SURFACE_WHITE = '#FFFFFF';
-export const TABLE_HEAD_BG = '#A8B9C9';
-export const TABLE_ZEBRA_BG = '#E8EEF4';
-
-/** Paleta institucional e semântica. */
-export const palette = {
-  primary: '#004587',
-  primaryForeground: '#FFFFFF',
-  background: '#F7FAFC',
-  foreground: '#1A2332',
-  muted: '#5B6B7C',
-  border: '#D0DAE4',
-  success: '#1F7A4D',
-  warning: '#B86E00',
-  danger: '#B42318',
-  info: '#0B6BCB',
+export const BRAND = {
+  navy: '#0B2A4A',
+  navyDeep: '#071C33',
+  cyan: '#00A8E0',
+  gold: '#C9A227',
+  barra: '#E87722',
+  futuro: '#2E6BFF',
 } as const;
 
-/** Escala 8 px. */
+export const SURFACE = '#F4F7FB';
+export const SURFACE_CARD = '#FFFFFF';
+export const TEXT = '#122033';
+export const TEXT_MUTED = '#5B6B7C';
+export const DANGER = '#C63A3A';
+export const OK = '#1F9D5A';
+
+/** Fundo operacional da app (= --surface). */
+export const SCREEN_BG = SURFACE;
+export const SCREEN_BG_OPS = SURFACE;
+/** Auth: navy institucional. */
+export const AUTH_BG = BRAND.navy;
+export const SCREEN_BG_ALT = SURFACE;
+export const SURFACE_WHITE = SURFACE_CARD;
+export const TABLE_HEAD_BG = '#DCE4EE';
+export const TABLE_ZEBRA_BG = '#EEF2F7';
+
+export const palette = {
+  primary: BRAND.navy,
+  primaryForeground: '#FFFFFF',
+  background: SURFACE,
+  foreground: TEXT,
+  muted: TEXT_MUTED,
+  border: '#D0DAE4',
+  success: OK,
+  warning: BRAND.gold,
+  danger: DANGER,
+  info: BRAND.cyan,
+} as const;
+
 export const space = {
   0: 0,
   1: 8,
@@ -55,21 +71,42 @@ export const touch = {
   cta: 48,
 } as const;
 
-/** Classes Tailwind semânticas (preferir em vez de hex inline). */
 export const ui = {
-  screen: 'bg-background text-foreground',
-  screenOps: 'bg-screen text-foreground',
-  page: 'page flex min-h-dvh flex-col bg-background text-foreground',
-  pageOps: 'page flex min-h-dvh flex-col bg-screen text-foreground',
+  screen: 'bg-surface text-text',
+  screenOps: 'bg-surface text-text',
+  page: 'page flex min-h-dvh flex-col bg-surface text-text',
+  pageOps: 'page flex min-h-dvh flex-col bg-surface text-text',
   pageBody: 'page-body',
   surface:
-    'rounded-2xl border border-border/70 bg-card text-card-foreground shadow-card',
-  authCard:
-    'rounded-2xl border border-border/60 bg-card p-6 shadow-card text-card-foreground',
-  section: 'flex flex-col gap-3 rounded-2xl border border-border/70 bg-card p-4 shadow-sm',
-  sectionTitle: 'text-[13px] font-bold uppercase tracking-wide text-primary',
-  helper: 'text-[13px] leading-snug text-muted-foreground',
-  fieldError: 'text-[13px] font-medium text-destructive',
-  tableHead: 'bg-table-head text-foreground',
-  tableZebra: 'even:bg-table-zebra odd:bg-card',
+    'rounded-xl border border-border/60 bg-surface-card text-text shadow-card',
+  authCard: 'auth-card p-6',
+  section:
+    'flex flex-col gap-3 rounded-xl border border-border/60 bg-surface-card p-4 shadow-sm',
+  sectionTitle: 'text-[13px] font-bold uppercase tracking-wide text-brand-navy',
+  helper: 'text-[13px] leading-snug text-text-muted',
+  fieldError: 'text-[13px] font-medium text-danger',
+  tableHead: 'bg-table-head text-text',
+  tableZebra: 'even:bg-table-zebra odd:bg-surface-card',
 } as const;
+
+/** Tom de marca por empresa (chip/ponto). */
+export type EmpresaBrand = 'redentor' | 'barra' | 'futuro' | 'default';
+
+export function empresaBrand(nome?: string | null): EmpresaBrand {
+  const n = String(nome ?? '')
+    .trim()
+    .toLowerCase();
+  if (n.includes('barra')) return 'barra';
+  if (n.includes('futuro')) return 'futuro';
+  if (n.includes('reden') || n.includes('redmapa') || n === 'red') {
+    return 'redentor';
+  }
+  return 'default';
+}
+
+export const empresaBrandDotClass: Record<EmpresaBrand, string> = {
+  redentor: 'bg-brand-cyan',
+  barra: 'bg-brand-barra',
+  futuro: 'bg-brand-futuro',
+  default: 'bg-brand-navy',
+};

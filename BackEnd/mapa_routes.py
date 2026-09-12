@@ -24,6 +24,7 @@ from .mapa_service import (
     dar_baixa_item_map,
     excluir_item_map,
     excluir_mapa,
+    excluir_todos_mapas,
     excluir_viagem,
     listar_mapas,
     listar_ocupacao_escalas,
@@ -71,6 +72,17 @@ def list_maps():
     if isinstance(resultado, MapaError):
         return json_error(resultado.mensagem, 400, resultado.codigo)
     return jsonify({"ok": True, "mapas": resultado}), 200
+
+
+@mapa_bp.delete("")
+@require_mapa_access
+def delete_all_maps():
+    """DELETE /api/v1/mapas — remove todos os MAPAs e dependências."""
+    resultado = excluir_todos_mapas(_dal())
+    if isinstance(resultado, MapaError):
+        status = 404 if resultado.codigo == "nao_encontrado" else 400
+        return json_error(resultado.mensagem, status, resultado.codigo)
+    return jsonify({"ok": True, "excluidos": int(resultado.get("excluidos") or 0)}), 200
 
 
 @mapa_bp.get("/ocupacao")

@@ -655,13 +655,24 @@ class DAL:
         conn = self.circuit_breaker.call(self.pool.get_connection)
         prev_ac = True
         try:
-            if hasattr(conn, "get_autocommit"):
+            # psycopg2: não dá para alterar autocommit com transação aberta
+            # (ex.: SELECT anterior no pool com autocommit=False).
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+
+            if hasattr(conn, "get_autocommit") and callable(conn.get_autocommit):
                 prev_ac = bool(conn.get_autocommit())
-            if hasattr(conn, "autocommit"):
-                if callable(conn.autocommit):
-                    conn.autocommit(False)
-                else:
-                    conn.autocommit = False
+            else:
+                prev_ac = bool(getattr(conn, "autocommit", True))
+
+            if callable(getattr(conn, "autocommit", None)) and not isinstance(
+                getattr(conn, "autocommit", None), bool
+            ):
+                conn.autocommit(False)
+            else:
+                conn.autocommit = False
             self._tls.conn = conn
             self._tls.in_transaction = True
             yield
@@ -678,11 +689,16 @@ class DAL:
             self._tls.conn = None
             self._tls.in_transaction = False
             try:
-                if hasattr(conn, "autocommit"):
-                    if callable(conn.autocommit):
-                        conn.autocommit(prev_ac)
-                    else:
-                        conn.autocommit = prev_ac
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                if callable(getattr(conn, "autocommit", None)) and not isinstance(
+                    getattr(conn, "autocommit", None), bool
+                ):
+                    conn.autocommit(prev_ac)
+                else:
+                    conn.autocommit = prev_ac
             except Exception:
                 pass
             self.pool.return_connection(conn)

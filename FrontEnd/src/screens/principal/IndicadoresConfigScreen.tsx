@@ -181,7 +181,7 @@ export function IndicadoresConfigScreen() {
   if (authLoading || (allowed && loading && perfis.length === 0 && !infoMsg)) {
     return (
       <AppShell className="bg-screen">
-        <PageHeader title="INDICADORES" onBack={voltar} />
+        <PageHeader title="INDICADORES" />
         <LoadingState label="Carregando…" />
       </AppShell>
     );
@@ -191,7 +191,7 @@ export function IndicadoresConfigScreen() {
 
   return (
     <AppShell className="flex min-h-[100dvh] flex-col bg-screen">
-      <PageHeader title="INDICADORES" onBack={voltar} />
+      <PageHeader title="INDICADORES" />
 
       <div className="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-3">
         <div className="flex w-full max-w-[50%] flex-col gap-1.5">

@@ -127,7 +127,7 @@ def listar_cadastros_mestres(dal) -> dict[str, Any]:
             SELECT id_motorista, matricula, nome, ativo
             FROM tb_motorista
             WHERE ativo = 1
-            ORDER BY CAST(matricula AS UNSIGNED), matricula
+            ORDER BY matricula
             """,
         ),
         "frota_regra": obter_regra_frota(dal),

@@ -101,7 +101,7 @@ export function ConfiguracaoScreen() {
   if (authLoading || (allowed && loading && !infoMsg && qtdT === '')) {
     return (
       <AppShell className="bg-screen">
-        <PageHeader title="CONFIGURAÇÃO" onBack={() => navigate('/mais')} />
+        <PageHeader title="CONFIGURAÇÃO" />
         <LoadingState label="Carregando…" />
       </AppShell>
     );
@@ -113,7 +113,7 @@ export function ConfiguracaoScreen() {
 
   return (
     <AppShell className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-screen text-slate-900">
-      <PageHeader title="CONFIGURAÇÃO" onBack={() => navigate('/mais')} />
+      <PageHeader title="CONFIGURAÇÃO" />
 
       <div className="flex min-h-0 flex-1 flex-col px-4 py-8">
         <div className="mx-auto flex w-full max-w-[360px] flex-col gap-6">

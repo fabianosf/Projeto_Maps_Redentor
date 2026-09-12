@@ -245,7 +245,7 @@ export function EntradaSaidaScreen() {
     return (
       <AppShell className="bg-screen">
         <div className="page min-h-dvh bg-screen">
-          <PageHeader title="CHEGADA | SAÍDA" onBack={cancelar} />
+          <PageHeader title="CHEGADA | SAÍDA" />
           <LoadingState />
         </div>
       </AppShell>
@@ -256,7 +256,7 @@ export function EntradaSaidaScreen() {
     return (
       <AppShell className="bg-screen">
         <div className="page flex min-h-dvh flex-col bg-screen">
-          <PageHeader title="CHEGADA | SAÍDA" onBack={cancelar} />
+          <PageHeader title="CHEGADA | SAÍDA" />
           <EmptyState
             title={semLocal ? 'Usuário sem local' : 'Nenhuma linha'}
             description={
@@ -278,7 +278,7 @@ export function EntradaSaidaScreen() {
   return (
     <AppShell className="bg-screen">
       <div className="page flex min-h-dvh flex-col bg-screen text-slate-900">
-        <PageHeader title="CHEGADA | SAÍDA" onBack={cancelar} />
+        <PageHeader title="CHEGADA | SAÍDA" />
 
         <div className="page-body flex min-h-0 flex-1 flex-col gap-3">
           <div className="flex w-full shrink-0 flex-col gap-1.5">

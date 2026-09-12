@@ -37,7 +37,7 @@ import { ErrorState } from '@/components/ErrorState';
 import { FormField } from '@/components/FormField';
 import { RegistrarSaidaPanel } from '@/components/guia/RegistrarSaidaPanel';
 import { LoadingState } from '@/components/LoadingState';
-import { PageHeader } from '@/components/PageHeader';
+import { OpsPageHeader } from '@/components/ops';
 import { StatusBadge } from '@/components/StatusBadge';
 import {
   AlertPanel,
@@ -1306,12 +1306,11 @@ export function GuiaScreen() {
   return (
     <AppShell className="bg-screen">
       <div className="page flex min-h-dvh flex-col bg-screen text-foreground">
-        <PageHeader
+        <OpsPageHeader
           title="Guia"
-          onBack={() => navigate('/principal')}
           rightSlot={
             <span
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-foreground/15 text-xs font-bold text-primary-foreground"
+              className="flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-primary-foreground/15 text-xs font-bold text-primary-foreground"
               aria-label={`Usuário ${user?.nome ?? ''}`}
               title={user?.nome ?? undefined}
             >

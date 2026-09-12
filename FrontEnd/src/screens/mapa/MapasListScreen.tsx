@@ -1,22 +1,24 @@
 ﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Plus, Search } from 'lucide-react';
+import { MapPinned, Plus, Search, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { ApiRequestError } from '@/api/client';
-import { listMapas } from '@/api/mapa';
+import { deleteTodosMapas, listMapas } from '@/api/mapa';
 import { AppShell } from '@/components/AppShell';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EmptyState } from '@/components/EmptyState';
 import { ErrorState } from '@/components/ErrorState';
 import { LoadingState } from '@/components/LoadingState';
-import { PageHeader } from '@/components/PageHeader';
+import { OpsPageHeader } from '@/components/ops';
 import {
   FilterBottomSheet,
   FilterChipsBar,
   OpsCard,
-  StatusSeal,
 } from '@/components/ops';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { EmpresaChip, Pill } from '@/components/ui/pill';
 import {
   Select,
   SelectContent,
@@ -51,14 +53,13 @@ function dataExibicao(row: MapaListaItem): string | null {
   return br || null;
 }
 
-/** Status de apresentação a partir dos campos já disponíveis na lista. */
 function statusMapaLista(row: MapaListaItem): {
   label: string;
-  tone: 'success' | 'info' | 'neutral';
+  tone: 'ok' | 'info' | 'neutral';
 } {
   const qtd = Number(row.total_viagens ?? row.qtd_viagens ?? NaN);
   if (Number.isFinite(qtd) && qtd > 0) {
-    return { label: 'Com viagens', tone: 'success' };
+    return { label: 'Com viagens', tone: 'ok' };
   }
   if (row.linha) return { label: 'Planejado', tone: 'info' };
   return { label: 'Cadastrado', tone: 'neutral' };
@@ -71,7 +72,7 @@ function qtdViagensLabel(row: MapaListaItem): string {
   return `${n} viagem${n === 1 ? '' : 's'}`;
 }
 
-/** Tela 04 — Lista MAPA (UX mobile-first; mesmos dados/rotas/API). */
+/** Lista MAPA — card sem Excluir (exclusão só no detalhe). */
 export function MapasListScreen() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -87,6 +88,8 @@ export function MapasListScreen() {
   const [draftTurno, setDraftTurno] = useState('');
   const [draftLinha, setDraftLinha] = useState('');
   const [draftBusca, setDraftBusca] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
 
   const aliveRef = useRef(true);
 
@@ -226,22 +229,61 @@ export function MapasListScreen() {
 
   const novoMapa = () => navigate('/mapas/novo');
 
+  const confirmarExcluirTodos = async () => {
+    if (busy || mapas.length === 0) return;
+    setConfirmDeleteAll(false);
+    setBusy(true);
+    try {
+      const res = await deleteTodosMapas();
+      if (!aliveRef.current) return;
+      const n = Number(res.excluidos ?? mapas.length);
+      toast.success(
+        n === 1 ? '1 MAPA excluído.' : `${n} MAPAs excluídos.`,
+      );
+      await carregar();
+    } catch (err) {
+      if (!aliveRef.current) return;
+      toast.error(
+        err instanceof ApiRequestError
+          ? err.message
+          : 'Falha de comunicação com a API.',
+      );
+    } finally {
+      if (aliveRef.current) setBusy(false);
+    }
+  };
+
   return (
-    <AppShell className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-screen text-foreground">
-      <PageHeader
+    <AppShell className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-surface text-text">
+      <OpsPageHeader
         title="Mapas"
-        onBack={() => navigate('/principal')}
         rightSlot={
-          <Button
-            type="button"
-            variant="ghost"
-            aria-label="Novo MAPA"
-            onClick={novoMapa}
-            className="h-11 min-h-touch gap-1 rounded-lg px-2.5 text-[12px] font-bold uppercase tracking-wide text-primary-foreground hover:bg-primary-foreground/10"
-          >
-            <Plus className="h-5 w-5" strokeWidth={2.75} aria-hidden />
-            <span>Novo</span>
-          </Button>
+          <div className="flex items-center gap-0.5">
+            {mapas.length > 0 ? (
+              <Button
+                type="button"
+                variant="ghost"
+                aria-label="Excluir todos os MAPAs"
+                disabled={busy || loading}
+                onClick={() => setConfirmDeleteAll(true)}
+                className="h-11 min-h-[44px] gap-1 rounded-full border-0 bg-transparent px-2.5 text-[12px] font-bold uppercase tracking-wide text-primary-foreground shadow-none hover:bg-primary-foreground/10 focus-visible:ring-2 focus-visible:ring-brand-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-brand-navy"
+              >
+                <Trash2 className="h-5 w-5" strokeWidth={2.5} aria-hidden />
+                <span>Todos</span>
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="ghost"
+              aria-label="Novo MAPA"
+              disabled={busy}
+              onClick={novoMapa}
+              className="h-11 min-h-[44px] gap-1 rounded-full border-0 bg-transparent px-2.5 text-[12px] font-bold uppercase tracking-wide text-primary-foreground shadow-none hover:bg-primary-foreground/10 focus-visible:ring-2 focus-visible:ring-brand-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-brand-navy"
+            >
+              <Plus className="h-5 w-5" strokeWidth={2.75} aria-hidden />
+              <span>Novo</span>
+            </Button>
+          </div>
         }
       />
 
@@ -252,10 +294,11 @@ export function MapasListScreen() {
           <ErrorState message={error} onRetry={() => void carregar()} />
         ) : mapas.length === 0 ? (
           <EmptyState
+            icon={MapPinned}
             title="Nenhum MAPA cadastrado"
-            description="Toque em Novo para criar o primeiro MAPA."
+            description="Crie o primeiro MAPA do turno."
             action={
-              <Button type="button" onClick={novoMapa} className="min-h-touch gap-2">
+              <Button type="button" variant="primary" onClick={novoMapa} className="min-h-btn gap-2">
                 <Plus className="h-5 w-5" aria-hidden />
                 Novo MAPA
               </Button>
@@ -263,14 +306,14 @@ export function MapasListScreen() {
           />
         ) : (
           <>
-            <div className="shrink-0 space-y-2 border-b border-border/50 bg-card/40 px-4 py-3">
+            <div className="shrink-0 space-y-2 border-b border-border/50 bg-surface-card px-4 py-3">
               <FilterChipsBar
                 chips={chips}
                 filterActive={temFiltroAtivo}
                 onOpenFilters={abrirFiltro}
               />
               {temFiltroAtivo ? (
-                <p className="text-xs font-medium text-slate-600">
+                <p className="text-xs font-medium text-text-muted">
                   {filtrados.length} resultado{filtrados.length === 1 ? '' : 's'}
                 </p>
               ) : null}
@@ -278,6 +321,7 @@ export function MapasListScreen() {
 
             {filtrados.length === 0 ? (
               <EmptyState
+                icon={Search}
                 title="Nenhum MAPA encontrado"
                 description="Ajuste a busca ou os filtros e tente de novo."
                 action={
@@ -285,7 +329,7 @@ export function MapasListScreen() {
                     type="button"
                     variant="outline"
                     onClick={limparFiltros}
-                    className="min-h-touch"
+                    className="min-h-btn"
                   >
                     Limpar filtros
                   </Button>
@@ -297,57 +341,43 @@ export function MapasListScreen() {
                   {filtrados.map((row) => {
                     const data = dataExibicao(row);
                     const st = statusMapaLista(row);
+                    const codigo = formatCodigoMapa(row.codigo_mapa);
                     return (
                       <li key={row.id_registro}>
                         <OpsCard
                           onClick={() => abrirMapa(row.id_registro)}
-                          aria-label={`Abrir MAPA ${formatCodigoMapa(row.codigo_mapa)}`}
+                          aria-label={`Abrir MAPA ${codigo}`}
+                          disabled={busy}
+                          className="rounded-xl border-border/60 bg-surface-card"
                         >
                           <div className="flex items-start justify-between gap-2">
-                            <p className="text-base font-bold tabular-nums text-primary">
-                              {formatCodigoMapa(row.codigo_mapa)}
+                            <p className="text-base font-bold tabular-nums text-brand-navy">
+                              {codigo}
                             </p>
-                            <StatusSeal
-                              label={st.label}
-                              tone={st.tone}
-                              icon={st.tone === 'success' ? 'ok' : 'tempo'}
-                            />
+                            <Pill label={st.label} tone={st.tone} />
                           </div>
-                          <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-slate-600">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <EmpresaChip empresa={row.empresa} />
+                          </div>
+                          <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-text-muted">
                             <div>
-                              <dt className="font-semibold uppercase tracking-wide text-slate-400">
-                                Empresa
-                              </dt>
-                              <dd className="truncate font-semibold text-slate-900">
-                                {row.empresa?.trim() || '—'}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt className="font-semibold uppercase tracking-wide text-slate-400">
+                              <dt className="font-semibold uppercase tracking-wide text-text-muted/80">
                                 Turno
                               </dt>
-                              <dd className="truncate font-semibold text-slate-900">
+                              <dd className="truncate font-semibold text-text">
                                 {row.turno || '—'}
                               </dd>
                             </div>
                             <div>
-                              <dt className="font-semibold uppercase tracking-wide text-slate-400">
-                                Linha
-                              </dt>
-                              <dd className="truncate font-semibold text-slate-900">
-                                {row.linha?.trim() || '—'}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt className="font-semibold uppercase tracking-wide text-slate-400">
+                              <dt className="font-semibold uppercase tracking-wide text-text-muted/80">
                                 Data
                               </dt>
-                              <dd className="font-semibold tabular-nums text-slate-900">
+                              <dd className="font-semibold tabular-nums text-text">
                                 {data ?? '—'}
                               </dd>
                             </div>
                           </dl>
-                          <p className="text-xs font-medium text-slate-500">
+                          <p className="text-xs font-medium text-text-muted">
                             {qtdViagensLabel(row)}
                           </p>
                         </OpsCard>
@@ -373,7 +403,7 @@ export function MapasListScreen() {
       >
         <div className="relative">
           <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted"
             aria-hidden
           />
           <Input
@@ -424,6 +454,15 @@ export function MapasListScreen() {
           </Select>
         </div>
       </FilterBottomSheet>
+
+      <ConfirmDialog
+        open={confirmDeleteAll}
+        title="Excluir todos"
+        message={`Exclui os ${mapas.length} MAPA${mapas.length === 1 ? '' : 's'} cadastrados, com carros e viagens. Esta ação não pode ser desfeita. Continuar?`}
+        confirmLabel="Excluir todos"
+        onConfirm={() => void confirmarExcluirTodos()}
+        onCancel={() => setConfirmDeleteAll(false)}
+      />
     </AppShell>
   );
 }

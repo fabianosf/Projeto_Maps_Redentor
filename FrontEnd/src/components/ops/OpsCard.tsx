@@ -48,10 +48,10 @@ export function OpsCard({
           : undefined
       }
       className={cn(
-        'relative flex w-full overflow-hidden rounded-2xl border border-slate-200/90 bg-white text-left shadow-sm outline-none transition-colors',
+        'relative flex w-full overflow-hidden rounded-xl border border-border/60 bg-surface-card text-left text-text shadow-sm outline-none transition-colors',
         onClick &&
           !disabled &&
-          'cursor-pointer active:bg-slate-50 focus-visible:ring-2 focus-visible:ring-ring',
+          'cursor-pointer active:bg-surface focus-visible:ring-2 focus-visible:ring-ring',
         disabled && 'opacity-60',
         className,
       )}

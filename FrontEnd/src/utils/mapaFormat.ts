@@ -103,12 +103,25 @@ export function isValidHHMM(value: string): boolean {
   return hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59;
 }
 
-/** Converte para valor de datetime-local (YYYY-MM-DDTHH:MM). */
-export function toDateTimeLocal(value: string | null | undefined): string {
+/**
+ * Converte para valor de datetime-local (YYYY-MM-DDTHH:MM).
+ * Aceita datetime legado ou HH:mm (plantão TIME) — neste caso usa `dateFallback`.
+ */
+export function toDateTimeLocal(
+  value: string | null | undefined,
+  dateFallback?: string | null,
+): string {
   if (!value) return '';
   const s = String(value).trim();
   const iso = s.replace(' ', 'T').match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})/);
   if (iso) return `${iso[1]}T${iso[2]}:${iso[3]}`;
+
+  const hm = s.match(/^(\d{2}):(\d{2})(?::\d{2})?$/);
+  if (hm) {
+    const ymd = toDateInput(dateFallback);
+    if (ymd) return `${ymd}T${hm[1]}:${hm[2]}`;
+    return '';
+  }
 
   // Flask/RFC (ex.: "Fri, 04 Sep 2026 10:00:00 GMT") — UTC bate com formatHora (HH:MM literal).
   const d = new Date(s);

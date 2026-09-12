@@ -38,6 +38,11 @@ CREATE TABLE tb_mapa_seq (
     ultimo_seq INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE tb_cod_map_seq (
+    id INTEGER PRIMARY KEY,
+    ultimo_seq INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE tb_turno (
     id_turno INTEGER PRIMARY KEY AUTOINCREMENT,
     codigo_turno INTEGER NOT NULL UNIQUE,
@@ -307,6 +312,9 @@ class SqliteTestDal:
             return True
         except sqlite3.Error:
             return False
+
+    def get_sgbd(self) -> str:
+        return "sqlite"
 
     @staticmethod
     def _sql_sqlite(sql: str) -> str:

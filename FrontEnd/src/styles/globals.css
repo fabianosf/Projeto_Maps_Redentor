@@ -1,49 +1,10 @@
+@import './tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  :root {
-    /* RedMapa DS — primary #004587, fundo claro */
-    --main-tab-bar: 3.75rem;
-    --space-1: 0.5rem; /* 8 */
-    --space-2: 1rem; /* 16 */
-    --space-3: 1.5rem; /* 24 */
-    --space-4: 2rem; /* 32 */
-
-    --background: 210 40% 98%;
-    --foreground: 218 28% 15%;
-    --card: 0 0% 100%;
-    --card-foreground: 218 28% 15%;
-    --primary: 209 100% 26%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 214 33% 94%;
-    --secondary-foreground: 209 100% 26%;
-    --muted: 210 25% 96%;
-    --muted-foreground: 215 14% 42%;
-    --accent: 214 33% 94%;
-    --accent-foreground: 209 100% 26%;
-    --destructive: 4 78% 40%;
-    --destructive-foreground: 0 0% 100%;
-    --success: 152 58% 30%;
-    --success-foreground: 0 0% 100%;
-    --warning: 38 100% 36%;
-    --warning-foreground: 218 28% 15%;
-    --info: 207 90% 42%;
-    --info-foreground: 0 0% 100%;
-    --border: 214 20% 85%;
-    --input: 214 20% 85%;
-    --ring: 209 100% 26%;
-    --radius: 0.75rem;
-    --zebra: 210 25% 97%;
-    /* Fundo operacional (Mapas/Guia) — cinza-azul legado */
-    --screen: 210 28% 76%;
-    --screen-foreground: 218 28% 15%;
-    --table-head: 210 22% 72%;
-    --table-zebra: 210 28% 93%;
-    --shadow-card: 0 4px 24px rgba(15, 40, 80, 0.06);
-  }
-
   * {
     @apply border-border;
   }
@@ -51,13 +12,13 @@
   html,
   body,
   #root {
-    @apply m-0 min-h-full w-full bg-background text-foreground font-sans antialiased;
+    @apply m-0 min-h-full w-full bg-surface text-text font-sans antialiased;
     overflow-x: hidden;
     -webkit-tap-highlight-color: transparent;
   }
 
   :focus-visible {
-    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-surface;
   }
 
   button,
@@ -70,17 +31,63 @@
 
 @layer components {
   .app-shell {
-    @apply relative mx-auto flex min-h-dvh w-full max-w-phone flex-col bg-screen;
+    @apply relative mx-auto flex min-h-dvh w-full max-w-phone flex-col bg-surface;
   }
 
   .auth-shell {
-    @apply relative mx-auto w-full max-w-phone bg-background text-foreground;
+    @apply relative mx-auto w-full max-w-phone overflow-hidden text-primary-foreground;
+    background-color: #0b2a4a;
   }
 
   .auth-shell-bg {
-    background:
-      radial-gradient(120% 80% at 50% -10%, hsl(209 80% 92% / 0.9), transparent 55%),
-      linear-gradient(180deg, hsl(210 40% 98%) 0%, hsl(214 35% 94%) 100%);
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background-color: #0b2a4a;
+    overflow: hidden;
+  }
+
+  /* Poster fantasma em tela cheia (torre + ônibus só adivinháveis). */
+  .auth-shell-bg::after {
+    content: '';
+    position: absolute;
+    inset: -8%;
+    background-image: var(--auth-bg-image);
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center 55%;
+    opacity: 0.12;
+    filter: blur(10px);
+    -webkit-filter: blur(10px);
+  }
+
+  .auth-card {
+    @apply relative overflow-hidden text-text shadow-card;
+    border-radius: 20px;
+    background-color: #ffffff;
+    opacity: 1;
+  }
+
+  .auth-card::before {
+    content: '';
+    display: block;
+    height: var(--fillet-auth-h);
+    background: var(--fillet-auth);
+  }
+
+  .auth-card--login::before {
+    display: none;
+  }
+
+  .card-fillet-gold {
+    @apply relative overflow-hidden rounded-[var(--radius-lg)] border border-border/60 bg-surface-card text-text shadow-card;
+  }
+
+  .card-fillet-gold::before {
+    content: '';
+    display: block;
+    height: var(--fillet-gold);
+    background: var(--brand-gold);
   }
 
   .page {
@@ -105,6 +112,13 @@
     padding-bottom: calc(var(--main-tab-bar) + env(safe-area-inset-bottom, 0px) + 0.75rem);
   }
 
+  /* Formulários: Confirmar acima da tab bar */
+  .form-footer-sticky {
+    @apply sticky z-20 grid grid-cols-2 gap-3 border-t border-border/50 bg-surface px-4 pt-3;
+    bottom: 0;
+    padding-bottom: calc(var(--main-tab-bar) + env(safe-area-inset-bottom, 0px) + 0.75rem);
+  }
+
   .main-tab-panel {
     @apply min-h-0 w-full;
   }
@@ -118,27 +132,27 @@
   }
 
   .req {
-    @apply text-destructive;
+    @apply text-danger;
   }
 
   .screen-label {
-    @apply pointer-events-none absolute bottom-3 left-4 z-10 text-[11px] text-muted-foreground/50;
+    @apply pointer-events-none absolute bottom-3 left-4 z-10 text-[11px] text-text-muted/50;
   }
 
   .surface-card {
-    @apply rounded-2xl border border-border/70 bg-card text-card-foreground shadow-card;
+    @apply rounded-[var(--radius-lg)] border border-border/60 bg-surface-card text-text shadow-card;
   }
 
   .table-head-row {
-    @apply border-b-2 border-border bg-table-head text-left text-[13px] font-bold uppercase tracking-wide text-foreground;
+    @apply border-b-2 border-border bg-table-head text-left text-[13px] font-bold uppercase tracking-wide text-text;
   }
 
   .table-zebra-row {
-    @apply border-b border-border/50 odd:bg-card even:bg-table-zebra;
+    @apply border-b border-border/50 odd:bg-surface-card even:bg-table-zebra;
   }
 
   .list-card {
-    @apply flex min-h-[72px] w-full flex-col gap-1 rounded-2xl border border-border/70 bg-card px-4 py-3.5 text-left shadow-sm transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:bg-muted;
+    @apply flex min-h-[72px] w-full flex-col gap-1 rounded-[var(--radius-lg)] border border-border/60 bg-surface-card px-4 py-3.5 text-left shadow-sm transition-colors hover:bg-surface-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:bg-muted;
   }
 
   .toolbar-actions {
@@ -146,11 +160,11 @@
   }
 
   .helper-text {
-    @apply text-[13px] leading-snug text-muted-foreground;
+    @apply text-[13px] leading-snug text-text-muted;
   }
 
   .field-error {
-    @apply text-[13px] font-medium text-destructive;
+    @apply text-[13px] font-medium text-danger;
   }
 
   .ds-cta {
@@ -158,10 +172,98 @@
   }
 
   .ds-title {
-    @apply text-xl font-bold tracking-tight text-foreground;
+    @apply text-xl font-bold tracking-tight text-text;
   }
 
   .ds-subtitle {
-    @apply text-sm leading-snug text-muted-foreground;
+    @apply text-sm leading-snug text-text-muted;
+  }
+
+  .link-cyan {
+    @apply text-brand-cyan underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+  }
+
+  .icon-circle-navy {
+    @apply flex h-11 w-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-full bg-brand-navy text-primary-foreground;
+  }
+
+  .login-mark {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    padding: 3px;
+    background: linear-gradient(135deg, #c9a227, #00a8e0);
+    box-shadow: 0 8px 28px rgba(0, 168, 224, 0.28);
+  }
+
+  .login-mark-inner {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #0b2a4a;
+  }
+
+  .login-mark-bus {
+    width: 44px;
+    height: 44px;
+    color: #ffffff;
+  }
+
+  .login-brand-title {
+    margin-top: 0.85rem;
+    font-size: 1.75rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #fff;
+    line-height: 1.15;
+  }
+
+  .login-brand-org {
+    margin-top: 0.3rem;
+    font-size: 12px;
+    font-weight: 600;
+    color: #00a8e0;
+    line-height: 1.3;
+  }
+
+  .login-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .login-field-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #122033;
+  }
+
+  .login-field-input {
+    width: 100%;
+    height: 44px;
+    min-height: 44px;
+    border: none;
+    border-bottom: 1.5px solid #c5ced8;
+    border-radius: 0;
+    background: transparent;
+    padding: 0.35rem 0;
+    font-size: 1rem;
+    color: #122033;
+    outline: none;
+  }
+
+  .login-field-input:focus {
+    border-bottom-color: #00a8e0;
+  }
+
+  .login-field-input--error {
+    border-bottom-color: #c63a3a;
+  }
+
+  .login-field-input::placeholder {
+    color: #8a97a6;
   }
 }

@@ -709,7 +709,7 @@ export function UsuariosScreen() {
     return (
       <AppShell className="bg-screen">
         <div className="page bg-screen">
-          <PageHeader title="Cadastro de Usuário" onBack={() => navigate(-1)} />
+          <PageHeader title="Cadastro de Usuário" />
           <LoadingState />
         </div>
       </AppShell>
@@ -720,10 +720,7 @@ export function UsuariosScreen() {
     return (
       <AppShell className="bg-screen">
         <div className="page bg-screen">
-          <PageHeader
-            title="Cadastro de Usuário"
-            onBack={() => navigate('/mais')}
-          />
+          <PageHeader title="Cadastro de Usuário" />
           <AlertDialog
             open
             message="Acesso restrito a Administradores e Inspetores."
@@ -738,10 +735,7 @@ export function UsuariosScreen() {
   return (
     <AppShell className="bg-screen">
       <div className="page bg-screen">
-        <PageHeader
-          title="Cadastro de Usuário"
-          onBack={() => navigate('/mais')}
-        />
+        <PageHeader title="Cadastro de Usuário" />
 
         <div className="page-body bg-screen">
           <div className="field-stack">

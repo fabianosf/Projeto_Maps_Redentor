@@ -4,19 +4,16 @@ import { cn } from '@/lib/utils';
 
 type Props = {
   title: string;
-  /** Telas internas: seta discreta. Abas principais da barra inferior: omitir. */
   onBack?: () => void;
   rightSlot?: ReactNode;
   className?: string;
 };
 
 /**
- * Cabeçalho operacional reutilizável (Mapa, Guia, Indicadores, etc.).
- * - Voltar = só ícone linear (sem Button/caixa/borda/texto)
- * - Título centralizado
- * - Ações contextuais à direita (opcional)
+ * Header institucional — navy fixo.
+ * Tema por empresa NÃO altera o header (só chips/pontos).
  */
-export function OpsPageHeader({ title, onBack, rightSlot, className }: Props) {
+export function AppHeader({ title, onBack, rightSlot, className }: Props) {
   return (
     <header
       className={cn(

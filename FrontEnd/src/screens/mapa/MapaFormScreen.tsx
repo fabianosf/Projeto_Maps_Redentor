@@ -13,7 +13,7 @@ import { createMapa, getMapa, updateMapa } from '@/api/mapa';
 import { AppShell } from '@/components/AppShell';
 import { FormField } from '@/components/FormField';
 import { LoadingState } from '@/components/LoadingState';
-import { PageHeader } from '@/components/PageHeader';
+import { OpsPageHeader } from '@/components/ops';
 import { DatePickerField } from '@/components/forms/DatePickerField';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -30,7 +30,6 @@ import type { CadastrosMestres } from '@/types/cadastro';
 import type { MapaHeaderPayload } from '@/types/mapa';
 import {
   brToYmd,
-  combineDateAndTime,
   formatCodigoMapa,
   formatHora,
   isValidHHMM,
@@ -46,12 +45,7 @@ const MAPA_BG = SCREEN_BG;
 /** Opções fixas do combo Turno (sempre renderizadas). */
 const TURNO_OPCOES = ['TURNO 01', 'TURNO 02', 'TURNO 03'] as const;
 const SELECT_EMPTY_EMP = '__empty_empresa__';
-
-function maskHHMM(raw: string): string {
-  const digits = raw.replace(/\D/g, '').slice(0, 4);
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
-}
+const ERR_HORA_PLANTAO = 'Informe um horário válido no formato HH:mm.';
 
 function toId(v: unknown): string {
   if (v == null || v === '') return '';
@@ -85,6 +79,7 @@ export function MapaFormScreen() {
   useScreenBg(MAPA_BG);
 
   const mountedRef = useRef(true);
+  const busyRef = useRef(false);
   const loadAliveRef = useRef(true);
   const idleIdsRef = useRef<number[]>([]);
   const timerIdsRef = useRef<number[]>([]);
@@ -96,6 +91,8 @@ export function MapaFormScreen() {
   const [dataBR, setDataBR] = useState('');
   const [inicioHHMM, setInicioHHMM] = useState('');
   const [fimHHMM, setFimHHMM] = useState('');
+  const [erroInicio, setErroInicio] = useState('');
+  const [erroFim, setErroFim] = useState('');
   const [turno, setTurno] = useState<string>(TURNO_OPCOES[0]);
   const [idEmpresa, setIdEmpresa] = useState('');
   const [codigoMapa, setCodigoMapa] = useState('');
@@ -212,19 +209,23 @@ export function MapaFormScreen() {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!mountedRef.current || busy) return;
+    if (!mountedRef.current || busyRef.current || busy) return;
 
     const dataOk = parseDateBR(dataBR);
     if (!dataOk) {
       toast.error('Data inválida. Use o formato dd/mm/aaaa.');
       return;
     }
-    if (!isValidHHMM(inicioHHMM)) {
-      toast.error('Início do plantão inválido. Use HH:MM.');
+
+    const inicioOk = isValidHHMM(inicioHHMM);
+    const fimOk = isValidHHMM(fimHHMM);
+    setErroInicio(inicioOk ? '' : ERR_HORA_PLANTAO);
+    setErroFim(fimOk ? '' : ERR_HORA_PLANTAO);
+    if (!inicioOk || !fimOk) {
       return;
     }
-    if (fimHHMM.trim() && !isValidHHMM(fimHHMM)) {
-      toast.error('Fim do plantão inválido. Use HH:MM.');
+    if (fimHHMM <= inicioHHMM) {
+      toast.error('Início do plantão deve ser anterior ao fim.');
       return;
     }
 
@@ -262,10 +263,8 @@ export function MapaFormScreen() {
       codigo_turno: Number(codigoTurno),
       turno: turnoSelecionado,
       data: brToYmd(dataOk),
-      inicio_jornada_des: combineDateAndTime(dataOk, inicioHHMM),
-      fim_jornada_des: fimHHMM.trim()
-        ? combineDateAndTime(dataOk, fimHHMM)
-        : null,
+      inicio_jornada_des: inicioHHMM,
+      fim_jornada_des: fimHHMM,
       observacao: null,
       ...(!isEdit || (!codigoMapa || codigoMapa === '—')
         ? idEmpresa.trim()
@@ -274,6 +273,7 @@ export function MapaFormScreen() {
         : {}),
     };
 
+    busyRef.current = true;
     setBusy(true);
     try {
       if (isEdit && idRegistro != null) {
@@ -304,6 +304,7 @@ export function MapaFormScreen() {
           : 'Falha de comunicação com a API.';
       toast.error(msg);
     } finally {
+      busyRef.current = false;
       if (mountedRef.current) setBusy(false);
     }
   };
@@ -312,7 +313,7 @@ export function MapaFormScreen() {
     return (
       <AppShell className="bg-screen">
         <div className="page min-h-dvh bg-screen text-slate-900">
-          <PageHeader title="MAPA" onBack={onCancelar} />
+          <OpsPageHeader title={isEdit ? 'Editar mapa' : 'Novo mapa'} />
           <LoadingState />
         </div>
       </AppShell>
@@ -322,26 +323,25 @@ export function MapaFormScreen() {
   return (
     <AppShell className="bg-screen">
       <div className="page flex min-h-dvh flex-col bg-screen text-slate-900">
-        <PageHeader
-          title="MAPA"
-          onBack={onCancelar}
+        <OpsPageHeader
+          title={isEdit ? 'Editar mapa' : 'Novo mapa'}
           rightSlot={
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label="Abrir detalhe do MAPA"
-              onClick={() => {
-                if (!isEdit || idRegistro == null) {
-                  toast.message('Salve o MAPA antes de abrir os registros.');
-                  return;
-                }
-                navigate(`/mapas/${idRegistro}`);
-              }}
-              className="h-9 w-9 rounded border border-white/70 text-white hover:bg-white/10"
-            >
-              <ClipboardList className="h-5 w-5" strokeWidth={2.25} />
-            </Button>
+            isEdit ? (
+              <button
+                type="button"
+                aria-label="Abrir detalhe do MAPA"
+                onClick={() => {
+                  if (idRegistro == null) {
+                    toast.message('Salve o MAPA antes de abrir os registros.');
+                    return;
+                  }
+                  navigate(`/mapas/${idRegistro}`);
+                }}
+                className="inline-flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full border-0 bg-transparent p-0 text-primary-foreground shadow-none hover:bg-primary-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground/80 focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
+              >
+                <ClipboardList className="h-5 w-5" strokeWidth={2.25} aria-hidden />
+              </button>
+            ) : null
           }
         />
 
@@ -442,23 +442,33 @@ export function MapaFormScreen() {
               <FormField
                 label="INÍCIO DO PLANTÃO"
                 name="inicio"
-                type="text"
-                inputMode="numeric"
-                placeholder="HH:MM"
-                maxLength={5}
+                type="time"
+                requiredMark
+                min="00:00"
+                max="23:59"
+                step={60}
                 value={inicioHHMM ?? ''}
-                onChange={(e) => setInicioHHMM(maskHHMM(e.target.value))}
+                onChange={(e) => {
+                  setInicioHHMM(e.target.value);
+                  setErroInicio('');
+                }}
+                error={erroInicio || undefined}
                 className="bg-white"
               />
               <FormField
                 label="FIM DO PLANTÃO"
                 name="fim"
-                type="text"
-                inputMode="numeric"
-                placeholder="HH:MM"
-                maxLength={5}
+                type="time"
+                requiredMark
+                min="00:00"
+                max="23:59"
+                step={60}
                 value={fimHHMM ?? ''}
-                onChange={(e) => setFimHHMM(maskHHMM(e.target.value))}
+                onChange={(e) => {
+                  setFimHHMM(e.target.value);
+                  setErroFim('');
+                }}
+                error={erroFim || undefined}
                 className="bg-white"
               />
             </div>

@@ -69,8 +69,7 @@ describe('LoginScreen', () => {
 
     const mat = screen.getByLabelText(/matrícula/i);
     const senha = screen.getByLabelText(/^senha$/i);
-    await user.type(mat, '123');
-    await user.keyboard('{Enter}');
+    await user.type(mat, '123{Enter}');
     expect(senha).toHaveFocus();
   });
 });

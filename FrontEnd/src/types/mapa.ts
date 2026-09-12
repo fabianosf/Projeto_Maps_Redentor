@@ -134,8 +134,10 @@ export interface MapaHeaderPayload {
   codigo_turno?: number | null;
   turno?: string | null;
   data: string;
+  /** HH:mm (plantão); API também aceita datetime legado. */
   inicio_jornada_des: string;
-  fim_jornada_des?: string | null;
+  /** HH:mm (plantão); obrigatório no cadastro/edição. */
+  fim_jornada_des: string;
   observacao?: string | null;
   /** Obrigatório na criação — define prefixo/sequência do código. */
   id_empresa?: number | null;

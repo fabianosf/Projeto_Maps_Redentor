@@ -167,7 +167,7 @@ export function BancoHorasScreen() {
     return (
       <AppShell className="bg-background">
         <div className="page min-h-dvh bg-background text-foreground">
-          <PageHeader title="Banco de horas" onBack={() => navigate('/registros')} />
+          <PageHeader title="Banco de horas" />
           <LoadingState />
         </div>
       </AppShell>
@@ -177,7 +177,7 @@ export function BancoHorasScreen() {
   return (
     <AppShell className="bg-background">
       <div className="page flex min-h-dvh flex-col bg-background text-foreground">
-        <PageHeader title="Banco de horas" onBack={() => navigate('/registros')} />
+        <PageHeader title="Banco de horas" />
         <div className="page-body flex min-h-0 flex-1 flex-col gap-4 pb-tabbar">
           <p className="text-sm text-muted-foreground">
             Histórico diário operacional — chegadas nunca são geradas pelo fim

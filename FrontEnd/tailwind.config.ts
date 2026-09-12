@@ -1,59 +1,80 @@
 import type { Config } from 'tailwindcss';
 import animate from 'tailwindcss-animate';
 
+/** rgb(var(--x-rgb) / <alpha-value>) — opacidade Tailwind estável. */
+const rgb = (name: string) => `rgb(var(--${name}-rgb) / <alpha-value>)`;
+
 const config: Config = {
   darkMode: ['class'],
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        border: 'hsl(var(--border))',
-        input: 'hsl(var(--input))',
-        ring: 'hsl(var(--ring))',
-        background: 'hsl(var(--background))',
-        foreground: 'hsl(var(--foreground))',
+        border: 'hsl(var(--border) / <alpha-value>)',
+        input: 'hsl(var(--input) / <alpha-value>)',
+        ring: 'hsl(var(--ring) / <alpha-value>)',
+        background: 'hsl(var(--background) / <alpha-value>)',
+        foreground: 'hsl(var(--foreground) / <alpha-value>)',
+        surface: {
+          DEFAULT: rgb('surface'),
+          card: rgb('surface-card'),
+        },
+        text: {
+          DEFAULT: rgb('text'),
+          muted: rgb('text-muted'),
+        },
+        brand: {
+          navy: rgb('brand-navy'),
+          'navy-deep': rgb('brand-navy-deep'),
+          cyan: rgb('brand-cyan'),
+          gold: rgb('brand-gold'),
+          barra: rgb('brand-barra'),
+          futuro: rgb('brand-futuro'),
+        },
+        danger: rgb('danger'),
+        ok: rgb('ok'),
         screen: {
-          DEFAULT: 'hsl(var(--screen))',
-          foreground: 'hsl(var(--screen-foreground))',
+          DEFAULT: 'hsl(var(--screen) / <alpha-value>)',
+          foreground: 'hsl(var(--screen-foreground) / <alpha-value>)',
         },
         primary: {
-          DEFAULT: 'hsl(var(--primary))',
-          foreground: 'hsl(var(--primary-foreground))',
+          DEFAULT: 'hsl(var(--primary) / <alpha-value>)',
+          foreground: 'hsl(var(--primary-foreground) / <alpha-value>)',
         },
         secondary: {
-          DEFAULT: 'hsl(var(--secondary))',
-          foreground: 'hsl(var(--secondary-foreground))',
+          DEFAULT: 'hsl(var(--secondary) / <alpha-value>)',
+          foreground: 'hsl(var(--secondary-foreground) / <alpha-value>)',
         },
         destructive: {
-          DEFAULT: 'hsl(var(--destructive))',
-          foreground: 'hsl(var(--destructive-foreground))',
+          DEFAULT: 'hsl(var(--destructive) / <alpha-value>)',
+          foreground: 'hsl(var(--destructive-foreground) / <alpha-value>)',
         },
         success: {
-          DEFAULT: 'hsl(var(--success))',
-          foreground: 'hsl(var(--success-foreground))',
+          DEFAULT: 'hsl(var(--success) / <alpha-value>)',
+          foreground: 'hsl(var(--success-foreground) / <alpha-value>)',
         },
         warning: {
-          DEFAULT: 'hsl(var(--warning))',
-          foreground: 'hsl(var(--warning-foreground))',
+          DEFAULT: 'hsl(var(--warning) / <alpha-value>)',
+          foreground: 'hsl(var(--warning-foreground) / <alpha-value>)',
         },
         info: {
-          DEFAULT: 'hsl(var(--info))',
-          foreground: 'hsl(var(--info-foreground))',
+          DEFAULT: 'hsl(var(--info) / <alpha-value>)',
+          foreground: 'hsl(var(--info-foreground) / <alpha-value>)',
         },
         muted: {
-          DEFAULT: 'hsl(var(--muted))',
-          foreground: 'hsl(var(--muted-foreground))',
+          DEFAULT: 'hsl(var(--muted) / <alpha-value>)',
+          foreground: 'hsl(var(--muted-foreground) / <alpha-value>)',
         },
         accent: {
-          DEFAULT: 'hsl(var(--accent))',
-          foreground: 'hsl(var(--accent-foreground))',
+          DEFAULT: 'hsl(var(--accent) / <alpha-value>)',
+          foreground: 'hsl(var(--accent-foreground) / <alpha-value>)',
         },
         card: {
-          DEFAULT: 'hsl(var(--card))',
-          foreground: 'hsl(var(--card-foreground))',
+          DEFAULT: 'hsl(var(--card) / <alpha-value>)',
+          foreground: 'hsl(var(--card-foreground) / <alpha-value>)',
         },
-        'table-head': 'hsl(var(--table-head))',
-        'table-zebra': 'hsl(var(--table-zebra))',
+        'table-head': 'hsl(var(--table-head) / <alpha-value>)',
+        'table-zebra': 'hsl(var(--table-zebra) / <alpha-value>)',
       },
       boxShadow: {
         card: 'var(--shadow-card)',
@@ -62,7 +83,7 @@ const config: Config = {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
-        xl: 'calc(var(--radius) + 4px)',
+        xl: 'var(--radius-lg)',
       },
       fontFamily: {
         sans: ['Calibri', 'Segoe UI', 'system-ui', '-apple-system', 'sans-serif'],
@@ -76,7 +97,11 @@ const config: Config = {
         content: '640px',
       },
       minHeight: {
-        touch: '44px',
+        touch: 'var(--touch-min)',
+        btn: 'var(--btn-height)',
+      },
+      height: {
+        btn: 'var(--btn-height)',
       },
       spacing: {
         section: '1.25rem',

@@ -6,7 +6,7 @@ import { AppShell } from '@/components/AppShell';
 import { EmptyState } from '@/components/EmptyState';
 import { ErrorState } from '@/components/ErrorState';
 import { LoadingState } from '@/components/LoadingState';
-import { PageHeader } from '@/components/PageHeader';
+import { OpsPageHeader } from '@/components/ops';
 import {
   Table,
   TableBody,
@@ -68,7 +68,7 @@ export function IndicadoresScreen() {
 
   return (
     <AppShell className="flex min-h-[100dvh] flex-col bg-screen">
-      <PageHeader title="INDICADORES" onBack={() => navigate('/registros')} />
+      <OpsPageHeader title="Indicadores" />
 
       <div className="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-3">
         <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-slate-400/50 bg-white/70">
