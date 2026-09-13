@@ -21,7 +21,7 @@ def _criar_guia_aberta(client) -> None:
             "id_empresa": 1,
             "id_linha": 1,
             "id_turno": 1,
-            "numero_frota": "100",
+            "numero_frota": "C30100",
             "matricula_motorista": "50001",
             "hor_ini": "05:00",
         },
@@ -38,7 +38,7 @@ def test_registrar_chegada_evento_c(client, dal):
         json={
             "evento": "C",
             "id_linha": 1,
-            "carro": "100",
+            "carro": "C30100",
             "horario": "08:30",
             "temperatura": "25",
             "roleta": "1234",
@@ -54,7 +54,7 @@ def test_registrar_chegada_evento_c(client, dal):
     rows = dal.read("SELECT evento, carro FROM tb_chegada_saida ORDER BY id_cs DESC LIMIT 1")
     assert not rows.empty
     assert rows.iloc[0]["evento"] == "C"
-    assert int(rows.iloc[0]["carro"]) == 3  # id_veiculo frota 100
+    assert int(rows.iloc[0]["carro"]) == 3  # id_veiculo frota C30100
 
 
 def test_registrar_saida_evento_s(client, dal):
@@ -66,7 +66,7 @@ def test_registrar_saida_evento_s(client, dal):
         json={
             "evento": "S",
             "id_linha": 1,
-            "carro": "100",
+            "carro": "C30100",
             "horario": "09:15",
             "temperatura": "26",
             "roleta": "1300",
@@ -92,7 +92,7 @@ def test_evento_invalido(client):
     auth_client(client, "2")
     resp = client.post(
         "/api/v1/entrada-saida/registrar",
-        json={"evento": "X", "id_linha": 1, "carro": "100", "horario": "08:00"},
+        json={"evento": "X", "id_linha": 1, "carro": "C30100", "horario": "08:00"},
     )
     assert resp.status_code == 400
     assert resp.get_json()["codigo"] == "validacao"

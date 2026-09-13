@@ -129,7 +129,9 @@ def alteracao_escala(id_item: int):
     POST /api/v1/guia/escala/<id_item>/alteracao
     Troca veículo/motorista/horário com justificativa e auditoria (Admin/Despachante).
     """
-    if g.auth_usuario.codigo_perfil not in PERFIS_MAPA:
+    from .constants import PERFIL_ADMIN, PERFIL_DESPACHANTE
+
+    if g.auth_usuario.codigo_perfil not in {PERFIL_ADMIN, PERFIL_DESPACHANTE}:
         return json_error(
             "Sem permissão para alterar escala.", 403, "sem_permissao"
         )

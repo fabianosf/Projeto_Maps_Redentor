@@ -25,8 +25,8 @@ except ImportError:
 _log = CLLOG()
 _MODULO = "CONFIGURACAO"
 _TABELA = "tb_configuracao"
-_MAX_CHAVE = 15
-_MAX_VALOR = 30
+_MAX_CHAVE = 32
+_MAX_VALOR = 255
 
 
 def _log_evento(descricao: str) -> None:

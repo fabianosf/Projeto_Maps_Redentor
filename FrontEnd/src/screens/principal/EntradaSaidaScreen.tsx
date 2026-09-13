@@ -40,9 +40,9 @@ const compactFieldClass =
   'h-10 rounded-lg bg-white text-sm shadow-none border-slate-400';
 const halfFieldClass = cn(compactFieldClass, 'max-w-[50%]');
 const compactLabelClass =
-  'flex h-4 items-center text-[13px] font-semibold uppercase leading-none text-slate-900';
+  'flex h-4 items-center text-[13px] font-semibold uppercase leading-none text-text';
 const linhaListLabelClass =
-  'flex h-4 items-center text-xs font-semibold uppercase leading-none text-slate-900';
+  'flex h-4 items-center text-xs font-semibold uppercase leading-none text-text';
 
 function maskHHMM(raw: string): string {
   const digits = raw.replace(/\D/g, '').slice(0, 4);
@@ -277,7 +277,7 @@ export function EntradaSaidaScreen() {
 
   return (
     <AppShell className="bg-screen">
-      <div className="page flex min-h-dvh flex-col bg-screen text-slate-900">
+      <div className="page flex min-h-dvh flex-col bg-screen text-text">
         <PageHeader title="CHEGADA | SAÍDA" />
 
         <div className="page-body flex min-h-0 flex-1 flex-col gap-3">
@@ -298,10 +298,10 @@ export function EntradaSaidaScreen() {
                     role="option"
                     aria-selected={selected}
                     className={cn(
-                      'flex min-h-[44px] w-full items-center border-b border-slate-200 px-3 text-left text-[15px] last:border-b-0',
+                      'flex min-h-[48px] w-full items-center border-b border-slate-200 px-3 text-left text-[15px] last:border-b-0',
                       selected
-                        ? 'bg-primary/15 font-semibold text-slate-900'
-                        : 'bg-white text-slate-800 active:bg-slate-100',
+                        ? 'bg-primary/15 font-semibold text-text'
+                        : 'bg-white text-text active:bg-slate-100',
                     )}
                     onClick={() => selecionarLinha(String(l.id_linha))}
                   >
@@ -449,7 +449,7 @@ export function EntradaSaidaScreen() {
             </p>
           )}
 
-          <div className="mt-auto grid grid-cols-2 gap-3 border-t border-slate-400/40 pt-4">
+          <div className="mt-auto grid grid-cols-2 gap-3 border-t border-field pt-4">
             <Button
               type="button"
               className="h-12 text-base font-bold uppercase"

@@ -9,19 +9,19 @@ import {
   XCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { STATUS_LABELS } from '@/theme/tokens';
 
 const statusBadgeVariants = cva(
-  'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-semibold uppercase tracking-wide',
+  'inline-flex max-w-full items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-bold uppercase tracking-wide',
   {
     variants: {
       tone: {
-        neutral:
-          'border-slate-300 bg-slate-100 text-slate-800',
-        info: 'border-sky-300 bg-sky-50 text-sky-900',
-        success: 'border-emerald-300 bg-emerald-50 text-emerald-900',
-        warning: 'border-amber-300 bg-amber-50 text-amber-950',
-        danger: 'border-red-300 bg-red-50 text-red-900',
-        primary: 'border-primary/30 bg-primary/10 text-primary',
+        neutral: 'border-field bg-surface text-text',
+        info: 'border-brand-cta/40 bg-brand-cta/10 text-brand-navy',
+        success: 'border-ok/40 bg-ok/10 text-ok',
+        warning: 'border-warn/40 bg-warn/10 text-warn',
+        danger: 'border-danger/40 bg-danger/10 text-danger',
+        primary: 'border-brand-navy/30 bg-brand-navy/10 text-brand-navy',
       },
     },
     defaultVariants: {
@@ -39,24 +39,90 @@ const ICONS = {
   tempo: Clock3,
 } as const;
 
-type Props = {
+/** Mapeia status operacional → rótulo + tom + ícone. */
+export function resolveStatusPresentation(raw?: string | null): {
   label: string;
+  tone: NonNullable<VariantProps<typeof statusBadgeVariants>['tone']>;
+  icon: keyof typeof ICONS;
+} {
+  const key = String(raw ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '_');
+
+  if (
+    key.includes('ANDAMENTO') ||
+    key === 'EM_ANDAMENTO' ||
+    key === 'ABERTA' ||
+    key === 'ATIVA'
+  ) {
+    return { label: STATUS_LABELS.EM_ANDAMENTO, tone: 'info', icon: 'tempo' };
+  }
+  if (key.includes('ENCERR') || key === 'FECHADA' || key === 'CONCLUID') {
+    return { label: STATUS_LABELS.ENCERRADA, tone: 'neutral', icon: 'ok' };
+  }
+  if (key.includes('RASCUNHO') || key.includes('DRAFT')) {
+    return { label: STATUS_LABELS.RASCUNHO, tone: 'neutral', icon: 'pendente' };
+  }
+  if (key.includes('CANCEL')) {
+    return { label: STATUS_LABELS.CANCELADA, tone: 'danger', icon: 'erro' };
+  }
+  if (key.includes('DISPON') || key === 'LIVRE') {
+    return { label: STATUS_LABELS.DISPONIVEL, tone: 'success', icon: 'ok' };
+  }
+  if (key.includes('OCUP')) {
+    return { label: STATUS_LABELS.OCUPADO, tone: 'warning', icon: 'alerta' };
+  }
+  if (key.includes('CONFLITO') || key.includes('BLOQUE')) {
+    return { label: STATUS_LABELS.CONFLITO, tone: 'danger', icon: 'erro' };
+  }
+  if (key.includes('ATEN') || key.includes('ALERT')) {
+    return { label: STATUS_LABELS.ATENCAO, tone: 'warning', icon: 'alerta' };
+  }
+  if (key.includes('PEND')) {
+    return { label: STATUS_LABELS.PENDENTE, tone: 'warning', icon: 'pendente' };
+  }
+  const label = String(raw ?? '').trim() || STATUS_LABELS.PENDENTE;
+  return { label: label.toUpperCase(), tone: 'neutral', icon: 'pendente' };
+}
+
+type Props = {
+  label?: string;
+  /** Status bruto da API — resolve rótulo padronizado. */
+  status?: string | null;
   icon?: keyof typeof ICONS | ReactNode;
   className?: string;
 } & VariantProps<typeof statusBadgeVariants>;
 
 /** Status com ícone + texto + cor (acessível, sem depender só da cor). */
-export function StatusBadge({ label, tone, icon = 'pendente', className }: Props) {
+export function StatusBadge({
+  label,
+  status,
+  tone,
+  icon,
+  className,
+}: Props) {
+  const resolved = status != null ? resolveStatusPresentation(status) : null;
+  const finalLabel = label ?? resolved?.label ?? STATUS_LABELS.PENDENTE;
+  const finalTone = tone ?? resolved?.tone ?? 'neutral';
+  const finalIcon = icon ?? resolved?.icon ?? 'pendente';
+
   const IconComp =
-    typeof icon === 'string' && Object.prototype.hasOwnProperty.call(ICONS, icon)
-      ? ICONS[icon as keyof typeof ICONS]
+    typeof finalIcon === 'string' &&
+    Object.prototype.hasOwnProperty.call(ICONS, finalIcon)
+      ? ICONS[finalIcon as keyof typeof ICONS]
       : null;
 
   return (
-    <span className={cn(statusBadgeVariants({ tone }), className)} role="status">
-      {IconComp ? <IconComp className="h-3.5 w-3.5 shrink-0" aria-hidden /> : null}
-      {typeof icon !== 'string' ? icon : null}
-      <span>{label}</span>
+    <span
+      className={cn(statusBadgeVariants({ tone: finalTone }), className)}
+      role="status"
+    >
+      {IconComp ? (
+        <IconComp className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      ) : null}
+      {typeof finalIcon !== 'string' ? finalIcon : null}
+      <span>{finalLabel}</span>
     </span>
   );
 }

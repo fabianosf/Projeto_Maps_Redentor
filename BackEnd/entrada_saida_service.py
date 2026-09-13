@@ -8,9 +8,12 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Optional
+from zoneinfo import ZoneInfo
 
 _HHMM = re.compile(r"^\d{2}:\d{2}$")
+_TZ_SP = ZoneInfo("America/Sao_Paulo")
 
 
 @dataclass(frozen=True)
@@ -208,16 +211,17 @@ def _id_guia_por_veiculo_data_atual_sem_largada(
     """
     if id_veiculo <= 0:
         return None
+    hoje = datetime.now(_TZ_SP).date().isoformat()
     df = dal.read(
         """
         SELECT id_guia FROM tb_guia
         WHERE id_veiculo = ?
-          AND DATE(data) = CURDATE()
+          AND DATE(data) = ?
           AND hor_fim IS NULL
         ORDER BY data DESC, id_guia DESC
         LIMIT 1
         """,
-        (id_veiculo,),
+        (id_veiculo, hoje),
     )
     if df.empty:
         return None

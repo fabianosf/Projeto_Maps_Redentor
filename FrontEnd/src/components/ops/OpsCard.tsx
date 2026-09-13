@@ -11,11 +11,12 @@ type Props = {
   primaryAction?: ReactNode;
   'aria-label'?: string;
   disabled?: boolean;
+  /** Destaque de seleção (borda azul espessa). */
+  selected?: boolean;
 };
 
 /**
- * Card operacional clicável por inteiro, sem seta decorativa.
- * Feedback de toque via active:/focus-visible.
+ * Card operacional clicável — App de Campo Robusto.
  */
 export function OpsCard({
   children,
@@ -25,6 +26,7 @@ export function OpsCard({
   primaryAction,
   'aria-label': ariaLabel,
   disabled,
+  selected,
 }: Props) {
   const stopAction = (e: SyntheticEvent) => {
     e.stopPropagation();
@@ -36,6 +38,7 @@ export function OpsCard({
       tabIndex={onClick && !disabled ? 0 : undefined}
       aria-label={ariaLabel}
       aria-disabled={disabled || undefined}
+      aria-pressed={selected}
       onClick={disabled ? undefined : onClick}
       onKeyDown={
         onClick && !disabled
@@ -48,7 +51,8 @@ export function OpsCard({
           : undefined
       }
       className={cn(
-        'relative flex w-full overflow-hidden rounded-xl border border-border/60 bg-surface-card text-left text-text shadow-sm outline-none transition-colors',
+        'relative flex w-full overflow-hidden rounded-xl border bg-surface-card text-left text-text shadow-card outline-none transition-colors',
+        selected ? 'border-[3px] border-brand-cta' : 'border-field',
         onClick &&
           !disabled &&
           'cursor-pointer active:bg-surface focus-visible:ring-2 focus-visible:ring-ring',
@@ -59,7 +63,7 @@ export function OpsCard({
       {stripeClass ? (
         <span className={cn('w-1.5 shrink-0 self-stretch', stripeClass)} aria-hidden />
       ) : null}
-      <div className="flex min-w-0 flex-1 flex-col gap-2 px-3 py-2.5">
+      <div className="flex min-w-0 flex-1 flex-col gap-2.5 px-4 py-3.5">
         {children}
         {primaryAction ? (
           <div className="pt-0.5" onClick={stopAction} onKeyDown={stopAction}>

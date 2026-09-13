@@ -312,7 +312,7 @@ export function MapaFormScreen() {
   if (loading) {
     return (
       <AppShell className="bg-screen">
-        <div className="page min-h-dvh bg-screen text-slate-900">
+        <div className="page min-h-dvh bg-screen text-text">
           <OpsPageHeader title={isEdit ? 'Editar mapa' : 'Novo mapa'} />
           <LoadingState />
         </div>
@@ -322,7 +322,7 @@ export function MapaFormScreen() {
 
   return (
     <AppShell className="bg-screen">
-      <div className="page flex min-h-dvh flex-col bg-screen text-slate-900">
+      <div className="page flex min-h-dvh flex-col bg-screen text-text">
         <OpsPageHeader
           title={isEdit ? 'Editar mapa' : 'Novo mapa'}
           rightSlot={
@@ -337,7 +337,7 @@ export function MapaFormScreen() {
                   }
                   navigate(`/mapas/${idRegistro}`);
                 }}
-                className="inline-flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full border-0 bg-transparent p-0 text-primary-foreground shadow-none hover:bg-primary-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground/80 focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
+                className="inline-flex h-12 w-12 min-h-[48px] min-w-[48px] items-center justify-center rounded-full border-0 bg-transparent p-0 text-primary-foreground shadow-none hover:bg-primary-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground/80 focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
               >
                 <ClipboardList className="h-5 w-5" strokeWidth={2.25} aria-hidden />
               </button>
@@ -388,7 +388,7 @@ export function MapaFormScreen() {
               </div>
             ) : (
               <div className="flex w-full flex-col gap-1.5">
-                <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900">
+                <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-text">
                   Empresa <span className="req">*</span>
                 </Label>
                 <Select
@@ -397,7 +397,7 @@ export function MapaFormScreen() {
                     setIdEmpresa(v === SELECT_EMPTY_EMP ? '' : (v ?? ''))
                   }
                 >
-                  <SelectTrigger className="h-12 w-full rounded-lg border-slate-400 bg-white text-base text-slate-900">
+                  <SelectTrigger className="h-12 w-full rounded-lg border-slate-400 bg-white text-base text-text">
                     <SelectValue placeholder="Selecione a empresa" />
                   </SelectTrigger>
                   <SelectContent position="popper" className="z-[300]">
@@ -418,14 +418,14 @@ export function MapaFormScreen() {
             )}
 
             <div className="flex w-full flex-col gap-1.5">
-              <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900">
+              <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-text">
                 Turno <span className="req">*</span>
               </Label>
               <Select
                 value={turno ?? ''}
                 onValueChange={(v) => setTurno(v ?? '')}
               >
-                <SelectTrigger className="h-12 w-full rounded-lg border-slate-400 bg-white text-base text-slate-900">
+                <SelectTrigger className="h-12 w-full rounded-lg border-slate-400 bg-white text-base text-text">
                   <SelectValue placeholder="TURNO 01" />
                 </SelectTrigger>
                 <SelectContent position="popper" className="z-[300]">
@@ -474,7 +474,7 @@ export function MapaFormScreen() {
             </div>
           </div>
 
-          <div className="mt-auto grid grid-cols-2 gap-3 border-t border-slate-400/40 pt-5">
+          <div className="mt-auto grid grid-cols-2 gap-3 border-t border-field pt-5">
             <Button type="submit" disabled={busy} className="h-12 text-base font-bold uppercase">
               {busy ? 'Salvando…' : 'Confirmar'}
             </Button>

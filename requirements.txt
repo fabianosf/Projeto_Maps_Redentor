@@ -19,3 +19,6 @@ pytest-cov>=5.0.0
 
 # Opcional — scripts de documentação/imagens (não necessário para API)
 # Pillow>=10.0.0
+
+# Produção — NÃO use Flask development server
+gunicorn>=22.0.0

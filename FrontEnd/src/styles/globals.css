@@ -15,6 +15,7 @@
     @apply m-0 min-h-full w-full bg-surface text-text font-sans antialiased;
     overflow-x: hidden;
     -webkit-tap-highlight-color: transparent;
+    font-size: 16px;
   }
 
   :focus-visible {
@@ -36,18 +37,17 @@
 
   .auth-shell {
     @apply relative mx-auto w-full max-w-phone overflow-hidden text-primary-foreground;
-    background-color: #0b2a4a;
+    background-color: var(--brand-navy);
   }
 
   .auth-shell-bg {
     position: absolute;
     inset: 0;
     z-index: 0;
-    background-color: #0b2a4a;
+    background-color: var(--brand-navy);
     overflow: hidden;
   }
 
-  /* Poster fantasma em tela cheia (torre + ônibus só adivinháveis). */
   .auth-shell-bg::after {
     content: '';
     position: absolute;
@@ -56,14 +56,15 @@
     background-repeat: no-repeat;
     background-size: cover;
     background-position: center 55%;
-    opacity: 0.12;
-    filter: blur(10px);
-    -webkit-filter: blur(10px);
+    opacity: 0.1;
+    filter: blur(8px);
+    -webkit-filter: blur(8px);
   }
 
   .auth-card {
     @apply relative overflow-hidden text-text shadow-card;
-    border-radius: 20px;
+    border-radius: 12px;
+    border: 1px solid var(--border-field);
     background-color: #ffffff;
     opacity: 1;
   }
@@ -80,14 +81,14 @@
   }
 
   .card-fillet-gold {
-    @apply relative overflow-hidden rounded-[var(--radius-lg)] border border-border/60 bg-surface-card text-text shadow-card;
+    @apply relative overflow-hidden rounded-xl border border-field bg-surface-card text-text shadow-card;
   }
 
   .card-fillet-gold::before {
     content: '';
     display: block;
     height: var(--fillet-gold);
-    background: var(--brand-gold);
+    background: var(--brand-cta);
   }
 
   .page {
@@ -95,26 +96,25 @@
   }
 
   .page-body {
-    @apply flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pt-4;
+    @apply flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden px-4 pt-4;
     padding-bottom: calc(var(--main-tab-bar) + env(safe-area-inset-bottom, 0px) + 1rem);
   }
 
   .page-body-center {
-    @apply flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-6 pt-8;
+    @apply flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto overflow-x-hidden px-6 pt-8;
     padding-bottom: calc(var(--main-tab-bar) + env(safe-area-inset-bottom, 0px) + 1rem);
   }
 
   .page-body-auth {
-    @apply flex min-h-0 flex-1 flex-col overflow-y-auto px-5 pb-8 pt-2;
+    @apply flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-5 pb-8 pt-2;
   }
 
   .pb-tabbar {
     padding-bottom: calc(var(--main-tab-bar) + env(safe-area-inset-bottom, 0px) + 0.75rem);
   }
 
-  /* Formulários: Confirmar acima da tab bar */
   .form-footer-sticky {
-    @apply sticky z-20 grid grid-cols-2 gap-3 border-t border-border/50 bg-surface px-4 pt-3;
+    @apply sticky z-20 grid grid-cols-2 gap-3 border-t border-field bg-surface px-4 pt-3;
     bottom: 0;
     padding-bottom: calc(var(--main-tab-bar) + env(safe-area-inset-bottom, 0px) + 0.75rem);
   }
@@ -140,19 +140,27 @@
   }
 
   .surface-card {
-    @apply rounded-[var(--radius-lg)] border border-border/60 bg-surface-card text-text shadow-card;
+    @apply rounded-xl border border-field bg-surface-card text-text shadow-card;
+  }
+
+  .ops-card {
+    @apply rounded-xl border border-field bg-surface-card text-text shadow-card;
+  }
+
+  .ops-card--selected {
+    @apply border-[3px] border-brand-cta shadow-card;
   }
 
   .table-head-row {
-    @apply border-b-2 border-border bg-table-head text-left text-[13px] font-bold uppercase tracking-wide text-text;
+    @apply border-b-2 border-field bg-table-head text-left text-[13px] font-bold uppercase tracking-wide text-text;
   }
 
   .table-zebra-row {
-    @apply border-b border-border/50 odd:bg-surface-card even:bg-table-zebra;
+    @apply border-b border-field/70 odd:bg-surface-card even:bg-table-zebra;
   }
 
   .list-card {
-    @apply flex min-h-[72px] w-full flex-col gap-1 rounded-[var(--radius-lg)] border border-border/60 bg-surface-card px-4 py-3.5 text-left shadow-sm transition-colors hover:bg-surface-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:bg-muted;
+    @apply flex min-h-[72px] w-full flex-col gap-1.5 rounded-xl border border-field bg-surface-card px-4 py-4 text-left shadow-card transition-colors hover:bg-surface-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:bg-muted;
   }
 
   .toolbar-actions {
@@ -160,11 +168,11 @@
   }
 
   .helper-text {
-    @apply text-[13px] leading-snug text-text-muted;
+    @apply text-[14px] leading-snug text-text-muted;
   }
 
   .field-error {
-    @apply text-[13px] font-medium text-danger;
+    @apply text-[14px] font-medium text-danger;
   }
 
   .ds-cta {
@@ -176,15 +184,35 @@
   }
 
   .ds-subtitle {
-    @apply text-sm leading-snug text-text-muted;
+    @apply text-[15px] leading-snug text-text-muted;
   }
 
   .link-cyan {
-    @apply text-brand-cyan underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
+    @apply text-brand-cta underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring;
   }
 
   .icon-circle-navy {
-    @apply flex h-11 w-11 min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-full bg-brand-navy text-primary-foreground;
+    @apply flex h-12 w-12 min-h-[48px] min-w-[48px] shrink-0 items-center justify-center rounded-full bg-brand-navy text-primary-foreground;
+  }
+
+  .persistent-banner {
+    @apply flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-[15px] font-semibold;
+  }
+
+  .persistent-banner--error {
+    @apply border-danger/40 bg-danger/10 text-danger;
+  }
+
+  .persistent-banner--warning {
+    @apply border-warn/40 bg-warn/10 text-warn;
+  }
+
+  .persistent-banner--info {
+    @apply border-brand-cta/40 bg-brand-cta/10 text-brand-navy;
+  }
+
+  .persistent-banner--success {
+    @apply border-ok/40 bg-ok/10 text-ok;
   }
 
   .login-mark {
@@ -192,8 +220,8 @@
     height: 88px;
     border-radius: 50%;
     padding: 3px;
-    background: linear-gradient(135deg, #c9a227, #00a8e0);
-    box-shadow: 0 8px 28px rgba(0, 168, 224, 0.28);
+    background: var(--brand-cta);
+    box-shadow: 0 6px 20px color-mix(in srgb, var(--brand-cta) 28%, transparent);
   }
 
   .login-mark-inner {
@@ -203,7 +231,7 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: #0b2a4a;
+    background: var(--brand-navy);
   }
 
   .login-mark-bus {
@@ -214,7 +242,7 @@
 
   .login-brand-title {
     margin-top: 0.85rem;
-    font-size: 1.75rem;
+    font-size: 1.85rem;
     font-weight: 700;
     letter-spacing: -0.02em;
     color: #fff;
@@ -223,47 +251,47 @@
 
   .login-brand-org {
     margin-top: 0.3rem;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 600;
-    color: #00a8e0;
+    color: #a8c8e8;
     line-height: 1.3;
   }
 
   .login-field {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
+    gap: 0.4rem;
   }
 
   .login-field-label {
-    font-size: 0.875rem;
+    font-size: 0.9375rem;
     font-weight: 600;
-    color: #122033;
+    color: var(--text);
   }
 
   .login-field-input {
     width: 100%;
-    height: 44px;
-    min-height: 44px;
-    border: none;
-    border-bottom: 1.5px solid #c5ced8;
-    border-radius: 0;
-    background: transparent;
-    padding: 0.35rem 0;
-    font-size: 1rem;
-    color: #122033;
+    height: 48px;
+    min-height: 48px;
+    border: 1.5px solid var(--border-field);
+    border-radius: 12px;
+    background: #fff;
+    padding: 0.5rem 0.85rem;
+    font-size: 1.0625rem;
+    color: var(--text);
     outline: none;
   }
 
   .login-field-input:focus {
-    border-bottom-color: #00a8e0;
+    border-color: var(--brand-cta);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-cta) 25%, transparent);
   }
 
   .login-field-input--error {
-    border-bottom-color: #c63a3a;
+    border-color: var(--danger);
   }
 
   .login-field-input::placeholder {
-    color: #8a97a6;
+    color: #7b93a8;
   }
 }

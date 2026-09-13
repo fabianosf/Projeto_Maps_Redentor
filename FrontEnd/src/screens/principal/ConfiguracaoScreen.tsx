@@ -112,7 +112,7 @@ export function ConfiguracaoScreen() {
   }
 
   return (
-    <AppShell className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-screen text-slate-900">
+    <AppShell className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-screen text-text">
       <PageHeader title="CONFIGURAÇÃO" />
 
       <div className="flex min-h-0 flex-1 flex-col px-4 py-8">
@@ -146,7 +146,7 @@ export function ConfiguracaoScreen() {
             <div className="flex items-center justify-between gap-3">
               <Label
                 htmlFor="bloqueio_login"
-                className="text-[12px] font-normal leading-snug text-slate-900"
+                className="text-[12px] font-normal leading-snug text-text"
               >
                 Login (Bloqueio de tentativas de acesso):
               </Label>
@@ -180,7 +180,7 @@ export function ConfiguracaoScreen() {
             <div className="flex items-center gap-2">
               <Label
                 htmlFor="qtd_tentativas"
-                className="shrink-0 text-[12px] font-semibold leading-none text-slate-900"
+                className="shrink-0 text-[12px] font-semibold leading-none text-text"
               >
                 QTD:
               </Label>
@@ -195,7 +195,7 @@ export function ConfiguracaoScreen() {
                 value={qtdT}
                 onChange={(e) => setQtdT(onlyDigits(e.target.value).slice(0, 1))}
                 disabled={loading || busy || !bloqueioLogin}
-                className="h-10 w-12 rounded-lg border-slate-400 bg-white text-center text-base text-slate-900 shadow-none"
+                className="h-10 w-12 rounded-lg border-slate-400 bg-white text-center text-base text-text shadow-none"
               />
             </div>
           </div>

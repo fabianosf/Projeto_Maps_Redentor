@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS tb_veiculo (
     id_veiculo      SERIAL       PRIMARY KEY,
     codigo_veiculo  INT          NOT NULL,
     numero_frota    VARCHAR(20)  NOT NULL,
+    frota_status    VARCHAR(40)  NULL,
     placa           VARCHAR(10)  NOT NULL,
     id_empresa      INT          NOT NULL,
     ativo           BOOLEAN      NOT NULL DEFAULT TRUE,
@@ -123,6 +124,9 @@ CREATE TABLE IF NOT EXISTS tb_usuario (
     id_local        INT          NULL,
     ativo           BOOLEAN      NOT NULL DEFAULT TRUE,
     trocar_senha    BOOLEAN      NOT NULL DEFAULT TRUE,
+    permite_leitura_mapas_outros BOOLEAN NOT NULL DEFAULT FALSE,
+    pendente_validacao_erp       BOOLEAN NOT NULL DEFAULT FALSE,
+    ticket_aprovacao_erp         VARCHAR(80) NULL,
     CONSTRAINT uk_tb_usuario_matricula UNIQUE (matricula),
     CONSTRAINT fk_tb_usuario_perfil
         FOREIGN KEY (id_perfil) REFERENCES tb_perfil (id_perfil),
@@ -197,10 +201,9 @@ CREATE INDEX IF NOT EXISTS idx_tb_ind_perf_id_perfil ON tb_ind_perf (id_perfil);
 
 CREATE TABLE IF NOT EXISTS tb_configuracao (
     idconf SERIAL      PRIMARY KEY,
-    -- VARCHAR(32): chave 'QTD_MAX_TENTATIVAS' tem 18 chars (MariaDB VARCHAR(15)
-    -- costuma truncar em modo não-strict; Postgres rejeita).
-    chave  VARCHAR(32) NOT NULL,
-    valor  VARCHAR(30) NOT NULL
+    -- VARCHAR(32)/VARCHAR(255): chaves longas (QTD_MAX_TENTATIVAS) e FROTA_MENSAGEM.
+    chave  VARCHAR(32)  NOT NULL,
+    valor  VARCHAR(255) NOT NULL
 );
 
 INSERT INTO tb_configuracao (chave, valor)
@@ -307,6 +310,7 @@ CREATE TABLE IF NOT EXISTS tb_map (
     cod_map             INT          NOT NULL,
     codigo_mapa        VARCHAR(20)  NULL,
     id_usuario          INT          NOT NULL,
+    id_responsavel      INT          NULL,
     id_empresa          INT          NULL,
     id_linha            INT          NULL,
     id_turno            INT          NOT NULL,
@@ -323,7 +327,9 @@ CREATE TABLE IF NOT EXISTS tb_map (
     CONSTRAINT fk_tb_map_turno
         FOREIGN KEY (id_turno) REFERENCES tb_turno (id_turno),
     CONSTRAINT fk_tb_map_usuario
-        FOREIGN KEY (id_usuario) REFERENCES tb_usuario (id_usuario)
+        FOREIGN KEY (id_usuario) REFERENCES tb_usuario (id_usuario),
+    CONSTRAINT fk_tb_map_responsavel
+        FOREIGN KEY (id_responsavel) REFERENCES tb_usuario (id_usuario)
 );
 
 CREATE SEQUENCE IF NOT EXISTS tb_map_cod_map_seq
@@ -341,6 +347,7 @@ CREATE TABLE IF NOT EXISTS tb_mapa_seq (
 );
 
 CREATE INDEX IF NOT EXISTS idx_tb_map_usuario ON tb_map (id_usuario);
+CREATE INDEX IF NOT EXISTS idx_tb_map_id_responsavel ON tb_map (id_responsavel);
 CREATE INDEX IF NOT EXISTS idx_tb_map_linha ON tb_map (id_linha);
 CREATE INDEX IF NOT EXISTS idx_tb_map_turno ON tb_map (id_turno);
 CREATE INDEX IF NOT EXISTS idx_tb_map_data ON tb_map (data);
@@ -352,10 +359,19 @@ CREATE TABLE IF NOT EXISTS tb_item_map (
     idmap          INT       NOT NULL,
     id_linha       INT       NULL,
     id_veiculo     INT       NOT NULL,
-    id_motorista   INT       NOT NULL,
+    id_motorista   INT       NULL,
     hor_ini_jor    TIMESTAMP NULL,
     hor_fim_jor    TIMESTAMP NULL,
     chegada_ponto  TIMESTAMP NULL,
+    inicio_real    TIMESTAMP NULL,
+    fim_real       TIMESTAMP NULL,
+    status_escala  VARCHAR(20) NOT NULL DEFAULT 'EM_ANDAMENTO',
+    baixa_em       TIMESTAMP NULL,
+    data_baixa     DATE NULL,
+    hora_baixa     TIME NULL,
+    motivo_baixa   VARCHAR(120) NULL,
+    observacao_baixa TEXT NULL,
+    duracao_trabalhada_minutos INT NULL,
     CONSTRAINT fk_tb_item_map_map
         FOREIGN KEY (idmap) REFERENCES tb_map (id_registro),
     CONSTRAINT fk_tb_item_map_linha
@@ -370,6 +386,30 @@ CREATE INDEX IF NOT EXISTS idx_tb_item_map_idmap ON tb_item_map (idmap);
 CREATE INDEX IF NOT EXISTS idx_tb_item_map_id_linha ON tb_item_map (id_linha);
 CREATE INDEX IF NOT EXISTS idx_tb_item_map_veiculo ON tb_item_map (id_veiculo);
 CREATE INDEX IF NOT EXISTS idx_tb_item_map_motorista ON tb_item_map (id_motorista);
+CREATE INDEX IF NOT EXISTS idx_tb_item_map_status_escala ON tb_item_map (status_escala);
+CREATE INDEX IF NOT EXISTS idx_tb_item_map_veiculo_status ON tb_item_map (id_veiculo, status_escala);
+CREATE INDEX IF NOT EXISTS idx_tb_item_map_motorista_status ON tb_item_map (id_motorista, status_escala);
+
+-- Auditoria imutável (APPEND-ONLY)
+CREATE TABLE IF NOT EXISTS tb_auditoria (
+    id_auditoria      BIGSERIAL    PRIMARY KEY,
+    entidade          VARCHAR(60)  NOT NULL,
+    id_entidade       VARCHAR(60)  NULL,
+    acao              VARCHAR(60)  NOT NULL,
+    id_executor       INT          NULL,
+    perfil_executor   INT          NULL,
+    criado_em         TIMESTAMP(3) NOT NULL DEFAULT CLOCK_TIMESTAMP(),
+    tz                VARCHAR(40)  NOT NULL DEFAULT 'America/Sao_Paulo',
+    correlation_id    VARCHAR(64)  NULL,
+    origem_ip         VARCHAR(64)  NULL,
+    valores_antes     JSONB        NULL,
+    valores_depois    JSONB        NULL,
+    motivo            VARCHAR(500) NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_tb_auditoria_entidade ON tb_auditoria (entidade, id_entidade);
+CREATE INDEX IF NOT EXISTS idx_tb_auditoria_executor ON tb_auditoria (id_executor);
+CREATE INDEX IF NOT EXISTS idx_tb_auditoria_criado ON tb_auditoria (criado_em);
 
 CREATE TABLE IF NOT EXISTS tb_viagem (
     id_viagem         SERIAL      PRIMARY KEY,

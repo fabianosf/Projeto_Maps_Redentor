@@ -22,12 +22,12 @@ import { SCREEN_BG } from '@/theme/tokens';
 
 const BG = SCREEN_BG;
 
-const screenTextClass = 'text-[15px] font-bold text-slate-900';
+const screenTextClass = 'text-[15px] font-bold text-text';
 
 const compactFieldHeightClass = 'h-10';
 
 const labelClass =
-  'flex h-5 items-center text-[15px] font-semibold leading-none text-slate-900';
+  'flex h-5 items-center text-[15px] font-semibold leading-none text-text';
 
 const fieldBorderClass = 'rounded-lg border border-black bg-white';
 

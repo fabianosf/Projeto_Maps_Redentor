@@ -346,9 +346,12 @@ def registrar_alteracao_escala(
 
     nova_frota = body.get("numero_frota", body.get("carro"))
     if nova_frota is not None and str(nova_frota).strip() != "":
-        frota = str(nova_frota).strip()
-        if not frota.isdigit() or len(frota) > 5:
-            return GuiaError("Carro deve conter até 5 dígitos numéricos.", "validacao")
+        from .cadastros_service import CadastroError, validar_frota
+
+        vf = validar_frota(str(nova_frota).strip())
+        if isinstance(vf, CadastroError):
+            return GuiaError(vf.mensagem, vf.codigo or "validacao")
+        frota = vf[0]
         id_vei = _id_veiculo_por_frota(dal, frota)
         if id_vei is None:
             return GuiaError("Carro não encontrado.", "carro_invalido")

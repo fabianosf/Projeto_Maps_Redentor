@@ -104,7 +104,7 @@ export function DatePickerField({
         <div className="flex h-5 items-center">
           <Label
             htmlFor={name}
-            className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900"
+            className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-text"
           >
             {label}
           </Label>
@@ -121,7 +121,7 @@ export function DatePickerField({
       ) : (
         <Label
           htmlFor={name}
-          className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900"
+          className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-text"
         >
           {label}
         </Label>
@@ -137,7 +137,7 @@ export function DatePickerField({
           onChange={(e) => onTextChange(e.target.value)}
           disabled={disabled}
           className={cn(
-            'h-12 rounded-lg border-slate-400 bg-white text-base text-slate-900',
+            'h-12 rounded-lg border-slate-400 bg-white text-base text-text',
             iconBesideLabel ? 'pr-3' : 'pr-11',
             inputClassName,
           )}
@@ -212,7 +212,7 @@ export function DatePickerField({
                     'flex h-9 w-9 items-center justify-center rounded-md text-sm font-medium',
                     isSelected
                       ? 'bg-primary text-primary-foreground'
-                      : 'text-slate-900 hover:bg-secondary',
+                      : 'text-text hover:bg-secondary',
                   )}
                 >
                   {cell.day}

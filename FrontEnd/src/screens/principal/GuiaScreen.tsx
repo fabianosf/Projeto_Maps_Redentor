@@ -117,7 +117,7 @@ const fieldClass = 'h-10 rounded-lg bg-white text-sm shadow-none border-slate-40
 const halfFieldClass = cn(fieldClass, 'w-full max-w-none');
 const selectTriggerClass = cn(fieldClass, 'h-10 w-full text-sm');
 const labelClass =
-  'flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900';
+  'flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-text';
 
 function toSelectValue(v: string): string {
   return v === '' ? SELECT_EMPTY : v;
@@ -234,7 +234,7 @@ function GuiaViagemOpsCard({
             </span>
           </p>
           {op === 'em_transito' ? (
-            <div className="mt-1.5 space-y-0.5 text-[11px] leading-snug text-slate-600">
+            <div className="mt-1.5 space-y-0.5 text-[11px] leading-snug text-text-muted">
               {motoristaTxt ? <p>Motorista: {motoristaTxt}</p> : null}
               {desp ? <p>Despachante: {desp}</p> : null}
             </div>
@@ -338,7 +338,7 @@ function ReadonlyField({
   return (
     <div className="flex w-full flex-col gap-1">
       <span className={labelClass}>{label}</span>
-      <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+      <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-text">
         {value != null && String(value).trim() !== '' ? String(value) : '—'}
       </p>
     </div>
@@ -1261,25 +1261,25 @@ export function GuiaScreen() {
         className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-left"
         aria-label={`Editar ${titulo}`}
       >
-        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-700">
+        <p className="text-[11px] font-bold uppercase tracking-wide text-text">
           {titulo}
         </p>
-        <div className="mt-1 grid grid-cols-3 gap-1 text-[11px] text-slate-600">
+        <div className="mt-1 grid grid-cols-3 gap-1 text-[11px] text-text-muted">
           <span>
             Início{' '}
-            <strong className="tabular-nums text-slate-900">
+            <strong className="tabular-nums text-text">
               {bloco?.leitura_ini ?? bloco?.sugestao_ini ?? '—'}
             </strong>
           </span>
           <span>
             Fim{' '}
-            <strong className="tabular-nums text-slate-900">
+            <strong className="tabular-nums text-text">
               {bloco?.leitura_fim ?? '—'}
             </strong>
           </span>
           <span>
             Pas.{' '}
-            <strong className="tabular-nums text-slate-900">{pas}</strong>
+            <strong className="tabular-nums text-text">{pas}</strong>
           </span>
         </div>
       </button>
@@ -1310,7 +1310,7 @@ export function GuiaScreen() {
           title="Guia"
           rightSlot={
             <span
-              className="flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-primary-foreground/15 text-xs font-bold text-primary-foreground"
+              className="flex h-12 w-12 min-h-[48px] min-w-[48px] items-center justify-center rounded-full bg-primary-foreground/15 text-xs font-bold text-primary-foreground"
               aria-label={`Usuário ${user?.nome ?? ''}`}
               title={user?.nome ?? undefined}
             >
@@ -1323,7 +1323,7 @@ export function GuiaScreen() {
           <div className="flex gap-2">
             <button
               type="button"
-              className="flex min-h-11 flex-1 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-left text-sm font-medium text-slate-800"
+              className="flex min-h-11 flex-1 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-left text-sm font-medium text-text"
               aria-label={`Data selecionada: ${formatDataChip(dataFiltro)}`}
               onClick={() => {
                 const next = window.prompt('Data (dd/mm/aaaa)', dataFiltro);
@@ -1335,7 +1335,7 @@ export function GuiaScreen() {
                 setDataFiltro(next.trim());
               }}
             >
-              <CalendarDays className="h-4 w-4 shrink-0 text-slate-600" aria-hidden />
+              <CalendarDays className="h-4 w-4 shrink-0 text-text-muted" aria-hidden />
               <span className="truncate">{formatDataChip(dataFiltro)}</span>
             </button>
           </div>
@@ -1356,10 +1356,10 @@ export function GuiaScreen() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <h2 className="truncate text-base font-bold text-slate-900">
+                    <h2 className="truncate text-base font-bold text-text">
                       {resumo.titulo_mapa}
                       {resumo.turno ? (
-                        <span className="font-semibold text-slate-600">
+                        <span className="font-semibold text-text-muted">
                           {' '}
                           · {resumo.turno}
                         </span>
@@ -1515,7 +1515,7 @@ export function GuiaScreen() {
                         aria-label={titulo}
                         className="space-y-2"
                       >
-                        <h3 className="px-0.5 text-[13px] font-bold uppercase tracking-wide text-slate-600">
+                        <h3 className="px-0.5 text-[13px] font-bold uppercase tracking-wide text-text-muted">
                           {titulo}
                           <span className="ml-1 font-semibold tabular-nums text-slate-400">
                             ({lista.length})
@@ -1610,7 +1610,7 @@ export function GuiaScreen() {
         />
 
         <Dialog open={filtroOpen} onOpenChange={setFiltroOpen}>
-          <DialogContent className="max-w-[360px] border-slate-400/50 bg-screen p-5">
+          <DialogContent className="max-w-[360px] border-field bg-screen p-5">
             <DialogHeader>
               <DialogTitle className="text-center text-[16px] uppercase tracking-wide">
                 Filtrar
@@ -1649,7 +1649,7 @@ export function GuiaScreen() {
                   </SelectContent>
                 </Select>
               </div>
-              <label className="flex items-center gap-2 text-sm font-medium text-slate-800">
+              <label className="flex items-center gap-2 text-sm font-medium text-text">
                 <input
                   type="checkbox"
                   checked={filtroPendentes}
@@ -1680,16 +1680,16 @@ export function GuiaScreen() {
         </Dialog>
 
         <Dialog open={pesquisarOpen} onOpenChange={setPesquisarOpen}>
-          <DialogContent className="max-w-[340px] border-slate-400/50 bg-screen p-5">
+          <DialogContent className="max-w-[340px] border-field bg-screen p-5">
             <DialogHeader>
-              <DialogTitle className="text-center text-[16px] uppercase tracking-wide text-slate-900">
+              <DialogTitle className="text-center text-[16px] uppercase tracking-wide text-text">
                 Pesquisar guia
               </DialogTitle>
             </DialogHeader>
             <div className="mt-2">
               <Label
                 htmlFor="pesquisa_nr_guia"
-                className="mb-1.5 block text-sm font-semibold text-slate-800"
+                className="mb-1.5 block text-sm font-semibold text-text"
               >
                 NR(Guia)
               </Label>
@@ -1700,7 +1700,7 @@ export function GuiaScreen() {
                 maxLength={NR_MAX}
                 value={pesquisarNumero}
                 onChange={(e) => setPesquisarNumero(normalizeNrGuia(e.target.value))}
-                className="h-12 rounded-lg border-slate-400 bg-white text-base text-slate-900"
+                className="h-12 rounded-lg border-slate-400 bg-white text-base text-text"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
@@ -1723,7 +1723,7 @@ export function GuiaScreen() {
         </Dialog>
 
         <Dialog open={alertaDetalheOpen} onOpenChange={setAlertaDetalheOpen}>
-          <DialogContent className="max-w-[380px] border-slate-400/50 bg-screen p-5">
+          <DialogContent className="max-w-[380px] border-field bg-screen p-5">
             <DialogHeader>
               <DialogTitle className="text-center text-[16px] uppercase tracking-wide">
                 Divergências
@@ -1749,7 +1749,7 @@ export function GuiaScreen() {
                   </li>
                 ))}
               {viagens.every((v) => v.status === 'sincronizado') ? (
-                <li className="text-sm text-slate-600">Nenhum item pendente na lista.</li>
+                <li className="text-sm text-text-muted">Nenhum item pendente na lista.</li>
               ) : null}
             </ul>
           </DialogContent>
@@ -1766,7 +1766,7 @@ export function GuiaScreen() {
             }
           }}
         >
-          <DialogContent className="flex max-h-[92dvh] max-w-[420px] flex-col gap-0 overflow-hidden border-slate-400/50 bg-screen p-0">
+          <DialogContent className="flex max-h-[92dvh] max-w-[420px] flex-col gap-0 overflow-hidden border-field bg-screen p-0">
             <DialogHeader className="border-b border-slate-200 px-4 py-3">
               <DialogTitle className="text-center text-[16px] uppercase tracking-wide">
                 {cardAtivo?.viagem_label ?? 'Detalhe da viagem'}
@@ -1867,7 +1867,7 @@ export function GuiaScreen() {
                   />
                 </div>
 
-                <p className="text-center text-[13px] font-semibold uppercase tracking-wide text-slate-700">
+                <p className="text-center text-[13px] font-semibold uppercase tracking-wide text-text">
                   Leituras (independentes)
                 </p>
                 <div className="grid grid-cols-2 gap-2">
@@ -2000,7 +2000,7 @@ export function GuiaScreen() {
                 </div>
               </div>
             ) : null}
-            <div className="flex flex-wrap gap-2 border-t border-slate-200 bg-white/80 p-3">
+            <div className="flex flex-wrap gap-2 border-t border-slate-200 bg-surface-card p-3">
               <Button
                 type="button"
                 variant="outline"
@@ -2038,13 +2038,13 @@ export function GuiaScreen() {
         </Dialog>
 
         <Dialog open={proximaViagemOpen} onOpenChange={setProximaViagemOpen}>
-          <DialogContent className="max-w-[380px] border-slate-400/50 bg-screen p-5">
+          <DialogContent className="max-w-[380px] border-field bg-screen p-5">
             <DialogHeader>
               <DialogTitle className="text-center text-[16px] uppercase tracking-wide">
                 Registrar próxima viagem
               </DialogTitle>
             </DialogHeader>
-            <p className="mt-2 text-sm text-slate-600">
+            <p className="mt-2 text-sm text-text-muted">
               Cria um novo trecho na guia aberta do dia
               {guiaAbertaDoDia()?.numero
                 ? ` (${guiaAbertaDoDia()?.numero})`
@@ -2096,7 +2096,7 @@ export function GuiaScreen() {
             }
           }}
         >
-          <DialogContent className="flex max-h-[92dvh] max-w-[420px] flex-col gap-0 overflow-hidden border-slate-400/50 bg-screen p-0">
+          <DialogContent className="flex max-h-[92dvh] max-w-[420px] flex-col gap-0 overflow-hidden border-field bg-screen p-0">
             <DialogHeader className="border-b border-slate-200 px-4 py-3">
               <DialogTitle className="text-center text-[16px] uppercase tracking-wide">
                 {modo === 'include' ? 'Nova guia' : 'Detalhe da guia'}
@@ -2233,8 +2233,8 @@ export function GuiaScreen() {
               ) : null}
 
               {contextoEscala ? (
-                <div className="space-y-3 rounded-xl border border-slate-300 bg-white/70 p-3">
-                  <p className="text-center text-[13px] font-semibold uppercase tracking-wide text-slate-700">
+                <div className="space-y-3 rounded-xl border border-slate-300 bg-surface-card p-3">
+                  <p className="text-center text-[13px] font-semibold uppercase tracking-wide text-text">
                     Dados da escala (somente leitura)
                   </p>
                   <div className="grid grid-cols-2 gap-2">
@@ -2284,7 +2284,7 @@ export function GuiaScreen() {
                   {(contextoEscala.viagens_previstas?.length ?? 0) > 0 ? (
                     <div>
                       <p className={`${labelClass} mb-1`}>Viagens previstas</p>
-                      <ul className="max-h-28 space-y-1 overflow-y-auto text-sm text-slate-700">
+                      <ul className="max-h-28 space-y-1 overflow-y-auto text-sm text-text">
                         {contextoEscala.viagens_previstas!.map((v, idx) => (
                           <li
                             key={v.id_viagem ?? idx}
@@ -2442,7 +2442,7 @@ export function GuiaScreen() {
                 </>
               ) : null}
 
-              <p className="pt-1 text-center text-[13px] font-semibold uppercase tracking-wide text-slate-700">
+              <p className="pt-1 text-center text-[13px] font-semibold uppercase tracking-wide text-text">
                 Dados da execução
               </p>
 
@@ -2579,7 +2579,7 @@ export function GuiaScreen() {
               </div>
 
               {modo === 'edit' && guiaStatus ? (
-                <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+                <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-text">
                   Status da jornada:{' '}
                   <span className="font-semibold">
                     {String(guiaStatus).toUpperCase() === 'ENCERRADA'
@@ -2594,10 +2594,10 @@ export function GuiaScreen() {
 
               {guiaTrechos.length > 0 ? (
                 <div className="space-y-2">
-                  <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-700">
+                  <p className="text-[13px] font-semibold uppercase tracking-wide text-text">
                     Trechos da jornada
                   </p>
-                  <ul className="max-h-40 space-y-1 overflow-y-auto text-sm text-slate-700">
+                  <ul className="max-h-40 space-y-1 overflow-y-auto text-sm text-text">
                     {guiaTrechos.map((t) => (
                       <li
                         key={t.id_trecho}
@@ -2671,10 +2671,10 @@ export function GuiaScreen() {
 
               {guiaAlteracoes.length > 0 ? (
                 <div className="space-y-2">
-                  <p className="text-[13px] font-semibold uppercase tracking-wide text-slate-700">
+                  <p className="text-[13px] font-semibold uppercase tracking-wide text-text">
                     Histórico de trocas
                   </p>
-                  <ul className="max-h-32 space-y-1 overflow-y-auto text-xs text-slate-600">
+                  <ul className="max-h-32 space-y-1 overflow-y-auto text-xs text-text-muted">
                     {guiaAlteracoes.map((a) => (
                       <li key={a.id_alteracao}>
                         {a.campo}: {a.valor_anterior || '—'} → {a.valor_novo || '—'}{' '}
@@ -2686,7 +2686,7 @@ export function GuiaScreen() {
               ) : null}
             </div>
 
-            <div className="flex flex-wrap gap-2 border-t border-slate-200 bg-white/80 p-3">
+            <div className="flex flex-wrap gap-2 border-t border-slate-200 bg-surface-card p-3">
               <Button
                 type="button"
                 variant="outline"
@@ -2751,13 +2751,13 @@ export function GuiaScreen() {
         </Dialog>
 
         <Dialog open={trocaRecursoOpen} onOpenChange={setTrocaRecursoOpen}>
-          <DialogContent className="max-w-[380px] border-slate-400/50 bg-screen p-5">
+          <DialogContent className="max-w-[380px] border-field bg-screen p-5">
             <DialogHeader>
               <DialogTitle className="text-center text-[16px] uppercase tracking-wide">
                 Troca na jornada
               </DialogTitle>
             </DialogHeader>
-            <p className="mt-2 text-sm text-slate-600">
+            <p className="mt-2 text-sm text-text-muted">
               Troca linha ou carro sem encerrar a guia (mesma empresa). Exige motivo
               para auditoria.
             </p>
@@ -2822,13 +2822,13 @@ export function GuiaScreen() {
         </Dialog>
 
         <Dialog open={encerrarOpen} onOpenChange={setEncerrarOpen}>
-          <DialogContent className="max-w-[360px] border-slate-400/50 bg-screen p-5">
+          <DialogContent className="max-w-[360px] border-field bg-screen p-5">
             <DialogHeader>
               <DialogTitle className="text-center text-[16px] uppercase tracking-wide">
                 Encerrar jornada
               </DialogTitle>
             </DialogHeader>
-            <p className="mt-2 text-sm text-slate-600">
+            <p className="mt-2 text-sm text-text-muted">
               Encerre ao final do turno ou antes de mudar de empresa (Redentor /
               Futuro / Barra).
             </p>
@@ -2858,13 +2858,13 @@ export function GuiaScreen() {
         </Dialog>
 
         <Dialog open={ajusteOpen} onOpenChange={setAjusteOpen}>
-          <DialogContent className="max-w-[360px] border-slate-400/50 bg-screen p-5">
+          <DialogContent className="max-w-[360px] border-field bg-screen p-5">
             <DialogHeader>
               <DialogTitle className="text-center text-[16px] uppercase tracking-wide">
                 Ajuste manual
               </DialogTitle>
             </DialogHeader>
-            <p className="mt-2 text-sm text-slate-600">
+            <p className="mt-2 text-sm text-text-muted">
               A roleta original não será sobrescrita. Informe sentido, embarques e
               justificativa para auditoria.
             </p>
@@ -2923,13 +2923,13 @@ export function GuiaScreen() {
         </Dialog>
 
         <Dialog open={alteracaoOpen} onOpenChange={setAlteracaoOpen}>
-          <DialogContent className="max-w-[380px] border-slate-400/50 bg-screen p-5">
+          <DialogContent className="max-w-[380px] border-field bg-screen p-5">
             <DialogHeader>
               <DialogTitle className="text-center text-[16px] uppercase tracking-wide">
                 Alteração de escala
               </DialogTitle>
             </DialogHeader>
-            <p className="mt-2 text-sm text-slate-600">
+            <p className="mt-2 text-sm text-text-muted">
               Troca de veículo, motorista ou horário exige justificativa e fica
               registrada na auditoria.
             </p>
@@ -3027,14 +3027,14 @@ export function GuiaScreen() {
         </Dialog>
 
         <Dialog open={roletaOpen} onOpenChange={setRoletaOpen}>
-          <DialogContent className="max-w-[360px] border-slate-400/50 bg-screen p-5">
+          <DialogContent className="max-w-[360px] border-field bg-screen p-5">
             <DialogHeader>
               <DialogTitle className="text-center text-[16px] uppercase tracking-wide">
                 {roletaFonte === 'jae' ? 'Ja E' : 'RioCard'} —{' '}
                 {cardAtivo?.sentido === 'volta' ? 'Volta' : 'Ida'}
               </DialogTitle>
             </DialogHeader>
-            <p className="mt-2 text-sm text-slate-600">
+            <p className="mt-2 text-sm text-text-muted">
               Inicie com a leitura inicial. Ao finalizar, informe a final — passageiros
               calculados automaticamente.
             </p>
@@ -3078,7 +3078,7 @@ export function GuiaScreen() {
                 </div>
               ) : null}
               {roletaIni && roletaFim && Number(roletaFim) >= Number(roletaIni) ? (
-                <p className="text-sm text-slate-700">
+                <p className="text-sm text-text">
                   Passageiros:{' '}
                   <strong className="tabular-nums">
                     {Number(roletaFim) - Number(roletaIni)}

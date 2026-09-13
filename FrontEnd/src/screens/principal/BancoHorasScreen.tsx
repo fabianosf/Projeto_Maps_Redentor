@@ -323,7 +323,7 @@ export function BancoHorasScreen() {
                         ) : null}
                       </div>
                     </div>
-                    <p className="mt-2 text-[12px] text-slate-600">
+                    <p className="mt-2 text-[12px] text-text-muted">
                       Previsto / eventos reais por escala — toque para detalhar.
                     </p>
                   </button>
@@ -343,7 +343,7 @@ export function BancoHorasScreen() {
           }}
         >
           <DialogContent className="max-w-[400px] gap-0 p-0">
-            <DialogHeader className="border-b border-border/60 px-5 py-4 text-left">
+            <DialogHeader className="border-b border-field px-5 py-4 text-left">
               <DialogTitle>Jornada do dia</DialogTitle>
               <DialogDescription>
                 {detalheDia?.data} · {detalheDia?.motorista.matricula} —{' '}
@@ -386,7 +386,7 @@ export function BancoHorasScreen() {
                           : 'em aberto (sem chegada automática)'}
                       </p>
                       {esc.responsavel_registro ? (
-                        <p className="mt-1 text-[11px] text-slate-600">
+                        <p className="mt-1 text-[11px] text-text-muted">
                           Responsável: {esc.matricula_responsavel} —{' '}
                           {esc.responsavel_registro}
                         </p>
@@ -408,7 +408,7 @@ export function BancoHorasScreen() {
                       {detalheEscala.viagens!.map((v) => (
                         <li
                           key={v.id_viagem}
-                          className="rounded-lg border border-border/50 bg-card px-2 py-1.5 text-xs"
+                          className="rounded-lg border border-field bg-card px-2 py-1.5 text-xs"
                         >
                           Saída {v.horario_saida ?? '—'} → Chegada{' '}
                           {v.horario_chegada ?? '—'}

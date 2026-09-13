@@ -7,94 +7,53 @@ O projeto mantém **MariaDB** (padrão) e **PostgreSQL** em paralelo. Os schemas
 | MariaDB | `schema.sql` + `schema_operacional.sql` (+ migrações pontuais) | `DAL/arquivos_crip/arq/map.dat` |
 | PostgreSQL | `schema_postgresql.sql` (espelho atualizado) | `DAL/arquivos_crip/arq/map_PostGree.dat` |
 
-## PostgreSQL no Linux (do zero)
+## PostgreSQL local (PC — sem Docker)
 
-### 1. Serviço e usuário
+Porta de lab: **`127.0.0.1:5433`**. Script único (cria DB, schema, migrations, seed, `map_PostGree.dat`):
 
-```bash
-sudo pg_ctlcluster 16 main start   # ou: sudo systemctl start postgresql
-# Role de app (exemplo): fabianosf com createdb + senha
+```powershell
+# Windows
+$env:PGHOST="127.0.0.1"; $env:PGPORT="5433"
+$env:PGUSER="postgres"; $env:PGPASSWORD="sua_senha"; $env:PGDATABASE="map"
+.\scripts\setup_postgresql_local.ps1
 ```
 
-Defina a senha **somente** em ambiente local (não versionar):
-
 ```bash
-# Opção A — variável de sessão
-export PGPASSWORD='sua_senha'
-
-# Opção B — arquivo gitignored na raiz do repo
-echo 'PGPASSWORD=sua_senha' > .env.local
-chmod 600 .env.local
-set -a && source .env.local && set +a
+# Linux / macOS
+export PGHOST=127.0.0.1 PGPORT=5433 PGUSER=postgres PGDATABASE=map
+export PGPASSWORD='sua_senha'   # ou .env.local gitignored
+python scripts/setup_postgresql_local.py
 ```
 
-Alinhe a senha da role no cluster (via peer/socket ou como superuser):
+Migrations PG (idempotentes, sem DROP/TRUNCATE de dados):
 
-```bash
-psql -h /var/run/postgresql -d postgres -c "ALTER ROLE CURRENT_USER PASSWORD '$PGPASSWORD';"
-```
+| Arquivo | Conteúdo |
+|---------|----------|
+| `schema_migrate_tb_item_map_ocupacao_completa_postgresql.sql` | `status_escala`, baixa, `inicio_real`/`fim_real`, índices |
+| `schema_migrate_mapa_authz_auditoria_p1_postgresql.sql` | `id_responsavel`, flags ERP, `tb_auditoria` |
+| `schema_migrate_frota_canonica_p1_postgresql.sql` | frota C47/C30/D13 |
+| `schema_migrate_tb_configuracao_chave_valor_p2_postgresql.sql` | `chave`/`valor` longos |
+| `schema_migrate_tb_mapa_codigo_empresa_postgresql.sql` | código MAPA / seq |
+| `schema_migrate_tb_map_plantao_time_postgresql.sql` | plantão TIME |
 
-### 2. Criar o banco e aplicar o schema
+Só migrations (DAL já configurado): `python scripts/aplicar_migrate_postgresql.py`.
 
-```bash
-cd /caminho/para/Maps
-createdb -h localhost -p 5432 -U fabianosf -E UTF8 --locale=pt_BR.UTF-8 map
-# Se --locale falhar: createdb -h localhost -p 5432 -U fabianosf -E UTF8 -T template0 map
+`schema_postgresql.sql` já espelha o estado final (ocupação, authz, auditoria, frota). Conversões vs MariaDB: `AUTO_INCREMENT`→`SERIAL`, `TINYINT(1)`→`BOOLEAN`, `DATETIME`→`TIMESTAMP`, `REGEXP`→`~`, sem `ENGINE=InnoDB` / `FROM DUAL`.
 
-psql -h localhost -p 5432 -U fabianosf -d map -v ON_ERROR_STOP=1 -f database/schema_postgresql.sql
-```
-
-O arquivo `schema_postgresql.sql` já inclui autenticação (`tb_perfil` / `tb_usuario`), cadastros operacionais e as colunas finais das migrações MariaDB (`tb_chegada_saida.horario`, `tb_avaria.texto`).
-
-Conversões aplicadas em relação ao MariaDB: `AUTO_INCREMENT`→`SERIAL`, `TINYINT(1)`→`BOOLEAN`, `DATETIME`→`TIMESTAMP`, sem `ENGINE=InnoDB`.
-
-Diferença pragmática: `tb_configuracao.chave` é `VARCHAR(32)` no Postgres (a chave `QTD_MAX_TENTATIVAS` tem 18 caracteres; no MariaDB `VARCHAR(15)` costuma truncar em modo não-strict).
-
-### 3. Arquivo `.dat` criptografado (PROJ_GAC)
-
-Credenciais do banco ficam em `DAL/arquivos_crip/` (gitignored), geradas com a chave Fernet local — **nunca** hardcode de senha em arquivos versionados.
-
-```bash
-set -a && source .env.local && set +a   # garante PGPASSWORD
-python3 <<'PY'
-import os, sys
-sys.path.insert(0, "DAL/PROJ_GAC")
-from geradorArquivoConfiguracao import ClGAC
-
-senha = os.environ.get("PGPASSWORD") or ""
-if not senha:
-    raise SystemExit("Defina PGPASSWORD (env ou .env.local) antes de gerar o .dat")
-
-gac = ClGAC(nome_arquivo="map_PostGree.dat")
-gac.definir_dados({
-    "sgbd": "postgresql",
-    "servidor": "localhost",
-    "porta": "5432",
-    "usuario": "fabianosf",
-    "senha": senha,
-    "bd": "map",
-})
-assert gac.gerarArquivoConfiguracao(), "Falha ao gerar map_PostGree.dat"
-print("Gerado:", gac.path_arq + "/" + gac.arq)
-PY
-```
-
-### 4. Subir a API com PostgreSQL
+### Subir a API com PostgreSQL
 
 ```bash
 export REDMAPA_SGBD=postgresql
 export REDMAPA_CONFIG=map_PostGree
-# demais vars: veja BackEnd/.env.example
-
+export ERP_PROVIDER=mock
 python -m BackEnd.app
 # Health: GET http://127.0.0.1:5000/api/v1/health  → {"ok": true, ...}
 ```
 
-Smoke test rápido:
+Smoke:
 
 ```bash
-REDMAPA_SGBD=postgresql REDMAPA_CONFIG=map_PostGree \
-  python -c "from BackEnd.dal_factory import create_dal; print(create_dal().test_connection())"
+python scripts/smoke_postgresql_local.py
 ```
 
 ## MariaDB (inalterado)

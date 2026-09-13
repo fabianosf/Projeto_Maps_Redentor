@@ -55,7 +55,9 @@ function toApiError(data: unknown, fallback: string): ApiError {
       (typeof rec.error === 'string' && rec.error) ||
       fallback;
     const codigo = typeof rec.codigo === 'string' ? rec.codigo : undefined;
-    return { ok: false, mensagem: msg, codigo };
+    const correlation_id =
+      typeof rec.correlation_id === 'string' ? rec.correlation_id : undefined;
+    return { ok: false, mensagem: msg, codigo, correlation_id };
   }
   if (typeof data === 'string' && data.trim()) {
     return { ok: false, mensagem: data.trim().slice(0, 300) };
@@ -223,6 +225,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
         status: response.status,
         codigo: errBody.codigo,
         mensagem: errBody.mensagem,
+        correlation_id: errBody.correlation_id,
       });
       throw new ApiRequestError(response.status, errBody, data);
     }

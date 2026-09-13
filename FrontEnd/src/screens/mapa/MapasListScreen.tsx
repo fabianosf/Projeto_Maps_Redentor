@@ -18,7 +18,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { EmpresaChip, Pill } from '@/components/ui/pill';
+import { EmpresaChip } from '@/components/ui/pill';
+import { StatusBadge } from '@/components/StatusBadge';
+import { PersistentBanner } from '@/components/PersistentBanner';
 import {
   Select,
   SelectContent,
@@ -55,14 +57,14 @@ function dataExibicao(row: MapaListaItem): string | null {
 
 function statusMapaLista(row: MapaListaItem): {
   label: string;
-  tone: 'ok' | 'info' | 'neutral';
+  status: string;
 } {
   const qtd = Number(row.total_viagens ?? row.qtd_viagens ?? NaN);
   if (Number.isFinite(qtd) && qtd > 0) {
-    return { label: 'Com viagens', tone: 'ok' };
+    return { label: 'COM VIAGENS', status: 'EM_ANDAMENTO' };
   }
-  if (row.linha) return { label: 'Planejado', tone: 'info' };
-  return { label: 'Cadastrado', tone: 'neutral' };
+  if (row.linha) return { label: 'PLANEJADO', status: 'PENDENTE' };
+  return { label: 'CADASTRADO', status: 'RASCUNHO' };
 }
 
 function qtdViagensLabel(row: MapaListaItem): string {
@@ -266,7 +268,7 @@ export function MapasListScreen() {
                 aria-label="Excluir todos os MAPAs"
                 disabled={busy || loading}
                 onClick={() => setConfirmDeleteAll(true)}
-                className="h-11 min-h-[44px] gap-1 rounded-full border-0 bg-transparent px-2.5 text-[12px] font-bold uppercase tracking-wide text-primary-foreground shadow-none hover:bg-primary-foreground/10 focus-visible:ring-2 focus-visible:ring-brand-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-brand-navy"
+                className="h-11 min-h-[48px] gap-1 rounded-full border-0 bg-transparent px-2.5 text-[12px] font-bold uppercase tracking-wide text-primary-foreground shadow-none hover:bg-primary-foreground/10 focus-visible:ring-2 focus-visible:ring-brand-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-brand-navy"
               >
                 <Trash2 className="h-5 w-5" strokeWidth={2.5} aria-hidden />
                 <span>Todos</span>
@@ -278,7 +280,7 @@ export function MapasListScreen() {
               aria-label="Novo MAPA"
               disabled={busy}
               onClick={novoMapa}
-              className="h-11 min-h-[44px] gap-1 rounded-full border-0 bg-transparent px-2.5 text-[12px] font-bold uppercase tracking-wide text-primary-foreground shadow-none hover:bg-primary-foreground/10 focus-visible:ring-2 focus-visible:ring-brand-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-brand-navy"
+              className="h-11 min-h-[48px] gap-1 rounded-full border-0 bg-transparent px-2.5 text-[12px] font-bold uppercase tracking-wide text-primary-foreground shadow-none hover:bg-primary-foreground/10 focus-visible:ring-2 focus-visible:ring-brand-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-brand-navy"
             >
               <Plus className="h-5 w-5" strokeWidth={2.75} aria-hidden />
               <span>Novo</span>
@@ -291,29 +293,42 @@ export function MapasListScreen() {
         {loading ? (
           <LoadingState label="Carregando mapas…" />
         ) : error ? (
-          <ErrorState message={error} onRetry={() => void carregar()} />
+          <div className="flex flex-1 flex-col gap-3 p-4">
+            <PersistentBanner tone="error">{error}</PersistentBanner>
+            <ErrorState message={error} onRetry={() => void carregar()} />
+          </div>
         ) : mapas.length === 0 ? (
           <EmptyState
             icon={MapPinned}
             title="Nenhum MAPA cadastrado"
             description="Crie o primeiro MAPA do turno."
             action={
-              <Button type="button" variant="primary" onClick={novoMapa} className="min-h-btn gap-2">
+              <Button type="button" variant="primary" onClick={novoMapa} className="min-h-12 gap-2 ds-cta">
                 <Plus className="h-5 w-5" aria-hidden />
-                Novo MAPA
+                + Novo MAPA
               </Button>
             }
           />
         ) : (
           <>
-            <div className="shrink-0 space-y-2 border-b border-border/50 bg-surface-card px-4 py-3">
+            <div className="shrink-0 space-y-2 border-b border-field bg-surface-card px-4 py-3">
+              <Button
+                type="button"
+                variant="primary"
+                onClick={novoMapa}
+                disabled={busy}
+                className="ds-cta gap-2"
+              >
+                <Plus className="h-5 w-5" aria-hidden />
+                + Novo MAPA
+              </Button>
               <FilterChipsBar
                 chips={chips}
                 filterActive={temFiltroAtivo}
                 onOpenFilters={abrirFiltro}
               />
               {temFiltroAtivo ? (
-                <p className="text-xs font-medium text-text-muted">
+                <p className="text-[14px] font-medium text-text-muted">
                   {filtrados.length} resultado{filtrados.length === 1 ? '' : 's'}
                 </p>
               ) : null}
@@ -329,15 +344,15 @@ export function MapasListScreen() {
                     type="button"
                     variant="outline"
                     onClick={limparFiltros}
-                    className="min-h-btn"
+                    className="min-h-12"
                   >
                     Limpar filtros
                   </Button>
                 }
               />
             ) : (
-              <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]">
-                <ul className="flex flex-col gap-2.5 p-4" role="list">
+              <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overflow-x-hidden overscroll-y-contain [-webkit-overflow-scrolling:touch]">
+                <ul className="flex flex-col gap-3 p-4" role="list">
                   {filtrados.map((row) => {
                     const data = dataExibicao(row);
                     const st = statusMapaLista(row);
@@ -348,20 +363,19 @@ export function MapasListScreen() {
                           onClick={() => abrirMapa(row.id_registro)}
                           aria-label={`Abrir MAPA ${codigo}`}
                           disabled={busy}
-                          className="rounded-xl border-border/60 bg-surface-card"
                         >
                           <div className="flex items-start justify-between gap-2">
-                            <p className="text-base font-bold tabular-nums text-brand-navy">
+                            <p className="text-lg font-bold tabular-nums text-brand-navy">
                               {codigo}
                             </p>
-                            <Pill label={st.label} tone={st.tone} />
+                            <StatusBadge label={st.label} status={st.status} />
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
                             <EmpresaChip empresa={row.empresa} />
                           </div>
-                          <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-text-muted">
+                          <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-[14px] text-text-muted">
                             <div>
-                              <dt className="font-semibold uppercase tracking-wide text-text-muted/80">
+                              <dt className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
                                 Turno
                               </dt>
                               <dd className="truncate font-semibold text-text">
@@ -369,15 +383,25 @@ export function MapasListScreen() {
                               </dd>
                             </div>
                             <div>
-                              <dt className="font-semibold uppercase tracking-wide text-text-muted/80">
+                              <dt className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
                                 Data
                               </dt>
                               <dd className="font-semibold tabular-nums text-text">
                                 {data ?? '—'}
                               </dd>
                             </div>
+                            {row.despachante ? (
+                              <div className="col-span-2">
+                                <dt className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                                  Responsável
+                                </dt>
+                                <dd className="truncate font-semibold text-text">
+                                  {row.despachante}
+                                </dd>
+                              </div>
+                            ) : null}
                           </dl>
-                          <p className="text-xs font-medium text-text-muted">
+                          <p className="text-[14px] font-medium text-text-muted">
                             {qtdViagensLabel(row)}
                           </p>
                         </OpsCard>

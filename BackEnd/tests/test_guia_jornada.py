@@ -17,7 +17,7 @@ def _payload_abertura(**overrides):
         "id_turno": 1,
         "id_veiculo": 3,
         "id_motorista": 1,
-        "numero_frota": "100",
+        "numero_frota": "C30100",
         "matricula_motorista": "50001",
         "hor_ini": "05:30",
         "chegada_ponto": "05:20",
@@ -71,7 +71,7 @@ def test_varios_trechos_mesma_guia(client):
         json={
             "sentido": "VOLTA",
             "id_linha": 2,
-            "numero_frota": "100",
+            "numero_frota": "C30100",
             "hor_ini": "07:00",
             "hor_fim": "07:35",
             "jae_ini": 140,
@@ -92,7 +92,7 @@ def test_troca_carro_mesma_empresa_com_auditoria(client, dal):
     auth_client(client, "1")
     dal.create(
         "INSERT INTO tb_veiculo (id_veiculo, codigo_veiculo, numero_frota, placa, ativo, id_empresa) "
-        "VALUES (80, 80, '101', 'PLA0101', 1, 1)"
+        "VALUES (80, 80, 'C30101', 'PLA0101', 1, 1)"
     )
     cri = client.post("/api/v1/guia", json=_payload_abertura(numero="JORN03"))
     id_guia = int(cri.get_json()["guia"]["id_guia"])
@@ -101,21 +101,21 @@ def test_troca_carro_mesma_empresa_com_auditoria(client, dal):
         f"/api/v1/guia/{id_guia}/alteracao",
         json={
             "campo": "veiculo",
-            "numero_frota": "101",
+            "numero_frota": "C30101",
             "motivo": "Troca de carro por pane mecânica",
         },
     )
     assert alt.status_code == 200, alt.get_json()
     guia = alt.get_json()["guia"]
     assert guia.get("status") == "ABERTA"
-    assert str(guia.get("numero_frota")) == "101"
+    assert str(guia.get("numero_frota")) == "C30101"
     assert len(guia.get("alteracoes") or []) >= 1
     assert guia["alteracoes"][0]["campo"] == "veiculo"
 
 
 def test_troca_veiculo_outra_empresa_ok_abrir_guia_exige_encerrar(client, dal):
     auth_client(client, "1")
-    # Veículo empresa 1 (id 3 frota 100)
+    # Veículo empresa 1 (id 3 frota C30100)
     cri = client.post(
         "/api/v1/guia",
         json=_payload_abertura(numero="JORN04", id_empresa=1, id_veiculo=3),

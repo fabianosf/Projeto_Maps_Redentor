@@ -9,26 +9,28 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          'bg-brand-navy text-primary-foreground border border-brand-navy hover:bg-brand-navy-deep active:bg-brand-navy-deep',
+          'bg-brand-cta text-primary-foreground border border-brand-cta hover:bg-brand-cta-deep active:bg-brand-cta-deep',
         primary:
-          'bg-brand-navy text-primary-foreground border border-brand-navy hover:bg-brand-navy-deep active:bg-brand-navy-deep',
+          'bg-brand-cta text-primary-foreground border border-brand-cta hover:bg-brand-cta-deep active:bg-brand-cta-deep',
         outline:
           'border-2 border-brand-navy bg-surface-card text-brand-navy hover:bg-surface',
         secondary:
-          'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+          'bg-secondary text-secondary-foreground border border-field hover:bg-secondary/80',
         ghost: 'hover:bg-secondary text-brand-navy',
         destructive:
           'bg-danger text-primary-foreground hover:opacity-90',
         danger:
           'bg-danger text-primary-foreground hover:opacity-90',
+        warning:
+          'bg-warn text-primary-foreground border border-warn hover:opacity-90',
         toolbar:
           'flex-col gap-1.5 rounded-xl border border-brand-navy bg-brand-navy text-primary-foreground text-[11px] shadow-sm active:bg-brand-navy-deep',
       },
       size: {
         default: 'h-12 min-h-btn px-4',
-        sm: 'h-10 min-h-10 px-3 text-sm',
+        sm: 'h-12 min-h-12 px-3 text-sm',
         lg: 'h-14 min-h-14 px-6',
-        icon: 'h-11 w-11 min-h-touch min-w-11',
+        icon: 'h-12 w-12 min-h-touch min-w-12',
         toolbar: 'h-[78px] min-h-[78px] w-full px-1 py-3',
         reset: 'h-[72px] w-[88px] flex-col gap-1 px-1 py-2 text-[12px]',
       },

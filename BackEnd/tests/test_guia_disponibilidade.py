@@ -17,7 +17,7 @@ def _payload(**overrides):
         "id_turno": 1,
         "id_veiculo": 3,
         "id_motorista": 1,
-        "numero_frota": "100",
+        "numero_frota": "C30100",
         "matricula_motorista": "50001",
         "hor_ini": "05:30",
         "chegada_ponto": "05:20",
@@ -158,7 +158,7 @@ def test_troca_carro_exige_novas_leituras(client, dal):
     auth_client(client, "1")
     dal.create(
         "INSERT INTO tb_veiculo (id_veiculo, codigo_veiculo, numero_frota, placa, ativo, id_empresa) "
-        "VALUES (81, 81, '102', 'PLA0102', 1, 1)"
+        "VALUES (81, 81, 'C30102', 'PLA0102', 1, 1)"
     )
     cri = client.post("/api/v1/guia", json=_payload(numero="CAR01"))
     id_guia = int(cri.get_json()["guia"]["id_guia"])

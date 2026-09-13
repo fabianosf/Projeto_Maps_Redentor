@@ -17,7 +17,7 @@ def _payload(**overrides):
         "id_turno": 1,
         "id_veiculo": 3,
         "id_motorista": 1,
-        "numero_frota": "100",
+        "numero_frota": "C30100",
         "matricula_motorista": "50001",
         "hor_ini": "05:30",
         "hor_fim": "14:00",

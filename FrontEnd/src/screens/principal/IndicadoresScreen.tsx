@@ -22,9 +22,9 @@ import { SCREEN_BG } from '@/theme/tokens';
 
 const BG = SCREEN_BG;
 
-const tableHeadClass = 'font-sans font-normal uppercase tracking-wide text-slate-700';
-const tableSiglaClass = 'font-sans text-[13px] font-bold text-slate-900';
-const tableDetalheClass = 'font-sans text-[13px] font-normal text-slate-700';
+const tableHeadClass = 'font-sans font-normal uppercase tracking-wide text-text';
+const tableSiglaClass = 'font-sans text-[13px] font-bold text-text';
+const tableDetalheClass = 'font-sans text-[13px] font-normal text-text';
 
 /**
  * Tela operacional de Indicadores — somente os autorizados ao perfil logado (RN-08).
@@ -71,7 +71,7 @@ export function IndicadoresScreen() {
       <OpsPageHeader title="Indicadores" />
 
       <div className="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-3">
-        <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-slate-400/50 bg-white/70">
+        <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-field bg-surface-card">
           {loading || authLoading ? (
             <LoadingState label="Carregando indicadores…" />
           ) : error ? (

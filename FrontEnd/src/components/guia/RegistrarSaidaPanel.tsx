@@ -245,7 +245,7 @@ export function RegistrarSaidaPanel({
           triggerRef?.current?.focus();
         }}
       >
-        <DialogHeader className="border-b border-border/60 px-5 py-4 text-left">
+        <DialogHeader className="border-b border-field px-5 py-4 text-left">
           <DialogTitle id={titleId}>Registrar saída</DialogTitle>
           <DialogDescription>
             Confira os vínculos da operação e a saída real. O motorista vem da
@@ -355,7 +355,7 @@ export function RegistrarSaidaPanel({
           )}
         </div>
 
-        <DialogFooter className="gap-2 border-t border-border/60 px-5 py-4 sm:flex-col">
+        <DialogFooter className="gap-2 border-t border-field px-5 py-4 sm:flex-col">
           {guia && viagem && (guia.id_item_map || viagem.id_item_map) ? (
             <Button
               type="button"

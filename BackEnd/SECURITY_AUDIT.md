@@ -1,7 +1,9 @@
 # Security Audit — RedMapa BackEnd
-**Data:** 2026-09-04  
+**Data:** 2026-09-04 (atualizado Fase 2: 2026-09-12)  
 **Escopo:** Auth, Users, Guia, Entrada/Saída, Mapas, Indicadores, Config  
 **Critério:** correções aplicadas nesta auditoria + verificação de comportamento existente  
+
+> **Fase 2:** ver também `docs/RELATORIO_FASE2.md` — CI, correlation ID, HSTS, guard produção≠mock, Gunicorn, métricas, migrate `tb_configuracao` chave/valor.
 
 Legenda de criticidade: **CRÍTICA** · **ALTA** · **MÉDIA** · **BAIXA** · **OK** (conforme / sem falha)
 

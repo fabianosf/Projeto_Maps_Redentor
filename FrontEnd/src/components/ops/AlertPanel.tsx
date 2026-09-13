@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { AlertTriangle, Info } from 'lucide-react';
+import { AlertTriangle, Info, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type Tone = 'warning' | 'danger' | 'info';
@@ -17,18 +17,18 @@ const TONE: Record<
   { wrap: string; icon: string; Icon: typeof AlertTriangle }
 > = {
   warning: {
-    wrap: 'border-amber-200 bg-amber-50',
-    icon: 'text-amber-700',
+    wrap: 'border-warn/40 bg-warn/10',
+    icon: 'text-warn',
     Icon: AlertTriangle,
   },
   danger: {
-    wrap: 'border-red-200 bg-red-50',
-    icon: 'text-red-600',
-    Icon: AlertTriangle,
+    wrap: 'border-danger/40 bg-danger/10',
+    icon: 'text-danger',
+    Icon: XCircle,
   },
   info: {
-    wrap: 'border-sky-200 bg-sky-50',
-    icon: 'text-sky-700',
+    wrap: 'border-brand-cta/40 bg-brand-cta/10',
+    icon: 'text-brand-navy',
     Icon: Info,
   },
 };
@@ -46,7 +46,7 @@ export function AlertPanel({
   return (
     <div
       className={cn(
-        'flex items-start gap-3 rounded-2xl border px-3.5 py-3',
+        'flex items-start gap-3 rounded-xl border px-4 py-3.5',
         t.wrap,
         className,
       )}
@@ -54,9 +54,11 @@ export function AlertPanel({
     >
       <Icon className={cn('mt-0.5 h-5 w-5 shrink-0', t.icon)} aria-hidden />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-bold text-slate-900">{title}</p>
+        <p className="text-[15px] font-bold text-text">{title}</p>
         {description ? (
-          <p className="mt-0.5 text-xs leading-snug text-slate-600">{description}</p>
+          <p className="mt-1 text-[14px] leading-snug text-text-muted">
+            {description}
+          </p>
         ) : null}
       </div>
       {action ? <div className="shrink-0 self-center">{action}</div> : null}

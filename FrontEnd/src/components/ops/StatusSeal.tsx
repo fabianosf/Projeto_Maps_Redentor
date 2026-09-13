@@ -8,14 +8,15 @@ import {
   XCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { resolveStatusPresentation } from '@/components/StatusBadge';
 
 const TONE = {
-  neutral: 'border-slate-200 bg-slate-100 text-slate-800',
-  info: 'border-sky-200 bg-sky-50 text-sky-900',
-  success: 'border-emerald-200 bg-emerald-50 text-emerald-900',
-  warning: 'border-amber-200 bg-amber-50 text-amber-950',
-  danger: 'border-red-200 bg-red-50 text-red-900',
-  primary: 'border-primary/25 bg-primary/10 text-primary',
+  neutral: 'border-field bg-surface text-text',
+  info: 'border-brand-cta/40 bg-brand-cta/10 text-brand-navy',
+  success: 'border-ok/40 bg-ok/10 text-ok',
+  warning: 'border-warn/40 bg-warn/10 text-warn',
+  danger: 'border-danger/40 bg-danger/10 text-danger',
+  primary: 'border-brand-navy/30 bg-brand-navy/10 text-brand-navy',
 } as const;
 
 const ICONS = {
@@ -31,7 +32,8 @@ export type StatusSealTone = keyof typeof TONE;
 export type StatusSealIcon = keyof typeof ICONS;
 
 type Props = {
-  label: string;
+  label?: string;
+  status?: string | null;
   tone?: StatusSealTone;
   icon?: StatusSealIcon | ReactNode;
   className?: string;
@@ -40,30 +42,46 @@ type Props = {
 /** Selo de status: ícone + texto (não só cor). */
 export function StatusSeal({
   label,
-  tone = 'neutral',
-  icon = 'pendente',
+  status,
+  tone,
+  icon,
   className,
 }: Props) {
+  const resolved = status != null ? resolveStatusPresentation(status) : null;
+  const finalLabel = label ?? resolved?.label ?? 'PENDENTE';
+  const finalTone = (tone ?? resolved?.tone ?? 'neutral') as StatusSealTone;
+  const mappedIcon =
+    icon ??
+    (resolved?.icon === 'tempo'
+      ? 'tempo'
+      : resolved?.icon === 'ok'
+        ? 'ok'
+        : resolved?.icon === 'erro'
+          ? 'erro'
+          : resolved?.icon === 'alerta'
+            ? 'alerta'
+            : 'pendente');
+
   const IconComp =
-    typeof icon === 'string' && icon in ICONS
-      ? ICONS[icon as StatusSealIcon]
+    typeof mappedIcon === 'string' && mappedIcon in ICONS
+      ? ICONS[mappedIcon as StatusSealIcon]
       : null;
 
   return (
     <span
       className={cn(
-        'inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold leading-tight',
-        TONE[tone],
+        'inline-flex max-w-full items-center gap-1.5 rounded-xl border px-2.5 py-1 text-xs font-bold leading-tight uppercase tracking-wide',
+        TONE[finalTone],
         className,
       )}
       role="status"
     >
       {IconComp ? (
-        <IconComp className="h-3 w-3 shrink-0" aria-hidden />
-      ) : typeof icon !== 'string' ? (
-        icon
+        <IconComp className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      ) : typeof mappedIcon !== 'string' ? (
+        mappedIcon
       ) : null}
-      <span className="truncate">{label}</span>
+      <span className="truncate">{finalLabel}</span>
     </span>
   );
 }

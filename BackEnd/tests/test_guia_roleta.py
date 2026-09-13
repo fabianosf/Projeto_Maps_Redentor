@@ -26,7 +26,7 @@ def test_salvar_jae_riocard_e_calcular_passageiros(client):
             "id_empresa": 1,
             "id_linha": 1,
             "id_turno": 1,
-            "numero_frota": "100",
+            "numero_frota": "C30100",
             "matricula_motorista": "50001",
             "hor_ini": "06:00",
         },
@@ -137,7 +137,7 @@ def test_sugestao_leitura_viagem_anterior(client):
             "id_empresa": 1,
             "id_linha": 1,
             "id_turno": 1,
-            "numero_frota": "100",
+            "numero_frota": "C30100",
             "hor_ini": "06:00",
         },
     ).get_json()["guia"]["id_guia"]

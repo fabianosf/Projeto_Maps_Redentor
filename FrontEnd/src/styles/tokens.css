@@ -1,53 +1,57 @@
-/* RedMapa — tokens canônicos (única fonte de hex).
+/* RedMapa — App de Campo Robusto (tokens canônicos).
    Componentes usam var(--…) / classes Tailwind; sem hex solto. */
 
 :root {
-  /* Marca institucional */
-  --brand-navy: #0b2a4a;
-  --brand-navy-deep: #071c33;
-  --brand-cyan: #00a8e0;
-  --brand-gold: #c9a227;
-  --brand-barra: #e87722;
-  --brand-futuro: #2e6bff;
+  /* Marca institucional — App de Campo Robusto */
+  --brand-navy: #003b6f;
+  --brand-navy-deep: #002a50;
+  --brand-cta: #006cc4;
+  --brand-cta-deep: #0057a0;
+  --brand-cyan: #006cc4;
+  --brand-gold: #b45309;
+  --brand-barra: #c2410c;
+  --brand-futuro: #1d4ed8;
 
-  /* Canais RGB (Tailwind opacity: bg-brand-navy/10 etc.) */
-  --brand-navy-rgb: 11 42 74;
-  --brand-navy-deep-rgb: 7 28 51;
-  --brand-cyan-rgb: 0 168 224;
-  --brand-gold-rgb: 201 162 39;
-  --brand-barra-rgb: 232 119 34;
-  --brand-futuro-rgb: 46 107 255;
+  /* Canais RGB (Tailwind opacity) */
+  --brand-navy-rgb: 0 59 111;
+  --brand-navy-deep-rgb: 0 42 80;
+  --brand-cta-rgb: 0 108 196;
+  --brand-cta-deep-rgb: 0 87 160;
+  --brand-cyan-rgb: 0 108 196;
+  --brand-gold-rgb: 180 83 9;
+  --brand-barra-rgb: 194 65 12;
+  --brand-futuro-rgb: 29 78 216;
 
   /* Superfícies e texto */
-  --surface: #f4f7fb;
+  --surface: #eef2f6;
   --surface-card: #ffffff;
-  --text: #122033;
-  --text-muted: #5b6b7c;
-  --danger: #c63a3a;
-  --ok: #1f9d5a;
+  --text: #102a43;
+  --text-muted: #486581;
+  --border-field: #c9d5e1;
+  --danger: #b91c1c;
+  --ok: #15803d;
+  --warning: #b45309;
 
-  --surface-rgb: 244 247 251;
+  --surface-rgb: 238 242 246;
   --surface-card-rgb: 255 255 255;
-  --text-rgb: 18 32 51;
-  --text-muted-rgb: 91 107 124;
-  --danger-rgb: 198 58 58;
-  --ok-rgb: 31 157 90;
+  --text-rgb: 16 42 67;
+  --text-muted-rgb: 72 101 129;
+  --border-field-rgb: 201 213 225;
+  --danger-rgb: 185 28 28;
+  --ok-rgb: 21 128 61;
+  --warning-rgb: 180 83 9;
 
-  /* Filete auth: ouro → ciano */
-  --fillet-auth: linear-gradient(
-    90deg,
-    var(--brand-gold) 0%,
-    var(--brand-cyan) 100%
-  );
+  /* Filete auth discreto (sem gradiente excessivo) */
+  --fillet-auth: var(--brand-cta);
 
   /* Layout */
-  --main-tab-bar: 3.75rem;
-  --radius: 1rem;
-  --radius-lg: 1.25rem;
-  --touch-min: 44px;
+  --main-tab-bar: 4rem;
+  --radius: 12px;
+  --radius-lg: 12px;
+  --touch-min: 48px;
   --btn-height: 48px;
   --fillet-gold: 3px;
-  --fillet-auth-h: 2px;
+  --fillet-auth-h: 3px;
 
   --space-1: 0.5rem;
   --space-2: 1rem;
@@ -55,35 +59,35 @@
   --space-4: 2rem;
 
   /* shadcn / Tailwind (HSL canais) */
-  --background: 210 33% 97%;
-  --foreground: 213 39% 14%;
+  --background: 210 22% 95%;
+  --foreground: 209 61% 16%;
   --card: 0 0% 100%;
-  --card-foreground: 213 39% 14%;
-  --primary: 210 74% 17%;
+  --card-foreground: 209 61% 16%;
+  --primary: 208 100% 22%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 210 33% 94%;
-  --secondary-foreground: 210 74% 17%;
-  --muted: 210 25% 94%;
-  --muted-foreground: 210 15% 42%;
-  --accent: 195 100% 94%;
-  --accent-foreground: 210 74% 17%;
-  --destructive: 0 55% 50%;
+  --secondary: 210 28% 92%;
+  --secondary-foreground: 208 100% 22%;
+  --muted: 210 22% 92%;
+  --muted-foreground: 209 28% 39%;
+  --accent: 207 100% 94%;
+  --accent-foreground: 208 100% 22%;
+  --destructive: 0 74% 40%;
   --destructive-foreground: 0 0% 100%;
-  --success: 148 67% 37%;
+  --success: 142 68% 30%;
   --success-foreground: 0 0% 100%;
-  --warning: 45 68% 47%;
-  --warning-foreground: 213 39% 14%;
-  --info: 195 100% 44%;
+  --warning: 27 90% 37%;
+  --warning-foreground: 0 0% 100%;
+  --info: 207 100% 38%;
   --info-foreground: 0 0% 100%;
-  --border: 214 20% 86%;
-  --input: 214 20% 86%;
-  --ring: 195 100% 44%;
-  --zebra: 210 25% 97%;
-  --screen: 210 33% 97%;
-  --screen-foreground: 213 39% 14%;
+  --border: 210 24% 84%;
+  --input: 210 24% 84%;
+  --ring: 207 100% 38%;
+  --zebra: 210 22% 96%;
+  --screen: 210 22% 95%;
+  --screen-foreground: 209 61% 16%;
   --table-head: 210 28% 90%;
-  --table-zebra: 210 28% 96%;
-  --shadow-card: 0 4px 20px color-mix(in srgb, var(--brand-navy) 8%, transparent);
+  --table-zebra: 210 22% 96%;
+  --shadow-card: 0 2px 8px color-mix(in srgb, var(--brand-navy) 10%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

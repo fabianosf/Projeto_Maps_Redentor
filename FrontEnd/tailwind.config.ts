@@ -26,6 +26,8 @@ const config: Config = {
         brand: {
           navy: rgb('brand-navy'),
           'navy-deep': rgb('brand-navy-deep'),
+          cta: rgb('brand-cta'),
+          'cta-deep': rgb('brand-cta-deep'),
           cyan: rgb('brand-cyan'),
           gold: rgb('brand-gold'),
           barra: rgb('brand-barra'),
@@ -33,6 +35,8 @@ const config: Config = {
         },
         danger: rgb('danger'),
         ok: rgb('ok'),
+        warn: rgb('warning'),
+        field: rgb('border-field'),
         screen: {
           DEFAULT: 'hsl(var(--screen) / <alpha-value>)',
           foreground: 'hsl(var(--screen-foreground) / <alpha-value>)',

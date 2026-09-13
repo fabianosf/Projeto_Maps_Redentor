@@ -38,7 +38,19 @@ def _apply_cookie(response: Response, cookie: dict[str, Any]) -> Response:
 
 
 def json_error(mensagem: str, status: int, codigo: str = "auth_error"):
-    return jsonify({"ok": False, "mensagem": mensagem, "codigo": codigo}), status
+    from .observability import ensure_correlation_id
+
+    return (
+        jsonify(
+            {
+                "ok": False,
+                "mensagem": mensagem,
+                "codigo": codigo,
+                "correlation_id": ensure_correlation_id(),
+            }
+        ),
+        status,
+    )
 
 
 def require_session(f: Callable) -> Callable:

@@ -27,7 +27,7 @@ export function ListSkeleton({ className, rows = 5 }: Props) {
       {Array.from({ length: rows }).map((_, i) => (
         <div
           key={i}
-          className="flex flex-col gap-2 rounded-xl border border-border/60 bg-card/70 p-4"
+          className="flex flex-col gap-2 rounded-xl border border-field bg-card/70 p-4"
         >
           <Skeleton className="h-4 w-2/5" />
           <Skeleton className="h-3 w-4/5" />

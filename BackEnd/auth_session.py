@@ -24,6 +24,20 @@ def cookie_secure() -> bool:
     return os.getenv("REDMAPA_COOKIE_SECURE", "false").lower() in ("1", "true", "yes")
 
 
+def cookie_samesite() -> str:
+    """
+    SameSite do cookie de sessão.
+    Padrão: Lax (mesmo site / reverse proxy).
+    Use REDMAPA_COOKIE_SAMESITE=None apenas com Secure=true (front em domínio distinto).
+    """
+    raw = (os.getenv("REDMAPA_COOKIE_SAMESITE") or "lax").strip().lower()
+    if raw in ("none", "lax", "strict"):
+        if raw == "none" and not cookie_secure():
+            return "lax"
+        return raw.capitalize() if raw == "none" else raw
+    return "lax"
+
+
 def build_session_cookie(session_id: str) -> dict[str, Any]:
     """Atributos do cookie de sessão (RF-RN-008)."""
     return {
@@ -32,7 +46,7 @@ def build_session_cookie(session_id: str) -> dict[str, Any]:
         "max_age": SESSION_TTL_SECONDS,
         "httponly": True,
         "secure": cookie_secure(),
-        "samesite": "lax",
+        "samesite": cookie_samesite(),
         "path": "/",
     }
 
@@ -45,7 +59,7 @@ def build_session_clear_cookie() -> dict[str, Any]:
         "max_age": 0,
         "httponly": True,
         "secure": cookie_secure(),
-        "samesite": "lax",
+        "samesite": cookie_samesite(),
         "path": "/",
     }
 

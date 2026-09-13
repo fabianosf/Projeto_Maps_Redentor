@@ -21,7 +21,7 @@ export const FormField = forwardRef<HTMLInputElement, Props>(function FormField(
     <div className="flex w-full flex-col gap-1.5">
       <Label
         htmlFor={inputId}
-        className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900"
+        className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-text"
       >
         {label.replace(/\s*\*$/, '')}
         {(requiredMark || label.includes('*')) && <span className="req"> *</span>}
@@ -36,7 +36,7 @@ export const FormField = forwardRef<HTMLInputElement, Props>(function FormField(
           id={inputId}
           ref={ref}
           className={cn(
-            'h-12 rounded-lg border-slate-400 bg-white text-base text-slate-900 shadow-none placeholder:text-muted-foreground/70',
+            'h-12 rounded-lg border-slate-400 bg-white text-base text-text shadow-none placeholder:text-muted-foreground/70',
             leftIcon && 'pl-12',
             rightSlot && 'pr-12',
             className,

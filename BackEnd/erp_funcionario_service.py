@@ -308,6 +308,9 @@ class DalERPFuncionarioRepository:
         except ErpError as exc:
             return exc
         except Exception as exc:
+            from .observability import record_erp_failure
+
+            record_erp_failure()
             logger.error(
                 "Falha ao consultar cadastro corporativo | ERP_PROVIDER=%s | "
                 "conexao_oracle=falha | matricula=%s | tabela=%s.%s | erro=%s",
@@ -469,6 +472,9 @@ class OracleERPFuncionarioRepository:
         except ErpError as exc:
             return exc
         except Exception as exc:
+            from .observability import record_erp_failure
+
+            record_erp_failure()
             logger.error(
                 "Falha ao consultar cadastro corporativo | ERP_PROVIDER=%s | "
                 "conexao_oracle=falha | matricula=%s | tabela=%s.%s | erro=%s",
@@ -609,6 +615,9 @@ def build_erp_funcionario_service() -> ERPFuncionarioService | ErpError | None:
             )
             return ERPFuncionarioService(OracleERPFuncionarioRepository())
         except Exception:
+            from .observability import record_erp_failure
+
+            record_erp_failure()
             logger.error(
                 "Falha ao configurar provider Oracle ERP | ERP_PROVIDER=oracle "
                 "(sem fallback mock)",

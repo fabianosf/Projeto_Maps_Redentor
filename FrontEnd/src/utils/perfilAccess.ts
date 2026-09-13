@@ -18,9 +18,13 @@ export function canResetSenhaUsuario(codigoPerfil: number | null | undefined): b
   return codigoPerfil === PERFIL_ADMIN;
 }
 
-/** RF-MAP — Administrador ou Despachante. */
+/** RF-MAP — Administrador, Despachante ou Inspetor (escopo no backend). */
 export function canAccessMapas(codigoPerfil: number | null | undefined): boolean {
-  return codigoPerfil === PERFIL_ADMIN || codigoPerfil === PERFIL_DESPACHANTE;
+  return (
+    codigoPerfil === PERFIL_ADMIN ||
+    codigoPerfil === PERFIL_DESPACHANTE ||
+    codigoPerfil === PERFIL_INSPETOR
+  );
 }
 
 /** Banco de horas operacional — Admin, Despachante ou Inspetor. */

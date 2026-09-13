@@ -594,46 +594,44 @@ class DAL:
         if self.sgbd == "postgresql":
             import re
 
+            # Funções só MariaDB → equivalentes portáteis.
+            sql = re.sub(r"\bCURDATE\s*\(\s*\)", "CURRENT_DATE", sql, flags=re.IGNORECASE)
+            sql = re.sub(r"\bIFNULL\s*\(", "COALESCE(", sql, flags=re.IGNORECASE)
+
+            bool_cols = (
+                "ativo",
+                "trocar_senha",
+                "permite_leitura_mapas_outros",
+                "pendente_validacao_erp",
+            )
             # 1) Atribuições em SET (nunca "SET col IS FALSE" — sintaxe inválida).
-            sql = re.sub(
-                r"(SET|,)\s*ativo\s*=\s*1\b",
-                r"\1 ativo = TRUE",
-                sql,
-                flags=re.IGNORECASE,
-            )
-            sql = re.sub(
-                r"(SET|,)\s*ativo\s*=\s*0\b",
-                r"\1 ativo = FALSE",
-                sql,
-                flags=re.IGNORECASE,
-            )
-            sql = re.sub(
-                r"(SET|,)\s*trocar_senha\s*=\s*1\b",
-                r"\1 trocar_senha = TRUE",
-                sql,
-                flags=re.IGNORECASE,
-            )
-            sql = re.sub(
-                r"(SET|,)\s*trocar_senha\s*=\s*0\b",
-                r"\1 trocar_senha = FALSE",
-                sql,
-                flags=re.IGNORECASE,
-            )
+            for col in bool_cols:
+                sql = re.sub(
+                    rf"(SET|,)\s*{col}\s*=\s*1\b",
+                    rf"\1 {col} = TRUE",
+                    sql,
+                    flags=re.IGNORECASE,
+                )
+                sql = re.sub(
+                    rf"(SET|,)\s*{col}\s*=\s*0\b",
+                    rf"\1 {col} = FALSE",
+                    sql,
+                    flags=re.IGNORECASE,
+                )
             # 2) Comparações restantes (WHERE / AND / OR).
-            sql = re.sub(r"\bativo\s*=\s*1\b", "ativo IS TRUE", sql, flags=re.IGNORECASE)
-            sql = re.sub(r"\bativo\s*=\s*0\b", "ativo IS FALSE", sql, flags=re.IGNORECASE)
-            sql = re.sub(
-                r"\btrocar_senha\s*=\s*1\b",
-                "trocar_senha IS TRUE",
-                sql,
-                flags=re.IGNORECASE,
-            )
-            sql = re.sub(
-                r"\btrocar_senha\s*=\s*0\b",
-                "trocar_senha IS FALSE",
-                sql,
-                flags=re.IGNORECASE,
-            )
+            for col in bool_cols:
+                sql = re.sub(
+                    rf"\b{col}\s*=\s*1\b",
+                    f"{col} IS TRUE",
+                    sql,
+                    flags=re.IGNORECASE,
+                )
+                sql = re.sub(
+                    rf"\b{col}\s*=\s*0\b",
+                    f"{col} IS FALSE",
+                    sql,
+                    flags=re.IGNORECASE,
+                )
             # 3) INSERT ... VALUES (..., 1, 0) para booleans.
             sql = re.sub(r",\s*1\s*,\s*0\s*\)", ", TRUE, FALSE)", sql)
             sql = re.sub(r",\s*1\s*,\s*1\s*\)", ", TRUE, TRUE)", sql)

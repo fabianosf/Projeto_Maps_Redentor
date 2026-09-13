@@ -1,8 +1,17 @@
 /**
- * Design System RedMapa — tokens canônicos (JS).
+ * Design System RedMapa — App de Campo Robusto.
  * Espelhados em styles/tokens.css e theme/tokens.ts.
  */
-import { BRAND, SURFACE, TEXT, TEXT_MUTED, DANGER, OK } from '@/theme/tokens';
+import {
+  BRAND,
+  SURFACE,
+  TEXT,
+  TEXT_MUTED,
+  DANGER,
+  OK,
+  WARNING,
+  BORDER,
+} from '@/theme/tokens';
 
 export const theme = {
   colors: {
@@ -10,14 +19,15 @@ export const theme = {
     foreground: TEXT,
     primary: BRAND.navy,
     primaryForeground: '#FFFFFF',
-    secondary: '#E8EEF5',
-    muted: '#F1F5F9',
+    cta: BRAND.cta,
+    secondary: '#E4EBF2',
+    muted: '#EEF2F6',
     mutedForeground: TEXT_MUTED,
-    border: '#D0DAE4',
+    border: BORDER,
     destructive: DANGER,
     success: OK,
-    warning: BRAND.gold,
-    info: BRAND.cyan,
+    warning: WARNING,
+    info: BRAND.cta,
     zebra: '#F5F7FA',
     brand: BRAND,
   },
@@ -25,11 +35,11 @@ export const theme = {
   radius: {
     sm: 8,
     md: 12,
-    lg: 16,
-    button: 16,
-    input: 16,
-    modal: 20,
-    card: 20,
+    lg: 12,
+    button: 12,
+    input: 12,
+    modal: 12,
+    card: 12,
   },
   space: {
     xs: 8,
@@ -40,7 +50,7 @@ export const theme = {
   },
   layout: {
     maxWidth: 720,
-    touchMin: 44,
+    touchMin: 48,
     inputHeight: 48,
     toolbarButtonHeight: 78,
   },

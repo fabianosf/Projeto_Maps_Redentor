@@ -21,7 +21,8 @@ import { EmptyState } from '@/components/EmptyState';
 import { FormField } from '@/components/FormField';
 import { LoadingState } from '@/components/LoadingState';
 import { OpsPageHeader } from '@/components/ops';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/StatusBadge';
+import { PersistentBanner } from '@/components/PersistentBanner';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -158,14 +159,9 @@ function StatusEscalaBadge({
   const emAndamento = escalaEmAndamento(item);
   return (
     <div className={cn('flex flex-col gap-0.5', className)}>
-      <Badge
-        variant={emAndamento ? 'warning' : 'success'}
-        className="w-fit whitespace-nowrap text-[10px] uppercase"
-      >
-        {emAndamento ? 'Em andamento' : 'Encerrada'}
-      </Badge>
+      <StatusBadge status={emAndamento ? 'EM_ANDAMENTO' : 'ENCERRADA'} />
       {!emAndamento ? (
-        <span className="helper-text text-[10px] font-medium">
+        <span className="helper-text text-[12px] font-medium">
           Trabalhado:{' '}
           {item.duracao_trabalhada_hhmm ??
             formatDuracaoHhMm(item.duracao_trabalhada_minutos)}
@@ -1249,7 +1245,7 @@ export function MapaDetalheScreen() {
   if (loading) {
     return (
       <AppShell className="bg-screen">
-        <div className="page min-h-dvh bg-screen text-slate-900">
+        <div className="page min-h-dvh bg-screen text-text">
         <OpsPageHeader title="MAPA" />
           <LoadingState label="Carregando MAPA…" className="min-h-[40vh]" />
         </div>
@@ -1260,7 +1256,7 @@ export function MapaDetalheScreen() {
   if (!mapa) {
     return (
       <AppShell className="bg-screen">
-        <div className="page min-h-dvh bg-screen text-slate-900">
+        <div className="page min-h-dvh bg-screen text-text">
         <OpsPageHeader title="MAPA" />
           <EmptyState
             title="MAPA não encontrado"
@@ -1276,7 +1272,7 @@ export function MapaDetalheScreen() {
 
   return (
     <AppShell className="bg-screen">
-      <div className="page flex min-h-dvh flex-col bg-screen text-slate-900">
+      <div className="page flex min-h-dvh flex-col bg-screen text-text">
         <OpsPageHeader
           title="MAPA"
           rightSlot={
@@ -1286,7 +1282,7 @@ export function MapaDetalheScreen() {
               size="icon"
               aria-label="Editar MAPA"
               onClick={() => navigate(`/mapas/${idRegistro}/editar`)}
-              className="h-11 w-11 min-h-[44px] min-w-[44px] rounded-full border-0 bg-transparent text-primary-foreground shadow-none hover:bg-primary-foreground/10 focus-visible:ring-2 focus-visible:ring-primary-foreground/80 focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
+              className="h-12 w-12 min-h-[48px] min-w-[48px] rounded-full border-0 bg-transparent text-primary-foreground shadow-none hover:bg-primary-foreground/10 focus-visible:ring-2 focus-visible:ring-primary-foreground/80 focus-visible:ring-offset-2 focus-visible:ring-offset-primary"
             >
               <Pencil className="h-5 w-5" strokeWidth={2.25} aria-hidden />
             </Button>
@@ -1294,7 +1290,7 @@ export function MapaDetalheScreen() {
         />
 
         <div className="page-body flex min-h-0 flex-1 flex-col gap-4">
-          <section className="rounded-xl border border-slate-400/40 bg-white/50 p-4">
+          <section className="rounded-xl border border-field bg-white/50 p-4">
             <div className="mb-2">
               <p className="text-lg font-bold text-primary">
                 Nº {formatCodigoMapa(mapa.codigo_mapa)}
@@ -1322,7 +1318,7 @@ export function MapaDetalheScreen() {
                   type="button"
                   size="sm"
                   variant="outline"
-                  className="h-11 min-h-[44px] rounded-full px-3 text-xs font-bold uppercase"
+                  className="h-11 min-h-[48px] rounded-full px-3 text-xs font-bold uppercase"
                   aria-label="Dar baixa"
                   disabled={!itemPodeDarBaixa || busy}
                   onClick={abrirDialogBaixa}
@@ -1332,7 +1328,7 @@ export function MapaDetalheScreen() {
                 <Button
                   type="button"
                   size="icon"
-                  className="h-11 w-11 min-h-[44px] min-w-[44px] rounded-full"
+                  className="h-12 w-12 min-h-[48px] min-w-[48px] rounded-full"
                   aria-label="Vincular motorista"
                   onClick={() => openMotoristaNovo()}
                 >
@@ -1342,7 +1338,7 @@ export function MapaDetalheScreen() {
                   type="button"
                   size="icon"
                   variant="outline"
-                  className="h-11 w-11 min-h-[44px] min-w-[44px] rounded-full"
+                  className="h-12 w-12 min-h-[48px] min-w-[48px] rounded-full"
                   aria-label="Excluir carro"
                   disabled={selectedItemId == null}
                   onClick={() => setConfirmDeleteItem(true)}
@@ -1356,7 +1352,7 @@ export function MapaDetalheScreen() {
               <EmptyState
                 title="Nenhum veículo neste MAPA"
                 description="Use o botão de vincular motorista para incluir a primeira escala."
-                className="rounded-xl border border-dashed border-slate-400/50 bg-white/40 py-10"
+                className="rounded-xl border border-dashed border-field bg-surface-card py-10"
               />
             ) : (
               <>
@@ -1376,6 +1372,9 @@ export function MapaDetalheScreen() {
                     const temVinculo =
                       item.id_motorista != null && Number(item.id_motorista) > 0;
                     const emAndamento = escalaEmAndamento(item);
+                    const qtdViagens = Array.isArray(item.viagens)
+                      ? item.viagens.length
+                      : 0;
                     return (
                       <li key={item.id_item}>
                         <div
@@ -1384,10 +1383,10 @@ export function MapaDetalheScreen() {
                           aria-selected={selected}
                           tabIndex={0}
                           className={cn(
-                            'w-full rounded-xl border bg-white/80 p-3 text-left shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                            'w-full rounded-xl border bg-surface-card p-4 text-left shadow-card transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                             selected
-                              ? 'border-primary bg-primary/10 ring-2 ring-primary/40'
-                              : 'border-slate-400/40 hover:border-slate-500/60',
+                              ? 'border-[3px] border-brand-cta'
+                              : 'border-field hover:border-brand-navy/40',
                           )}
                           onClick={() => setSelectedItemId(item.id_item)}
                           onKeyDown={(e) => {
@@ -1398,35 +1397,100 @@ export function MapaDetalheScreen() {
                           }}
                         >
                           <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0 flex-1 space-y-1.5">
+                            <div className="min-w-0 flex-1 space-y-2">
                               <div className="flex flex-wrap items-center gap-2">
-                                <p className="text-base font-bold text-slate-900">
+                                <p className="text-xl font-bold tabular-nums text-brand-navy">
                                   {frotaItemLabel(item)}
                                 </p>
                                 <StatusEscalaBadge item={item} />
                               </div>
-                              <p className="text-sm text-slate-700">
-                                <span className="font-semibold">Empresa:</span>{' '}
-                                {item.empresa ?? '—'}
-                              </p>
-                              <p className="text-sm text-slate-700">
-                                <span className="font-semibold">Linha:</span>{' '}
-                                {linhaItemLabel(item)}
-                              </p>
-                              <p className="text-sm text-slate-700">
-                                <span className="font-semibold">Motorista:</span>{' '}
-                                {motoristaItemLabel(item)}
-                              </p>
-                              <p className="text-sm text-slate-700">
-                                <span className="font-semibold">Jornada:</span>{' '}
-                                {jornadaItemLabel(item)}
-                              </p>
+                              <dl className="grid grid-cols-1 gap-1.5 text-[14px] text-text sm:grid-cols-2">
+                                <div>
+                                  <dt className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                                    Empresa
+                                  </dt>
+                                  <dd className="font-semibold">
+                                    {item.empresa ?? '—'}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                                    Linha
+                                  </dt>
+                                  <dd className="font-semibold">
+                                    {linhaItemLabel(item)}
+                                  </dd>
+                                </div>
+                                <div className="sm:col-span-2">
+                                  <dt className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                                    Motorista
+                                  </dt>
+                                  <dd className="font-semibold">
+                                    {motoristaItemLabel(item)}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                                    Jornada
+                                  </dt>
+                                  <dd className="font-semibold tabular-nums">
+                                    {jornadaItemLabel(item)}
+                                  </dd>
+                                </div>
+                                <div>
+                                  <dt className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                                    Viagens
+                                  </dt>
+                                  <dd className="font-semibold tabular-nums">
+                                    {qtdViagens}
+                                  </dd>
+                                </div>
+                              </dl>
+                              {!emAndamento ? (
+                                <PersistentBanner tone="warning" className="mt-1 text-[13px]">
+                                  ESCALA ENCERRADA — NOVAS VIAGENS BLOQUEADAS
+                                </PersistentBanner>
+                              ) : null}
+                              {selected ? (
+                                <div
+                                  className="flex flex-col gap-2 pt-1"
+                                  onClick={(e) => e.stopPropagation()}
+                                  onKeyDown={(e) => e.stopPropagation()}
+                                >
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="min-h-12 w-full"
+                                    onClick={() => setSelectedItemId(item.id_item)}
+                                  >
+                                    Ver viagens
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="primary"
+                                    className="min-h-12 w-full"
+                                    disabled={!itemProntoParaViagens || !emAndamento}
+                                    onClick={abrirDialogViagem}
+                                  >
+                                    Nova viagem
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="warning"
+                                    className="min-h-12 w-full"
+                                    disabled={!itemPodeDarBaixa || busy || !emAndamento}
+                                    onClick={abrirDialogBaixa}
+                                  >
+                                    Dar baixa
+                                  </Button>
+                                </div>
+                              ) : null}
                             </div>
                             <Button
                               type="button"
                               size="icon"
                               variant="ghost"
-                              className="h-11 w-11 min-h-[44px] min-w-[44px] shrink-0"
+                              className="h-12 w-12 min-h-[48px] min-w-[48px] shrink-0"
                               aria-label="Editar vínculo"
                               disabled={!temVinculo || !emAndamento}
                               onClick={(e) => {
@@ -1444,7 +1508,7 @@ export function MapaDetalheScreen() {
                 </ul>
 
                 {/* Desktop: tabela */}
-                <div className="hidden overflow-hidden rounded-xl border border-slate-400/40 md:block">
+                <div className="hidden overflow-hidden rounded-xl border border-field md:block">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-secondary/60 hover:bg-secondary/60">
@@ -1511,7 +1575,7 @@ export function MapaDetalheScreen() {
                                 type="button"
                                 size="icon"
                                 variant="ghost"
-                                className="h-11 w-11 min-h-[44px] min-w-[44px]"
+                                className="h-12 w-12 min-h-[48px] min-w-[48px]"
                                 aria-label="Editar vínculo"
                                 disabled={!temVinculo || !emAndamento}
                                 onClick={(e) => {
@@ -1547,7 +1611,7 @@ export function MapaDetalheScreen() {
               <Button
                 type="button"
                 size="icon"
-                className="h-11 w-11 min-h-[44px] min-w-[44px] shrink-0 rounded-full"
+                className="h-12 w-12 min-h-[48px] min-w-[48px] shrink-0 rounded-full"
                 aria-label="Nova viagem"
                 title={
                   itemSelecionado && !escalaEmAndamento(itemSelecionado)
@@ -1563,53 +1627,54 @@ export function MapaDetalheScreen() {
 
             {resumoViagens ? (
               <div
-                className="mb-3 rounded-xl border border-slate-400/40 bg-white/70 p-3 shadow-sm"
+                className="mb-3 rounded-xl border border-field bg-surface-card p-4 shadow-card"
                 aria-live="polite"
               >
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-bold text-slate-900">
+                  <p className="text-lg font-bold tabular-nums text-brand-navy">
                     Veículo {resumoViagens.frota}
                   </p>
-                  <Badge
-                    variant={resumoViagens.encerrada ? 'secondary' : 'default'}
-                    className="text-[10px] uppercase"
-                  >
-                    {resumoViagens.statusLabel}
-                  </Badge>
+                  <StatusBadge
+                    status={
+                      resumoViagens.encerrada ? 'ENCERRADA' : 'EM_ANDAMENTO'
+                    }
+                  />
                 </div>
-                <dl className="mt-2 grid gap-1.5 text-sm text-slate-800 sm:grid-cols-2">
+                <dl className="mt-3 grid gap-2 text-[14px] text-text sm:grid-cols-2">
                   <div>
-                    <dt className="text-[11px] font-semibold uppercase text-muted-foreground">
+                    <dt className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
                       Motorista
                     </dt>
-                    <dd>{resumoViagens.motoristaTxt}</dd>
+                    <dd className="font-semibold">{resumoViagens.motoristaTxt}</dd>
                   </div>
                   <div>
-                    <dt className="text-[11px] font-semibold uppercase text-muted-foreground">
+                    <dt className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
                       Linha
                     </dt>
-                    <dd>{resumoViagens.linhaTxt}</dd>
+                    <dd className="font-semibold">{resumoViagens.linhaTxt}</dd>
                   </div>
                   <div>
-                    <dt className="text-[11px] font-semibold uppercase text-muted-foreground">
+                    <dt className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
                       Empresa
                     </dt>
-                    <dd>{resumoViagens.empresaTxt}</dd>
+                    <dd className="font-semibold">{resumoViagens.empresaTxt}</dd>
                   </div>
                   <div>
-                    <dt className="text-[11px] font-semibold uppercase text-muted-foreground">
-                      Status
+                    <dt className="text-[11px] font-bold uppercase tracking-wide text-text-muted">
+                      Jornada
                     </dt>
-                    <dd>{resumoViagens.statusLabel}</dd>
+                    <dd className="font-semibold tabular-nums">
+                      {resumoViagens.jornadaTxt || '—'}
+                    </dd>
                   </div>
                 </dl>
-                {resumoViagens.jornadaTxt ? (
-                  <p className="mt-2 text-xs text-slate-700">
-                    Jornada {resumoViagens.jornadaTxt}
-                  </p>
+                {resumoViagens.encerrada ? (
+                  <PersistentBanner tone="warning" className="mt-3 text-[13px]">
+                    ESCALA ENCERRADA — NOVAS VIAGENS BLOQUEADAS
+                  </PersistentBanner>
                 ) : null}
                 {resumoViagens.encerrada ? (
-                  <p className="mt-1 text-xs text-slate-700">
+                  <p className="mt-2 text-[13px] text-text-muted">
                     Real {resumoViagens.inicioRealTxt}–
                     {resumoViagens.fimRealTxt}
                     {resumoViagens.trabalhadoTxt &&
@@ -1625,15 +1690,14 @@ export function MapaDetalheScreen() {
               <EmptyState
                 title="Nenhuma escala selecionada"
                 description="Selecione uma escala para visualizar ou registrar viagens."
-                className="rounded-xl border border-dashed border-slate-400/50 bg-white/40 py-10"
+                className="rounded-xl border border-dashed border-field bg-surface-card py-10"
               />
             ) : !escalaEmAndamento(itemSelecionado) ? (
               <>
-                <p className="mb-2 rounded-xl border border-dashed border-slate-400/50 bg-white/40 px-4 py-3 text-center text-sm text-slate-700">
-                  Esta escala foi encerrada. Crie uma nova escala para registrar
-                  novas viagens.
-                </p>
-                <div className="overflow-x-auto overflow-hidden rounded-xl border border-slate-400/40">
+                <PersistentBanner tone="warning" className="mb-3">
+                  ESCALA ENCERRADA — NOVAS VIAGENS BLOQUEADAS
+                </PersistentBanner>
+                <div className="overflow-x-auto overflow-hidden rounded-xl border border-field">
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-secondary/60 hover:bg-secondary/60">
@@ -1673,16 +1737,16 @@ export function MapaDetalheScreen() {
               <EmptyState
                 title="Motorista não vinculado"
                 description="Este carro ainda não tem motorista vinculado. Use o lápis ou Incluir vínculo antes de registrar viagens."
-                className="rounded-xl border border-dashed border-slate-400/50 bg-white/40 py-10"
+                className="rounded-xl border border-dashed border-field bg-surface-card py-10"
               />
             ) : viagensDoItem.length === 0 ? (
               <EmptyState
                 title="Nenhuma viagem"
                 description="Toque em + para registrar a primeira viagem desta escala."
-                className="rounded-xl border border-dashed border-slate-400/50 bg-white/40 py-10"
+                className="rounded-xl border border-dashed border-field bg-surface-card py-10"
               />
             ) : (
-              <div className="overflow-x-auto overflow-hidden rounded-xl border border-slate-400/40">
+              <div className="overflow-x-auto overflow-hidden rounded-xl border border-field">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-secondary/60 hover:bg-secondary/60">
@@ -1708,7 +1772,7 @@ export function MapaDetalheScreen() {
                             type="button"
                             variant="ghost"
                             size="icon"
-                            className="h-11 w-11 min-h-[44px] min-w-[44px] text-destructive"
+                            className="h-12 w-12 min-h-[48px] min-w-[48px] text-destructive"
                             aria-label="Excluir viagem"
                             onClick={() => setConfirmDeleteViagem(v.id_viagem)}
                           >
@@ -1740,16 +1804,16 @@ export function MapaDetalheScreen() {
             if (!open) closeMotoristaDialog();
           }}
         >
-          <DialogContent className="max-w-[min(100%,22rem)] border-slate-400/50 bg-card p-4 sm:p-5">
+          <DialogContent className="max-w-[min(100%,22rem)] border-field bg-card p-4 sm:p-5">
             <DialogClose
               type="button"
-              className="absolute right-2 top-2 z-10 flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="absolute right-2 top-2 z-10 flex h-12 w-12 min-h-[48px] min-w-[48px] items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               aria-label="Fechar"
             >
               <X className="h-5 w-5" strokeWidth={2.25} />
             </DialogClose>
             <DialogHeader className="shrink-0 pr-10">
-              <DialogTitle className="text-center text-[16px] uppercase tracking-wide text-slate-900">
+              <DialogTitle className="text-center text-[16px] uppercase tracking-wide text-text">
                 {motoristaDialogMode === 'editar'
                   ? 'Editar vínculo'
                   : 'Vincular motorista'}
@@ -1762,7 +1826,7 @@ export function MapaDetalheScreen() {
             >
               <div className="field-stack min-h-0 flex-1 gap-3 overflow-y-auto overscroll-contain pe-0.5">
               {ocupacaoLoading ? (
-                <p className="rounded-md border border-slate-300/70 bg-slate-50 px-3 py-2 text-sm text-slate-700" role="status">
+                <p className="rounded-md border border-slate-300/70 bg-slate-50 px-3 py-2 text-sm text-text" role="status">
                   Verificando disponibilidade...
                 </p>
               ) : null}
@@ -1776,7 +1840,7 @@ export function MapaDetalheScreen() {
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="min-h-[44px]"
+                    className="min-h-[48px]"
                     disabled={ocupacaoLoading || vinculoSaving}
                     onClick={() => void carregarOcupacao()}
                   >
@@ -1791,7 +1855,7 @@ export function MapaDetalheScreen() {
               ) : null}
 
               <section
-                className="space-y-3 rounded-lg border border-slate-300/60 bg-white/70 p-3"
+                className="space-y-3 rounded-lg border border-slate-300/60 bg-surface-card p-3"
                 aria-labelledby="vinculo-bloco-escala"
               >
                 <h3
@@ -1804,13 +1868,13 @@ export function MapaDetalheScreen() {
                   <div className="space-y-2 text-sm text-muted-foreground">
                     <p>
                       Empresa:{' '}
-                      <span className="font-semibold text-slate-900">
+                      <span className="font-semibold text-text">
                         {empresaContextoMotorista || '—'}
                       </span>
                     </p>
                     <p>
                       Linha:{' '}
-                      <span className="font-semibold text-slate-900">
+                      <span className="font-semibold text-text">
                         {linhaContextoMotorista || '—'}
                       </span>
                     </p>
@@ -1818,7 +1882,7 @@ export function MapaDetalheScreen() {
                 ) : (
                   <>
                     <div className="flex w-full flex-col gap-1">
-                      <Label className="text-[13px] font-semibold uppercase text-slate-900">
+                      <Label className="text-[13px] font-semibold uppercase text-text">
                         Empresa <span className="req">*</span>
                       </Label>
                       <Select
@@ -1828,7 +1892,7 @@ export function MapaDetalheScreen() {
                           limparLinhaEAbaixo();
                         }}
                       >
-                        <SelectTrigger className="h-11 min-h-[44px] bg-white text-base">
+                        <SelectTrigger className="h-11 min-h-[48px] bg-white text-base">
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
                         <SelectContent position="popper" className="z-[400]">
@@ -1848,7 +1912,7 @@ export function MapaDetalheScreen() {
                     </div>
 
                     <div className="flex w-full flex-col gap-1">
-                      <Label className="text-[13px] font-semibold uppercase text-slate-900">
+                      <Label className="text-[13px] font-semibold uppercase text-text">
                         Linha <span className="req">*</span>
                       </Label>
                       <Select
@@ -1859,7 +1923,7 @@ export function MapaDetalheScreen() {
                         }}
                         disabled={!idEmpresaForm}
                       >
-                        <SelectTrigger className="h-11 min-h-[44px] bg-white text-base">
+                        <SelectTrigger className="h-11 min-h-[48px] bg-white text-base">
                           <SelectValue placeholder="Selecione" />
                         </SelectTrigger>
                         <SelectContent position="popper" className="z-[400]">
@@ -1884,7 +1948,7 @@ export function MapaDetalheScreen() {
               </section>
 
               <section
-                className="space-y-3 rounded-lg border border-slate-300/60 bg-white/70 p-3"
+                className="space-y-3 rounded-lg border border-slate-300/60 bg-surface-card p-3"
                 aria-labelledby="vinculo-bloco-veiculo"
               >
                 <h3
@@ -1896,7 +1960,7 @@ export function MapaDetalheScreen() {
                 {isEditar ? (
                   <p className="text-sm text-muted-foreground">
                     Veículo:{' '}
-                    <span className="font-semibold text-slate-900">
+                    <span className="font-semibold text-text">
                       {frotaContextoMotorista || '—'}
                     </span>
                   </p>
@@ -1904,14 +1968,14 @@ export function MapaDetalheScreen() {
                   <div className="flex w-full flex-col gap-1">
                     <Label
                       htmlFor="veiculo-frota"
-                      className="text-[13px] font-semibold uppercase text-slate-900"
+                      className="text-[13px] font-semibold uppercase text-text"
                     >
                       Veículo <span className="req">*</span>
                     </Label>
                     <Input
                       id="veiculo-frota"
                       ref={veiculoInputRef}
-                      className="h-11 min-h-[44px] rounded-lg border-slate-400 bg-white font-mono text-base uppercase tracking-wide text-slate-900"
+                      className="h-11 min-h-[48px] rounded-lg border-slate-400 bg-white font-mono text-base uppercase tracking-wide text-text"
                       placeholder={
                         idEmpresaForm && idLinhaForm
                           ? placeholderFrotaEmpresa(nomeEmpresaForm)
@@ -1954,7 +2018,7 @@ export function MapaDetalheScreen() {
                 )}
 
                 <div className="flex w-full flex-col gap-1">
-                  <Label className="text-[13px] font-semibold uppercase text-slate-900">
+                  <Label className="text-[13px] font-semibold uppercase text-text">
                     Motorista <span className="req">*</span>
                   </Label>
                   <Select
@@ -1967,7 +2031,7 @@ export function MapaDetalheScreen() {
                       motoristaDialogMode === 'novo' ? !frotaValida : !idVeiculoForm
                     }
                   >
-                    <SelectTrigger className="h-11 min-h-[44px] bg-white text-base">
+                    <SelectTrigger className="h-11 min-h-[48px] bg-white text-base">
                       <SelectValue
                         placeholder={
                           motoristaDialogMode === 'novo'
@@ -2003,7 +2067,7 @@ export function MapaDetalheScreen() {
               </section>
 
               <section
-                className="space-y-3 rounded-lg border border-slate-300/60 bg-white/70 p-3"
+                className="space-y-3 rounded-lg border border-slate-300/60 bg-surface-card p-3"
                 aria-labelledby="vinculo-bloco-horarios"
               >
                 <h3
@@ -2019,7 +2083,7 @@ export function MapaDetalheScreen() {
                   value={chegada ?? ''}
                   onChange={(e) => setChegada(e.target.value)}
                   disabled={!idMotorista}
-                  className="h-11 min-h-[44px]"
+                  className="h-11 min-h-[48px]"
                 />
                 <FormField
                   label="Início jornada"
@@ -2028,7 +2092,7 @@ export function MapaDetalheScreen() {
                   value={horIni ?? ''}
                   onChange={(e) => setHorIni(e.target.value)}
                   disabled={!idMotorista}
-                  className="h-11 min-h-[44px]"
+                  className="h-11 min-h-[48px]"
                 />
                 <FormField
                   label="Fim jornada"
@@ -2037,7 +2101,7 @@ export function MapaDetalheScreen() {
                   value={horFim ?? ''}
                   onChange={(e) => setHorFim(e.target.value)}
                   disabled={!idMotorista}
-                  className="h-11 min-h-[44px]"
+                  className="h-11 min-h-[48px]"
                 />
               </section>
               </div>
@@ -2045,7 +2109,7 @@ export function MapaDetalheScreen() {
               <DialogFooter className="mt-4 shrink-0 grid grid-cols-2 gap-3">
                 <Button
                   type="submit"
-                  className="min-h-[44px]"
+                  className="min-h-[48px]"
                   disabled={
                     vinculoSaving ||
                     (motoristaDialogMode === 'novo' &&
@@ -2061,7 +2125,7 @@ export function MapaDetalheScreen() {
                 <Button
                   type="button"
                   variant="outline"
-                  className="min-h-[44px]"
+                  className="min-h-[48px]"
                   disabled={vinculoSaving}
                   onClick={closeMotoristaDialog}
                 >
@@ -2085,7 +2149,7 @@ export function MapaDetalheScreen() {
             </DialogHeader>
             <form className="field-stack" onSubmit={(e) => void onSalvarViagem(e)}>
               {ultimaViagemItem && saidaMinimaViagem ? (
-                <p className="rounded-md border border-slate-300/70 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+                <p className="rounded-md border border-slate-300/70 bg-slate-50 px-3 py-2 text-sm text-text">
                   Última viagem: {formatHora(ultimaViagemItem.horario_saida)}–
                   {formatHora(ultimaViagemItem.horario_chegada)}. Próxima saída
                   permitida: {saidaMinimaViagem}.
@@ -2219,7 +2283,7 @@ export function MapaDetalheScreen() {
                 onChange={(e) => setFimRealBaixa(e.target.value)}
                 required
               />
-              <p className="rounded-md border border-slate-300/70 bg-slate-50 px-3 py-2 text-slate-800">
+              <p className="rounded-md border border-slate-300/70 bg-slate-50 px-3 py-2 text-text">
                 As horas de {previewBaixa.inicioHora} até {previewBaixa.fimHora}{' '}
                 serão registradas no banco de horas do motorista.
                 {previewBaixa.minutos != null ? (

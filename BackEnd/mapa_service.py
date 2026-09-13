@@ -12,14 +12,21 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Any, Optional
+from zoneinfo import ZoneInfo
 
 from .cadastros_service import CadastroError, criar_veiculo
-from .constants import COD_MAP_INSERT_RETRIES, COD_MAP_MAX
+from .constants import COD_MAP_INSERT_RETRIES, COD_MAP_MAX, PERFIL_ADMIN
 
 logger = logging.getLogger(__name__)
 
 STATUS_ESCALA_EM_ANDAMENTO = "EM_ANDAMENTO"
 STATUS_ESCALA_ENCERRADA = "ENCERRADA"
+TZ_OPERACIONAL = ZoneInfo("America/Sao_Paulo")
+
+
+def _agora_operacional() -> datetime:
+    """Agora no fuso operacional (naive local America/Sao_Paulo)."""
+    return datetime.now(TZ_OPERACIONAL).replace(tzinfo=None, second=0, microsecond=0)
 
 # Sequence/contador atômico de cod_map (única global). Não usar MAX+1 sem lock.
 _COD_MAP_SEQ_NAME = "tb_map_cod_map_seq"
@@ -913,6 +920,7 @@ def obter_indicadores(
     except (TypeError, ValueError):
         codigo_exibicao = codigo_linha
 
+    hoje = _agora_operacional().date().isoformat()
     df = dal.read(
         """
         SELECT AVG(
@@ -922,9 +930,9 @@ def obter_indicadores(
         INNER JOIN tb_item_map i ON i.idmap = m.id_registro
         INNER JOIN tb_viagem v ON v.id_item_registro = i.id_item
         WHERE i.id_linha = ?
-          AND m.data = CURDATE()
+          AND m.data = ?
         """,
-        (id_linha_int,),
+        (id_linha_int, hoje),
     )
     qtc_m: float | None = None
     if not df.empty and df.iloc[0]["qtc_m"] is not None:
@@ -1191,25 +1199,50 @@ def criar_mapa(dal, id_usuario: int, payload: dict[str, Any]) -> dict[str, Any] 
                 if isinstance(cod_map, MapaError):
                     raise _AbortMapaTx(cod_map)
 
-                ok_map = dal.create(
-                    """
-                    INSERT INTO tb_map (
-                        cod_map, codigo_mapa, id_usuario, id_empresa, id_linha, id_turno,
-                        data, inicio_jornada_des, fim_jornada_des, observacao
-                    ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        cod_map,
-                        codigo_mapa,
-                        id_usuario,
-                        int(id_empresa),
-                        int(id_turno),
-                        data_parsed.isoformat(),
-                        inicio_sql,
-                        fim_sql,
-                        observacao,
-                    ),
-                )
+                ok_map = False
+                try:
+                    ok_map = dal.create(
+                        """
+                        INSERT INTO tb_map (
+                            cod_map, codigo_mapa, id_usuario, id_responsavel, id_empresa, id_linha, id_turno,
+                            data, inicio_jornada_des, fim_jornada_des, observacao
+                        ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            cod_map,
+                            codigo_mapa,
+                            id_usuario,
+                            id_usuario,
+                            int(id_empresa),
+                            int(id_turno),
+                            data_parsed.isoformat(),
+                            inicio_sql,
+                            fim_sql,
+                            observacao,
+                        ),
+                    )
+                except Exception:
+                    ok_map = False
+                if not ok_map:
+                    ok_map = dal.create(
+                        """
+                        INSERT INTO tb_map (
+                            cod_map, codigo_mapa, id_usuario, id_empresa, id_linha, id_turno,
+                            data, inicio_jornada_des, fim_jornada_des, observacao
+                        ) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            cod_map,
+                            codigo_mapa,
+                            id_usuario,
+                            int(id_empresa),
+                            int(id_turno),
+                            data_parsed.isoformat(),
+                            inicio_sql,
+                            fim_sql,
+                            observacao,
+                        ),
+                    )
                 if not ok_map:
                     raise _AbortMapaTx(
                         MapaError(
@@ -2318,7 +2351,8 @@ def obter_banco_horas_motorista(
         (int(id_motorista),),
     )
 
-    agora = datetime.now().replace(second=0, microsecond=0)
+    agora = _agora_operacional()
+    # Agrupamento operacional: data de início do MAPA (m.data), não só calendário do início_real
     dia_ini = datetime.combine(data_ref, datetime.min.time())
     dia_fim = datetime.combine(data_ref, datetime.max.time().replace(microsecond=0))
 
@@ -2330,6 +2364,10 @@ def obter_banco_horas_motorista(
     if not itens_df.empty:
         for _, row in itens_df.iterrows():
             item = row.to_dict()
+            data_mapa = _coerce_mapa_date(item.get("data_mapa") or item.get("data"))
+            # Preferência: data operacional = data de início do MAPA
+            if data_mapa is not None and data_mapa != data_ref:
+                continue
             ini = (
                 _as_datetime(item.get("inicio_real"))
                 or _as_datetime(item.get("chegada_ponto"))
@@ -2339,13 +2377,9 @@ def obter_banco_horas_motorista(
                 continue
             status = str(item.get("status_escala") or "").strip().upper()
             fim = _as_datetime(item.get("fim_real")) or _as_datetime(item.get("baixa_em"))
-            # Filtra escalas do dia (início no dia ou intervalo cruza o dia)
             fim_ref = fim if fim is not None else agora
-            if fim_ref < dia_ini or ini > dia_fim:
-                # ainda pode atravessar meia-noite do dia anterior
-                if not (ini.date() == data_ref or (fim and fim.date() == data_ref) or (fim_ref >= dia_ini and ini <= dia_fim)):
-                    continue
-            if ini.date() != data_ref and (fim is None or fim.date() != data_ref):
+            if data_mapa is None:
+                # Legado sem data_mapa: mantém filtro por intervalo no dia
                 if not (ini < dia_fim and fim_ref >= dia_ini):
                     continue
 
@@ -2758,7 +2792,8 @@ def atualizar_item_map(
 ) -> dict[str, Any] | MapaError:
     atual = dal.read(
         """
-        SELECT i.id_item, i.idmap, i.status_escala, m.data AS data_mapa
+        SELECT i.id_item, i.idmap, i.status_escala, i.id_veiculo, i.id_motorista,
+               m.data AS data_mapa
         FROM tb_item_map i
         INNER JOIN tb_map m ON m.id_registro = i.idmap
         WHERE i.id_item = ?
@@ -2776,6 +2811,12 @@ def atualizar_item_map(
         )
 
     idmap = int(atual.iloc[0]["idmap"])
+    id_veiculo_atual = int(atual.iloc[0]["id_veiculo"])
+    id_mot_atual = (
+        int(atual.iloc[0]["id_motorista"])
+        if atual.iloc[0].get("id_motorista") is not None
+        else None
+    )
 
     id_linha = _resolver_id_linha_item(dal, payload)
     if isinstance(id_linha, MapaError):
@@ -2792,6 +2833,22 @@ def atualizar_item_map(
     id_motorista = _resolver_id_motorista(dal, payload)
     if isinstance(id_motorista, MapaError):
         return id_motorista
+
+    # Após viagem/baixa/histórico: bloqueia troca direta de veículo/motorista
+    viagens = dal.read(
+        "SELECT COUNT(*) AS n FROM tb_viagem WHERE id_item_registro = ?",
+        (int(id_item),),
+    )
+    n_viagens = int(viagens.iloc[0]["n"]) if not viagens.empty else 0
+    muda_veiculo = int(id_veiculo) != id_veiculo_atual
+    muda_motorista = id_mot_atual is not None and int(id_motorista) != id_mot_atual
+    if n_viagens > 0 and (muda_veiculo or muda_motorista):
+        return MapaError(
+            "Após existir viagem nesta escala, não é permitido alterar veículo ou "
+            "motorista no fluxo normal. Dê baixa e crie nova escala, ou use "
+            "correção excepcional (Administrador).",
+            "correcao_excepcional_requerida",
+        )
 
     horarios = _exigir_horarios_item(payload, atual.iloc[0]["data_mapa"])
     if isinstance(horarios, MapaError):
@@ -2951,7 +3008,11 @@ def _item_map_detalhe(dal, id_item: int) -> dict[str, Any] | None:
     st = str(item.get("status_escala") or STATUS_ESCALA_EM_ANDAMENTO).strip().upper()
     item["status_escala"] = st or STATUS_ESCALA_EM_ANDAMENTO
     item["viagens"] = []
-    return _enriquecer_campos_horas_item(item)
+    # TIME (hora_baixa) e timestamps do MariaDB/pandas precisam ser JSON-safe
+    # (Timedelta quebra jsonify → 500 após baixa bem-sucedida).
+    enriched = _enriquecer_campos_horas_item(item)
+    safe = _json_safe_value(enriched)
+    return safe if isinstance(safe, dict) else enriched
 
 
 def excluir_item_map(dal, id_item: int) -> MapaError | None:
@@ -3134,13 +3195,10 @@ def criar_viagem(
     dal, id_item: int, payload: dict[str, Any]
 ) -> dict[str, Any] | MapaError:
     body = dict(payload or {})
-    # Obrigatório no body: vínculo explícito ao item (não só frota/prefixo).
+    # Preferir body; se ausente, usar id da rota (FE envia ambos; evita 400 em clients).
     raw_mapa_item = body.get("id_mapa_item", body.get("id_item"))
     if raw_mapa_item is None or str(raw_mapa_item).strip() == "":
-        return MapaError(
-            "id_mapa_item é obrigatório para criar a viagem.",
-            "validacao",
-        )
+        raw_mapa_item = id_item
     try:
         if int(raw_mapa_item) != int(id_item):
             return MapaError(
@@ -3189,7 +3247,8 @@ def criar_viagem(
     viagem_df = dal.read("SELECT * FROM tb_viagem WHERE id_viagem = ?", (id_viagem,))
     out = viagem_df.iloc[0].to_dict()
     out["id_mapa_item"] = int(id_item)
-    return out
+    safe = _json_safe_value(out)
+    return safe if isinstance(safe, dict) else out
 
 
 def atualizar_viagem(
@@ -3304,3 +3363,84 @@ def _rows(dal, sql: str) -> list[dict[str, Any]]:
                 clean[key] = value
         out.append(clean)
     return out
+
+
+def corrigir_escala_excepcional(
+    dal,
+    id_item: int,
+    payload: dict[str, Any],
+    executor: Any,
+) -> dict[str, Any] | MapaError:
+    """
+    Correção excepcional (somente Admin): altera veículo/motorista após histórico.
+    Exige motivo; registra before/after em tb_auditoria.
+    """
+    from .auditoria_service import registrar_auditoria
+    from .auth_service import UsuarioAuth
+
+    if not isinstance(executor, UsuarioAuth) or int(executor.codigo_perfil) != PERFIL_ADMIN:
+        return MapaError(
+            "Somente Administrador pode executar correção excepcional.",
+            "perfil_negado",
+        )
+
+    motivo = str(payload.get("motivo") or "").strip()
+    if not motivo:
+        return MapaError("Informe o motivo da correção excepcional.", "validacao")
+
+    atual = _item_map_detalhe(dal, int(id_item))
+    if atual is None:
+        return MapaError("Item não encontrado.", "nao_encontrado")
+
+    antes = {
+        "id_veiculo": atual.get("id_veiculo"),
+        "numero_frota": atual.get("numero_frota"),
+        "id_motorista": atual.get("id_motorista"),
+        "matricula_motorista": atual.get("matricula_motorista"),
+        "status_escala": atual.get("status_escala"),
+    }
+
+    id_veiculo = _resolver_id_veiculo(dal, payload) if (
+        payload.get("numero_frota") or payload.get("id_veiculo")
+    ) else int(atual["id_veiculo"])
+    if isinstance(id_veiculo, MapaError):
+        return id_veiculo
+
+    id_motorista = _resolver_id_motorista(dal, payload) if (
+        payload.get("matricula") or payload.get("id_motorista")
+    ) else int(atual["id_motorista"])
+    if isinstance(id_motorista, MapaError):
+        return id_motorista
+
+    ok = dal.update(
+        """
+        UPDATE tb_item_map
+        SET id_veiculo = ?, id_motorista = ?
+        WHERE id_item = ?
+        """,
+        (int(id_veiculo), int(id_motorista), int(id_item)),
+    )
+    if not ok:
+        return MapaError("Falha na correção excepcional.", "persistencia")
+
+    depois_item = _item_map_detalhe(dal, int(id_item))
+    if depois_item is None:
+        return MapaError("Item não encontrado após correção.", "nao_encontrado")
+
+    registrar_auditoria(
+        dal,
+        entidade="escala",
+        acao="corrigir",
+        id_entidade=id_item,
+        id_executor=executor.id_usuario,
+        perfil_executor=executor.codigo_perfil,
+        valores_antes=antes,
+        valores_depois={
+            "id_veiculo": depois_item.get("id_veiculo"),
+            "numero_frota": depois_item.get("numero_frota"),
+            "id_motorista": depois_item.get("id_motorista"),
+            "matricula_motorista": depois_item.get("matricula_motorista"),
+        },
+        motivo=motivo,
+    )
+    return depois_item

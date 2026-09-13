@@ -13,7 +13,7 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
       className={cn(
         filletGold
           ? 'card-fillet-gold'
-          : 'rounded-xl border border-border/60 bg-surface-card text-text shadow-card',
+          : 'rounded-xl border border-field bg-surface-card text-text shadow-card',
         className,
       )}
       {...props}

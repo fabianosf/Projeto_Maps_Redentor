@@ -18,16 +18,40 @@ class CadastroError:
     codigo: str = "validacao"
 
 
-# Validação genérica de frota (independente da empresa).
-# Aceita apenas: 47xxx | 30xxx | 13xxx (cinco dígitos).
+# Frota canônica (ADR-08): C47xxx | C30xxx | D13xxx (6 caracteres).
+# Aceita minúsculas na entrada; normaliza e persiste em maiúsculas.
 # Configurável via tb_configuracao / env: FROTA_REGEX, FROTA_MAX_LEN, FROTA_EXEMPLO, FROTA_MENSAGEM.
-_FROTA_REGEX_DEFAULT = r"^(47|30|13)[0-9]{3}$"
-_FROTA_MAX_LEN_DEFAULT = 5
-_FROTA_EXEMPLO_DEFAULT = "47123"
+_FROTA_REGEX_DEFAULT = r"^(C47|C30|D13)[0-9]{3}$"
+_FROTA_MAX_LEN_DEFAULT = 6
+_FROTA_EXEMPLO_DEFAULT = "C47654"
 _FROTA_MENSAGEM_DEFAULT = (
-    "Informe um carro válido: 47xxx, 30xxx ou 13xxx. "
-    "Exemplos: 47123, 30123 ou 13123."
+    "Informe um carro válido: C47xxx (Redentor), C30xxx (Futuro) ou D13xxx (Barra). "
+    "Exemplos: C47654, C30114 ou D13450."
 )
+# Prefixo obrigatório por empresa (descrição).
+_FROTA_PREFIXO_EMPRESA = (
+    ("redentor", "C47"),
+    ("futuro", "C30"),
+    ("barra", "D13"),
+)
+
+
+def _normalizar_frota(raw: str) -> str:
+    return re.sub(r"[^A-Z0-9]", "", (raw or "").strip().upper())
+
+
+def _prefixo_frota_empresa(empresa_descricao: str | None) -> str | None:
+    key = (
+        (empresa_descricao or "")
+        .strip()
+        .lower()
+        .encode("ascii", "ignore")
+        .decode("ascii")
+    )
+    for nome, prefixo in _FROTA_PREFIXO_EMPRESA:
+        if nome in key:
+            return prefixo
+    return None
 
 
 def _cfg_valor(dal, chave: str) -> Optional[str]:
@@ -157,30 +181,42 @@ def _proximo_codigo_veiculo(dal) -> int:
 
 
 def validar_frota(
-    numero_frota: str, dal=None
+    numero_frota: str,
+    dal=None,
+    *,
+    empresa_descricao: str | None = None,
 ) -> CadastroError | tuple[str, int]:
     """
-    Valida frota genérica (única, formato configurável).
-    Retorna (frota_normalizada, codigo_veiculo_sugerido) ou CadastroError.
-    Não depende da empresa.
+    Valida frota canônica (C47/C30/D13 + 3 dígitos).
+    Retorna (frota_normalizada_maiuscula, codigo_veiculo_sugerido) ou CadastroError.
+    Se empresa_descricao for informada, exige prefixo compatível.
     """
     regra = obter_regra_frota(dal)
-    frota = (numero_frota or "").strip().upper()
+    frota = _normalizar_frota(numero_frota)
     mensagem = str(regra["mensagem"])
     max_len = int(regra["max_len"])
 
     if not frota:
         return CadastroError(mensagem, "validacao")
-    if len(frota) > max_len:
+    if len(frota) != max_len and len(frota) > max_len:
+        return CadastroError(mensagem, "frota_invalida")
+    if len(frota) != max_len:
         return CadastroError(mensagem, "frota_invalida")
     try:
-        padrao = re.compile(str(regra["regex"]))
+        padrao = re.compile(str(regra["regex"]), re.IGNORECASE)
     except re.error:
-        padrao = re.compile(_FROTA_REGEX_DEFAULT)
+        padrao = re.compile(_FROTA_REGEX_DEFAULT, re.IGNORECASE)
     if not padrao.fullmatch(frota):
         return CadastroError(mensagem, "frota_invalida")
 
-    # codigo_veiculo: dígitos da frota quando houver; senão próximo sequencial.
+    prefixo_emp = _prefixo_frota_empresa(empresa_descricao)
+    if prefixo_emp and not frota.startswith(prefixo_emp):
+        return CadastroError(
+            f"Frota incompatível com a empresa. Use prefixo {prefixo_emp} "
+            f"(ex.: {prefixo_emp}654).",
+            "frota_empresa_incompativel",
+        )
+
     digitos = re.sub(r"\D", "", frota)
     if digitos:
         try:
@@ -194,13 +230,13 @@ def validar_frota(
     return frota, abs(hash(frota)) % 1_000_000_000 or 1
 
 
-# Compat: nome antigo usado por mapa_service / testes legados.
 def _validar_frota_empresa(
     numero_frota: str, empresa_descricao: str = ""
 ) -> CadastroError | tuple[str, int]:
-    """Compat: ignora empresa; valida formato genérico."""
-    del empresa_descricao
-    return validar_frota(numero_frota, dal=None)
+    """Valida formato + prefixo da empresa."""
+    return validar_frota(
+        numero_frota, dal=None, empresa_descricao=empresa_descricao or None
+    )
 
 
 def criar_veiculo(
@@ -210,10 +246,11 @@ def criar_veiculo(
     id_empresa: int | None = None,
 ) -> dict[str, Any] | CadastroError:
     """
-    Cria veículo independente (identificador único = numero_frota).
-    id_empresa é opcional/informativo — não amarra o formato da frota.
+    Cria veículo (identificador único = numero_frota canônico).
+    id_empresa é obrigatório para amarrar o prefixo à empresa.
     """
     id_emp: int | None = None
+    empresa_desc: str | None = None
     if id_empresa is not None and str(id_empresa).strip() not in ("", "null", "None"):
         try:
             id_emp = int(id_empresa)
@@ -222,8 +259,16 @@ def criar_veiculo(
         empresa = _empresa_por_id(dal, id_emp)
         if empresa is None:
             return CadastroError("Empresa não encontrada ou inativa.", "validacao")
+        empresa_desc = str(empresa.get("descricao") or "")
+    else:
+        return CadastroError(
+            "Selecione a empresa antes de informar o veículo.",
+            "empresa_obrigatoria",
+        )
 
-    validado = validar_frota(numero_frota, dal=dal)
+    validado = validar_frota(
+        numero_frota, dal=dal, empresa_descricao=empresa_desc
+    )
     if isinstance(validado, CadastroError):
         return validado
     frota, codigo_sugerido = validado

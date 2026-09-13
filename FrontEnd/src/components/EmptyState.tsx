@@ -32,7 +32,7 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        'flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-surface-card px-6 py-16 text-center',
+        'flex flex-1 flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-field bg-surface-card px-6 py-16 text-center shadow-card',
         className,
       )}
       role="status"
@@ -41,7 +41,7 @@ export function EmptyState({
         <span className="icon-circle-navy" aria-hidden>
           <Icon className="h-5 w-5" strokeWidth={2.25} />
         </span>
-      ) : icon ? (
+      ) : icon != null && typeof icon !== 'function' ? (
         <span className="icon-circle-navy" aria-hidden>
           {icon}
         </span>

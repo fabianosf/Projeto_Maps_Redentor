@@ -1,4 +1,8 @@
-# Setup local — RedMapa (Flask + React/Vite/TS + MariaDB)
+## Setup local — RedMapa (Flask + React/Vite/TS)
+
+**PostgreSQL no PC (recomendado, sem Docker):** veja [`README.md`](../README.md) e `scripts/setup_postgresql_local.ps1`.
+
+**MariaDB (empresa / lab alternativo):** continue abaixo.
 
 Passo a passo para subir API e frontend no Windows (PowerShell). Não cria nem altera `chave.key` / `.dat` — só indica onde ficam.
 

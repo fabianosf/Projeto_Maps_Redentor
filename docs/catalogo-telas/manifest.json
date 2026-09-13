@@ -1,0 +1,110 @@
+[
+  {
+    "title": "Login",
+    "route": "/login",
+    "file": "/home/fabianosf/Desktop/Maps/docs/catalogo-telas/screenshots/01-login.png",
+    "slug": "01-login"
+  },
+  {
+    "title": "Recuperar senha",
+    "route": "/recuperar-senha",
+    "file": "/home/fabianosf/Desktop/Maps/docs/catalogo-telas/screenshots/02-recuperar-senha.png",
+    "slug": "02-recuperar-senha"
+  },
+  {
+    "title": "Primeiro acesso",
+    "route": "/primeiro-acesso",
+    "file": "/home/fabianosf/Desktop/Maps/docs/catalogo-telas/screenshots/03-primeiro-acesso.png",
+    "slug": "03-primeiro-acesso"
+  },
+  {
+    "title": "Início",
+    "route": "/principal",
+    "file": "/home/fabianosf/Desktop/Maps/docs/catalogo-telas/screenshots/04-inicio.png",
+    "slug": "04-inicio"
+  },
+  {
+    "title": "Mapas — lista",
+    "route": "/mapas",
+    "file": "/home/fabianosf/Desktop/Maps/docs/catalogo-telas/screenshots/05-mapas-lista.png",
+    "slug": "05-mapas-lista"
+  },
+  {
+    "title": "Novo mapa",
+    "route": "/mapas/novo",
+    "file": "/home/fabianosf/Desktop/Maps/docs/catalogo-telas/screenshots/06-mapa-novo.png",
+    "slug": "06-mapa-novo"
+  },
+  {
+    "title": "Detalhe do mapa",
+    "route": "/mapas/42",
+    "file": "/home/fabianosf/Desktop/Maps/docs/catalogo-telas/screenshots/07-mapa-detalhe.png",
+    "slug": "07-mapa-detalhe"
+  },
+  {
+    "title": "Editar mapa",
+    "route": "/mapas/42/editar",
+    "file": "/home/fabianosf/Desktop/Maps/docs/catalogo-telas/screenshots/08-mapa-editar.png",
+    "slug": "08-mapa-editar"
+  },
+  {
+    "title": "Guia",
+    "route": "/guia",
+    "file": "/home/fabianosf/Desktop/Maps/docs/catalogo-telas/screenshots/09-guia.png",
+    "slug": "09-guia"
+  },
+  {
+    "title": "Nova guia",
+    "route": "/guia/nova",
+    "file": "/home/fabianosf/Desktop/Maps/docs/catalogo-telas/screenshots/10-guia-nova.png",
+    "slug": "10-guia-nova"
+  },
+  {
+    "title": "Registros",
+    "route": "/registros",
+    "file": "/home/fabianosf/Desktop/Maps/docs/catalogo-telas/screenshots/11-registros.png",
+    "slug": "11-registros"
+  },
+  {
+    "title": "Chegada | Saída",
+    "route": "/entrada-saida",
+    "file": "/home/fabianosf/Desktop/Maps/docs/catalogo-telas/screenshots/12-entrada-saida.png",
+    "slug": "12-entrada-saida"
+  },
+  {
+    "title": "Banco de horas",
+    "route": "/banco-horas",
+    "file": "/home/fabianosf/Desktop/Maps/docs/catalogo-telas/screenshots/13-banco-horas.png",
+    "slug": "13-banco-horas"
+  },
+  {
+    "title": "Indicadores",
+    "route": "/indicadores",
+    "file": "/home/fabianosf/Desktop/Maps/docs/catalogo-telas/screenshots/14-indicadores.png",
+    "slug": "14-indicadores"
+  },
+  {
+    "title": "Mais",
+    "route": "/mais",
+    "file": "/home/fabianosf/Desktop/Maps/docs/catalogo-telas/screenshots/15-mais.png",
+    "slug": "15-mais"
+  },
+  {
+    "title": "Configuração",
+    "route": "/configuracao",
+    "file": "/home/fabianosf/Desktop/Maps/docs/catalogo-telas/screenshots/16-configuracao.png",
+    "slug": "16-configuracao"
+  },
+  {
+    "title": "Config. indicadores",
+    "route": "/configuracao/indicadores",
+    "file": "/home/fabianosf/Desktop/Maps/docs/catalogo-telas/screenshots/17-config-indicadores.png",
+    "slug": "17-config-indicadores"
+  },
+  {
+    "title": "Cadastro de usuário",
+    "route": "/usuarios",
+    "file": "/home/fabianosf/Desktop/Maps/docs/catalogo-telas/screenshots/18-usuarios.png",
+    "slug": "18-usuarios"
+  }
+]

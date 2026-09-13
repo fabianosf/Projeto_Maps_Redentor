@@ -13,19 +13,19 @@ type Props = {
 
 const STYLES: Record<Tone, { wrap: string; icon: typeof Info }> = {
   error: {
-    wrap: 'border-destructive/30 bg-destructive/5 text-destructive',
+    wrap: 'persistent-banner persistent-banner--error text-[15px]',
     icon: AlertCircle,
   },
   success: {
-    wrap: 'border-success/30 bg-success/5 text-success',
+    wrap: 'persistent-banner persistent-banner--success text-[15px]',
     icon: CheckCircle2,
   },
   warning: {
-    wrap: 'border-warning/30 bg-warning/5 text-warning',
+    wrap: 'persistent-banner persistent-banner--warning text-[15px]',
     icon: TriangleAlert,
   },
   info: {
-    wrap: 'border-info/30 bg-info/5 text-info',
+    wrap: 'persistent-banner persistent-banner--info text-[15px]',
     icon: Info,
   },
 };
@@ -35,18 +35,11 @@ export function DsAlert({ tone = 'info', title, children, className }: Props) {
   const s = STYLES[tone];
   const Icon = s.icon;
   return (
-    <div
-      role="alert"
-      className={cn(
-        'flex gap-3 rounded-xl border px-3.5 py-3 text-sm',
-        s.wrap,
-        className,
-      )}
-    >
+    <div role="alert" className={cn(s.wrap, className)}>
       <Icon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
-      <div className="min-w-0 space-y-0.5 text-foreground">
+      <div className="min-w-0 space-y-0.5">
         {title ? <p className="font-bold">{title}</p> : null}
-        <div className="text-[13px] leading-snug text-foreground/90">{children}</div>
+        <div className="text-[14px] font-medium leading-snug">{children}</div>
       </div>
     </div>
   );

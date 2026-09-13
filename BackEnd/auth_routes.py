@@ -156,12 +156,28 @@ def me():
     Verifica sessão atual.
     Sem cookie/sessão válida: 200 + autenticado=false (evita 401 no boot do frontend).
     Com sessão: 200 + usuario/sessao.
+    Banco indisponível: 503 (não 500 opaco).
     """
     session = get_current_session(request.cookies)
     if session is None:
         return jsonify({"ok": True, "autenticado": False, "usuario": None}), 200
 
-    usuario = buscar_usuario_por_id(g.dal, session.id_usuario)
+    try:
+        if not g.dal.test_connection():
+            sgbd = g.dal.get_sgbd() if hasattr(g.dal, "get_sgbd") else ""
+            return json_error(
+                mensagem_db_indisponivel(sgbd), 503, "db_indisponivel"
+            )
+        usuario = buscar_usuario_por_id(g.dal, session.id_usuario)
+    except Exception:
+        logger.exception("Falha em GET /auth/me ao consultar usuário")
+        sgbd = ""
+        try:
+            sgbd = g.dal.get_sgbd() if hasattr(g.dal, "get_sgbd") else ""
+        except Exception:
+            pass
+        return json_error(mensagem_db_indisponivel(sgbd), 503, "db_indisponivel")
+
     if usuario is None or not usuario.ativo:
         destroy_session(request.cookies)
         response = jsonify({"ok": True, "autenticado": False, "usuario": None})

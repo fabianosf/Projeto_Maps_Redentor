@@ -39,6 +39,14 @@ def _cors_origins() -> list[str]:
     return filtered
 
 
+def _cookie_secure_enabled() -> bool:
+    return os.getenv("REDMAPA_COOKIE_SECURE", "false").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
 def init_security(app: Flask) -> None:
     """Aplica CORS, Limiter e headers de segurança."""
     origins = _cors_origins()
@@ -48,7 +56,13 @@ def init_security(app: Flask) -> None:
         app,
         resources={r"/api/*": {"origins": origins}},
         supports_credentials=True,
-        allow_headers=["Content-Type", "Authorization"],
+        allow_headers=[
+            "Content-Type",
+            "Authorization",
+            "X-Request-ID",
+            "X-Correlation-ID",
+        ],
+        expose_headers=["X-Request-ID"],
         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     )
 
@@ -71,6 +85,12 @@ def init_security(app: Flask) -> None:
             "Permissions-Policy",
             "geolocation=(), microphone=(), camera=()",
         )
+        # HSTS só quando cookies Secure (proxy HTTPS / produção).
+        if _cookie_secure_enabled():
+            response.headers.setdefault(
+                "Strict-Transport-Security",
+                "max-age=31536000; includeSubDomains",
+            )
         return response
 
 

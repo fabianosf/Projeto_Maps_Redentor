@@ -135,7 +135,7 @@ def test_item_sem_motorista_ou_horario(client):
 
 
 def test_item_frota_generica_aceita(client):
-    """Frota '100' (antes rejeitada por prefixo) é válida no formato genérico."""
+    """Frota canônica C30100 (veículo seed id=3) é aceita no item."""
     auth_client(client, "1")
     cri = client.post("/api/v1/mapas", json=_payload_mapa())
     id_reg = cri.get_json()["mapa"]["id_registro"]
@@ -205,7 +205,7 @@ def test_viagens_isoladas_por_item_e_motorista(client, dal):
     id_item_2 = int(i2.get_json()["item"]["id_item"])
     assert id_item_1 != id_item_2
 
-    # Sem id_mapa_item no body → rejeita
+    # Sem id_mapa_item no body → usa o id da rota (P1)
     sem = client.post(
         f"/api/v1/mapas/itens/{id_item_1}/viagens",
         json={
@@ -215,33 +215,22 @@ def test_viagens_isoladas_por_item_e_motorista(client, dal):
             "qtd_pas_volta": 0,
         },
     )
-    assert sem.status_code == 400
-    assert "id_mapa_item" in sem.get_json()["mensagem"].lower()
+    assert sem.status_code == 201, sem.get_json()
+    assert int(sem.get_json()["viagem"]["id_mapa_item"]) == id_item_1
+    assert int(sem.get_json()["viagem"]["id_item_registro"]) == id_item_1
 
     # id_mapa_item divergente da rota → rejeita
     diverg = client.post(
         f"/api/v1/mapas/itens/{id_item_1}/viagens",
         json={
             "id_mapa_item": id_item_2,
-            "horario_saida": "2026-09-08 09:00:00",
-            "horario_chegada": "2026-09-08 10:00:00",
+            "horario_saida": "2026-09-08 10:00:00",
+            "horario_chegada": "2026-09-08 11:00:00",
         },
     )
     assert diverg.status_code == 400
 
-    v1 = client.post(
-        f"/api/v1/mapas/itens/{id_item_1}/viagens",
-        json={
-            "id_mapa_item": id_item_1,
-            "horario_saida": "2026-09-08 09:00:00",
-            "horario_chegada": "2026-09-08 10:00:00",
-            "qtd_pas_ida": 5,
-            "qtd_pas_volta": 2,
-        },
-    )
-    assert v1.status_code == 201, v1.get_json()
-    assert int(v1.get_json()["viagem"]["id_mapa_item"]) == id_item_1
-    assert int(v1.get_json()["viagem"]["id_item_registro"]) == id_item_1
+    v1 = sem  # viagem do item 1 já criada acima
 
     v2 = client.post(
         f"/api/v1/mapas/itens/{id_item_2}/viagens",

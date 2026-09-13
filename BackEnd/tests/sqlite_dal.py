@@ -406,6 +406,10 @@ class SqliteTestDal:
             "INSERT INTO tb_turno (id_turno, codigo_turno, descricao, ativo) "
             "VALUES (1, 1, 'TURNO 01', 1)"
         )
+        c.execute(
+            "INSERT INTO tb_turno (id_turno, codigo_turno, descricao, ativo) "
+            "VALUES (2, 2, 'TURNO 02', 1)"
+        )
         c.executemany(
             "INSERT INTO tb_local (id_local, codigo_local, descricao, ativo) VALUES (?, ?, ?, 1)",
             [(1, 10, "Terminal A"), (2, 20, "Terminal B")],
@@ -438,10 +442,10 @@ class SqliteTestDal:
             "INSERT INTO tb_veiculo (id_veiculo, codigo_veiculo, numero_frota, placa, ativo, id_empresa) "
             "VALUES (1, 1, 'C30001', 'ABC1D23', 1, 1)"
         )
-        # Frota só dígitos — usada por testes de Guia / Entrada-Saída
+        # Frota canônica Futuro (empresa 1) — usada por testes de Guia / Entrada-Saída
         c.execute(
             "INSERT INTO tb_veiculo (id_veiculo, codigo_veiculo, numero_frota, placa, ativo, id_empresa) "
-            "VALUES (3, 3, '100', 'PLA0100', 1, 1)"
+            "VALUES (3, 3, 'C30100', 'PLA0100', 1, 1)"
         )
         c.execute(
             "INSERT INTO tb_veiculo (id_veiculo, codigo_veiculo, numero_frota, placa, ativo, id_empresa) "
@@ -456,16 +460,62 @@ class SqliteTestDal:
             [
                 ("QTD_MAX_TENTATIVAS", "3"),
                 ("BLOQUEIO_TENTATIVAS_LOGIN", "1"),
-                ("FROTA_REGEX", r"^(47|30|13)[0-9]{3}$"),
-                ("FROTA_MAX_LEN", "5"),
-                ("FROTA_EXEMPLO", "47123"),
+                ("FROTA_REGEX", r"^(C47|C30|D13)[0-9]{3}$"),
+                ("FROTA_MAX_LEN", "6"),
+                ("FROTA_EXEMPLO", "C47654"),
                 (
                     "FROTA_MENSAGEM",
-                    "Informe um carro válido: 47xxx, 30xxx ou 13xxx. "
-                    "Exemplos: 47123, 30123 ou 13123.",
+                    "Informe um carro válido: C47xxx (Redentor), C30xxx (Futuro) ou D13xxx (Barra). "
+                    "Exemplos: C47654, C30114 ou D13450.",
                 ),
             ],
         )
+
+        # Auditoria + authz P1 (SQLite)
+        c.execute(
+            """
+            CREATE TABLE IF NOT EXISTS tb_auditoria (
+                id_auditoria INTEGER PRIMARY KEY AUTOINCREMENT,
+                entidade TEXT NOT NULL,
+                id_entidade TEXT,
+                acao TEXT NOT NULL,
+                id_executor INTEGER,
+                perfil_executor INTEGER,
+                criado_em TEXT NOT NULL,
+                tz TEXT NOT NULL DEFAULT 'America/Sao_Paulo',
+                correlation_id TEXT,
+                origem_ip TEXT,
+                valores_antes TEXT,
+                valores_depois TEXT,
+                motivo TEXT
+            )
+            """
+        )
+        try:
+            c.execute("ALTER TABLE tb_map ADD COLUMN id_responsavel INTEGER")
+        except Exception:
+            pass
+        try:
+            c.execute(
+                "ALTER TABLE tb_usuario ADD COLUMN permite_leitura_mapas_outros INTEGER NOT NULL DEFAULT 0"
+            )
+        except Exception:
+            pass
+        try:
+            c.execute(
+                "ALTER TABLE tb_usuario ADD COLUMN pendente_validacao_erp INTEGER NOT NULL DEFAULT 0"
+            )
+        except Exception:
+            pass
+        try:
+            c.execute("ALTER TABLE tb_usuario ADD COLUMN ticket_aprovacao_erp TEXT")
+        except Exception:
+            pass
+        try:
+            c.execute("ALTER TABLE tb_veiculo ADD COLUMN frota_status TEXT")
+        except Exception:
+            pass
+        c.execute("UPDATE tb_map SET id_responsavel = id_usuario WHERE id_responsavel IS NULL")
 
         senha_ok = hash_senha("Senha@123")
         # Admin — login normal
@@ -478,13 +528,13 @@ class SqliteTestDal:
             """,
             (senha_ok,),
         )
-        # Inspetor
+        # Inspetor (escopo empresa 1 / turno 1 / local 1)
         c.execute(
             """
             INSERT INTO tb_usuario (
                 id_usuario, matricula, nome, senha, id_perfil,
                 id_empresa, id_turno, id_local, ativo, trocar_senha
-            ) VALUES (2, '3', 'Inspetor Teste', ?, 3, NULL, NULL, NULL, 1, 0)
+            ) VALUES (2, '3', 'Inspetor Teste', ?, 3, 1, 1, 1, 1, 0)
             """,
             (senha_ok,),
         )
@@ -495,6 +545,16 @@ class SqliteTestDal:
                 id_usuario, matricula, nome, senha, id_perfil,
                 id_empresa, id_turno, id_local, ativo, trocar_senha
             ) VALUES (3, '2', 'Despachante Teste', ?, 2, 1, 1, 1, 1, 0)
+            """,
+            (senha_ok,),
+        )
+        # Segundo despachante (para testes de responsabilidade)
+        c.execute(
+            """
+            INSERT INTO tb_usuario (
+                id_usuario, matricula, nome, senha, id_perfil,
+                id_empresa, id_turno, id_local, ativo, trocar_senha
+            ) VALUES (5, '4', 'Despachante B', ?, 2, 1, 1, 1, 1, 0)
             """,
             (senha_ok,),
         )
@@ -522,6 +582,7 @@ def build_test_app(dal: Any):
     from BackEnd.guia_routes import guia_bp
     from BackEnd.mapa_routes import mapa_bp
     from BackEnd.motoristas_routes import motoristas_bp
+    from BackEnd.observability import init_observability
     from BackEnd.security import init_security
     from BackEnd.users_routes import users_bp
 
@@ -529,6 +590,7 @@ def build_test_app(dal: Any):
     app.config["TESTING"] = True
     app.config["JSON_AS_ASCII"] = False
     init_security(app)
+    init_observability(app)
     init_auth_routes(app, lambda: dal)
     app.register_blueprint(auth_bp)
     app.register_blueprint(users_bp)

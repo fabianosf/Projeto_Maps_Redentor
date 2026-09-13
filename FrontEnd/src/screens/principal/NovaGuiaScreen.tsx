@@ -52,7 +52,7 @@ const fieldClass = 'h-10 rounded-lg bg-white text-sm shadow-none border-slate-40
 const halfFieldClass = cn(fieldClass, 'w-full max-w-none');
 const selectTriggerClass = cn(fieldClass, 'h-10 w-full text-sm');
 const labelClass =
-  'flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900';
+  'flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-text';
 
 function toSelectValue(v: string): string {
   return v === '' ? SELECT_EMPTY : v;
@@ -100,7 +100,7 @@ function ReadonlyField({
   return (
     <div className="flex w-full flex-col gap-1">
       <span className={labelClass}>{label}</span>
-      <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800">
+      <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-text">
         {value != null && String(value).trim() !== '' ? String(value) : '—'}
       </p>
     </div>
@@ -361,7 +361,7 @@ export function NovaGuiaScreen() {
 
   return (
     <AppShell className="bg-screen">
-      <div className="page flex min-h-0 flex-1 flex-col bg-screen text-slate-900">
+      <div className="page flex min-h-0 flex-1 flex-col bg-screen text-text">
         <OpsPageHeader title="Nova guia" />
 
         <div className="flex min-h-0 flex-1 flex-col">
@@ -462,8 +462,8 @@ export function NovaGuiaScreen() {
           </div>
 
           {contextoEscala ? (
-            <div className="space-y-3 rounded-xl border border-slate-300 bg-white/70 p-3">
-              <p className="text-center text-[13px] font-semibold uppercase tracking-wide text-slate-700">
+            <div className="space-y-3 rounded-xl border border-slate-300 bg-surface-card p-3">
+              <p className="text-center text-[13px] font-semibold uppercase tracking-wide text-text">
                 Dados da escala (somente leitura)
               </p>
               <div className="grid grid-cols-2 gap-2">
@@ -517,7 +517,7 @@ export function NovaGuiaScreen() {
               {(contextoEscala.viagens_previstas?.length ?? 0) > 0 ? (
                 <div>
                   <p className={`${labelClass} mb-1`}>Viagens previstas</p>
-                  <ul className="max-h-28 space-y-1 overflow-y-auto text-sm text-slate-700">
+                  <ul className="max-h-28 space-y-1 overflow-y-auto text-sm text-text">
                     {contextoEscala.viagens_previstas!.map((v, idx) => (
                       <li
                         key={v.id_viagem ?? idx}
@@ -554,10 +554,10 @@ export function NovaGuiaScreen() {
             </div>
           ) : null}
 
-          <p className="pt-1 text-center text-[13px] font-semibold uppercase tracking-wide text-slate-700">
+          <p className="pt-1 text-center text-[13px] font-semibold uppercase tracking-wide text-text">
             Abertura da jornada
           </p>
-          <p className="text-center text-xs text-slate-600">
+          <p className="text-center text-xs text-text-muted">
             A guia permanece aberta enquanto o motorista estiver na mesma empresa.
             Preencha o fim só ao encerrar a jornada.
           </p>
@@ -707,12 +707,12 @@ export function NovaGuiaScreen() {
           </div>
           </div>
 
-          <div className="shrink-0 border-t border-slate-400/40 bg-screen px-4 pt-3 pb-tabbar">
+          <div className="shrink-0 border-t border-field bg-screen px-4 pt-3 pb-tabbar">
             <div className="flex gap-2">
               <Button
                 type="button"
                 variant="outline"
-                className="h-12 min-h-[44px] flex-1"
+                className="h-12 min-h-[48px] flex-1"
                 disabled={busy}
                 onClick={() => navigate('/guia')}
               >
@@ -720,7 +720,7 @@ export function NovaGuiaScreen() {
               </Button>
               <Button
                 type="button"
-                className="h-12 min-h-[44px] flex-1"
+                className="h-12 min-h-[48px] flex-1"
                 disabled={busy}
                 onClick={() => void salvar()}
               >
@@ -737,13 +737,13 @@ export function NovaGuiaScreen() {
         />
 
         <Dialog open={alteracaoOpen} onOpenChange={setAlteracaoOpen}>
-          <DialogContent className="max-w-[380px] border-slate-400/50 bg-screen p-5">
+          <DialogContent className="max-w-[380px] border-field bg-screen p-5">
             <DialogHeader>
               <DialogTitle className="text-center text-[16px] uppercase tracking-wide">
                 Alteração de escala
               </DialogTitle>
             </DialogHeader>
-            <p className="mt-2 text-sm text-slate-600">
+            <p className="mt-2 text-sm text-text-muted">
               Troca de veículo, motorista ou horário exige justificativa e fica
               registrada na auditoria.
             </p>

@@ -768,7 +768,7 @@ export function UsuariosScreen() {
                 />
               </div>
               <div className="-mt-[1mm] ml-auto flex flex-col items-start gap-1.5">
-                <Label className="text-[15px] font-semibold uppercase leading-none text-slate-900">
+                <Label className="text-[15px] font-semibold uppercase leading-none text-text">
                   FOTO:
                 </Label>
                 <div
@@ -791,7 +791,7 @@ export function UsuariosScreen() {
             {mode === 'include' && (consultaCadastroMsg || consultaCadastroErro) ? (
               <p
                 className={`text-sm ${
-                  consultaCadastroErro ? 'text-destructive' : 'text-slate-700'
+                  consultaCadastroErro ? 'text-destructive' : 'text-text'
                 }`}
                 role={consultaCadastroErro ? 'alert' : 'status'}
               >
@@ -813,7 +813,7 @@ export function UsuariosScreen() {
             />
 
             <div className="flex w-full flex-col gap-1.5">
-              <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900">
+              <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-text">
                 Perfil <span className="req"> *</span>
               </Label>
               <Select
@@ -843,7 +843,7 @@ export function UsuariosScreen() {
 
             <div className="grid grid-cols-2 items-start gap-3">
               <div className="flex w-full flex-col gap-1.5">
-                <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900">
+                <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-text">
                   Empresa{isDespachante ? <span className="req"> *</span> : null}
                 </Label>
                 <Select
@@ -871,7 +871,7 @@ export function UsuariosScreen() {
               </div>
 
               <div className="flex w-full flex-col gap-1.5">
-                <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900">
+                <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-text">
                   Turno{isDespachante ? <span className="req"> *</span> : null}
                 </Label>
                 <Select
@@ -900,7 +900,7 @@ export function UsuariosScreen() {
             </div>
 
             <div className="flex w-full flex-col gap-1.5">
-              <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-slate-900">
+              <Label className="flex h-5 items-center text-[15px] font-semibold uppercase leading-none text-text">
                 Local{isDespachante ? <span className="req"> *</span> : null}
               </Label>
               <Select
@@ -980,16 +980,16 @@ export function UsuariosScreen() {
         />
 
         <Dialog open={pesquisarOpen} onOpenChange={setPesquisarOpen}>
-          <DialogContent className="max-w-[340px] border-slate-400/50 bg-screen p-5">
+          <DialogContent className="max-w-[340px] border-field bg-screen p-5">
             <DialogHeader>
-              <DialogTitle className="text-center text-[16px] uppercase tracking-wide text-slate-900">
+              <DialogTitle className="text-center text-[16px] uppercase tracking-wide text-text">
                 Pesquisar usuário
               </DialogTitle>
             </DialogHeader>
             <div className="mt-2">
               <Label
                 htmlFor="pesquisa_matricula_usuario"
-                className="mb-1.5 block text-sm font-semibold text-slate-800"
+                className="mb-1.5 block text-sm font-semibold text-text"
               >
                 Matrícula
               </Label>
@@ -1002,7 +1002,7 @@ export function UsuariosScreen() {
                   setPesquisarMatricula(onlyMatriculaDigits(e.target.value))
                 }
                 maxLength={MATRICULA_MAX_LENGTH}
-                className="h-12 rounded-lg border-slate-400 bg-white text-base text-slate-900"
+                className="h-12 rounded-lg border-slate-400 bg-white text-base text-text"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();

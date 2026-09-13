@@ -227,7 +227,10 @@ describe('MapaDetalheScreen — viagens por item/motorista', () => {
     });
     await user.click(screen.getAllByText('C30000')[0]);
 
-    await user.click(screen.getByRole('button', { name: /nova viagem/i }));
+    const novaViagemBtns = screen.getAllByRole('button', { name: /nova viagem/i });
+    const enabled = novaViagemBtns.find((b) => !(b as HTMLButtonElement).disabled);
+    expect(enabled).toBeTruthy();
+    await user.click(enabled!);
     const dialog = await screen.findByRole('dialog');
     const saida = within(dialog).getByLabelText(/^saída/i);
     const chegada = within(dialog).getByLabelText(/^chegada/i);

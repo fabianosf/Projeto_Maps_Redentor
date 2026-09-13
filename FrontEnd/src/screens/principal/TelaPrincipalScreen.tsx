@@ -70,19 +70,19 @@ export function TelaPrincipalScreen() {
           </Card>
 
           <section className="space-y-2" aria-label="Alertas">
-            <h3 className="px-0.5 text-[13px] font-bold uppercase tracking-wide text-text">
+            <h3 className="px-0.5 text-[13px] font-bold uppercase tracking-wide text-brand-navy">
               Alertas
             </h3>
-            <div className="flex items-start gap-3 rounded-xl border border-brand-gold/35 bg-brand-gold/10 px-3.5 py-3">
+            <div className="flex items-start gap-3 rounded-xl border border-warn/40 bg-warn/10 px-4 py-3.5">
               <AlertTriangle
-                className="mt-0.5 h-5 w-5 shrink-0 text-brand-gold"
+                className="mt-0.5 h-5 w-5 shrink-0 text-warn"
                 aria-hidden
               />
               <div className="min-w-0">
-                <p className="text-sm font-bold text-text">
+                <p className="text-[15px] font-bold text-text">
                   Acompanhe pendências na Guia
                 </p>
-                <p className="mt-0.5 text-xs leading-snug text-text-muted">
+                <p className="mt-1 text-[14px] leading-snug text-text-muted">
                   Saídas, chegadas, leituras e divergências ficam no módulo
                   operacional Guia.
                 </p>
@@ -90,13 +90,14 @@ export function TelaPrincipalScreen() {
             </div>
           </section>
 
-          <section className="space-y-2" aria-label="Atalhos operacionais">
-            <h3 className="px-0.5 text-[13px] font-bold uppercase tracking-wide text-text">
-              Atalhos
+          <section className="space-y-3" aria-label="Atalhos operacionais">
+            <h3 className="px-0.5 text-[13px] font-bold uppercase tracking-wide text-brand-navy">
+              Operação
             </h3>
-            <div className="flex flex-col gap-2.5">
+            <div className="flex flex-col gap-3">
               {podeMapas ? (
                 <HubNavCard
+                  priority
                   title="Mapas"
                   description="Planejamento de escalas do turno"
                   icon={<MapPinned className="h-5 w-5" aria-hidden />}
@@ -104,16 +105,25 @@ export function TelaPrincipalScreen() {
                 />
               ) : null}
               <HubNavCard
+                priority
                 title="Guia"
                 description="Registrar e acompanhar viagens"
                 icon={<NotebookTabs className="h-5 w-5" aria-hidden />}
                 onClick={() => navigate('/guia')}
               />
               <HubNavCard
+                priority
                 title="Chegada / Saída"
                 description="Registros de ponto e auditoria"
                 icon={<Bus className="h-5 w-5" aria-hidden />}
                 onClick={() => navigate('/entrada-saida')}
+              />
+              <HubNavCard
+                priority
+                title="Registros"
+                description="Histórico operacional"
+                icon={<NotebookTabs className="h-5 w-5" aria-hidden />}
+                onClick={() => navigate('/registros')}
               />
               {podeBancoHoras ? (
                 <HubNavCard

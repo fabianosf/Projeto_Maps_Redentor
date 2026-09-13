@@ -11,13 +11,17 @@ import traceback
 
 from flask import Blueprint, g, jsonify, request
 
-from .auth_middleware import json_error, require_banco_horas_access, require_mapa_access
+from .auth_middleware import json_error, require_admin, require_banco_horas_access, require_mapa_access
 from .auth_service import UsuarioAuth
+from .auditoria_service import registrar_auditoria
+from .mapa_authz import autorizar_item, autorizar_mapa, transferir_responsavel
+from .security import limiter
 from .mapa_service import (
     MapaError,
     atualizar_item_map,
     atualizar_mapa,
     atualizar_viagem,
+    corrigir_escala_excepcional,
     criar_item_map,
     criar_mapa,
     criar_viagem,
@@ -45,6 +49,22 @@ mapa_bp = Blueprint("mapa", __name__, url_prefix="/api/v1/mapas")
 
 def _dal():
     return g.dal
+
+
+def _authz_mapa(id_registro: int, modo: str = "escrita"):
+    usuario: UsuarioAuth = g.auth_usuario
+    erro = autorizar_mapa(_dal(), usuario, id_registro, modo=modo)  # type: ignore[arg-type]
+    if erro:
+        return json_error(erro.mensagem, erro.status, erro.codigo)
+    return None
+
+
+def _authz_item(id_item: int, modo: str = "escrita"):
+    usuario: UsuarioAuth = g.auth_usuario
+    erro = autorizar_item(_dal(), usuario, id_item, modo=modo)  # type: ignore[arg-type]
+    if erro:
+        return json_error(erro.mensagem, erro.status, erro.codigo)
+    return None
 
 
 @mapa_bp.get("/indicadores")
@@ -77,7 +97,10 @@ def list_maps():
 @mapa_bp.delete("")
 @require_mapa_access
 def delete_all_maps():
-    """DELETE /api/v1/mapas — remove todos os MAPAs e dependências."""
+    """DELETE /api/v1/mapas — remove todos os MAPAs e dependências (somente Admin)."""
+    usuario: UsuarioAuth = g.auth_usuario
+    if usuario.codigo_perfil != 1:  # PERFIL_ADMIN
+        return json_error("Somente Administrador pode excluir todos os MAPAs.", 403, "perfil_negado")
     resultado = excluir_todos_mapas(_dal())
     if isinstance(resultado, MapaError):
         status = 404 if resultado.codigo == "nao_encontrado" else 400
@@ -126,16 +149,10 @@ def ocupacao_escalas():
             exc,
             traceback.format_exc(),
         )
-        return (
-            jsonify(
-                {
-                    "message": "Não foi possível consultar a disponibilidade operacional.",
-                    "ok": False,
-                    "mensagem": "Não foi possível consultar a disponibilidade operacional.",
-                    "codigo": "disponibilidade_indisponivel",
-                }
-            ),
+        return json_error(
+            "Não foi possível consultar a disponibilidade operacional.",
             500,
+            "disponibilidade_indisponivel",
         )
 
     return jsonify(
@@ -153,6 +170,9 @@ def ocupacao_escalas():
 @mapa_bp.get("/<int:id_registro>")
 @require_mapa_access
 def get_map(id_registro: int):
+    neg = _authz_mapa(id_registro, "leitura")
+    if neg:
+        return neg
     try:
         resultado = obter_mapa_completo(_dal(), id_registro)
     except Exception as exc:  # noqa: BLE001 — detalhe nunca vira 500 opaco
@@ -190,6 +210,12 @@ def get_map(id_registro: int):
 @require_mapa_access
 def create_map():
     usuario: UsuarioAuth = g.auth_usuario
+    if usuario.pendente_validacao_erp:
+        return json_error(
+            "Usuário pendente de validação no ERP — operação sensível bloqueada.",
+            403,
+            "pendente_validacao_erp",
+        )
     body = request.get_json(silent=True) or {}
     resultado = criar_mapa(_dal(), usuario.id_usuario, body)
     if isinstance(resultado, MapaError):
@@ -203,26 +229,82 @@ def create_map():
         elif resultado.codigo in ("empresa_obrigatoria", "empresa_invalida"):
             status = 400
         return json_error(resultado.mensagem, status, resultado.codigo)
+    registrar_auditoria(
+        _dal(),
+        entidade="mapa",
+        acao="criar",
+        id_entidade=resultado.get("id_registro"),
+        id_executor=usuario.id_usuario,
+        perfil_executor=usuario.codigo_perfil,
+        valores_depois={"codigo_mapa": resultado.get("codigo_mapa")},
+    )
     return jsonify({"ok": True, "mapa": resultado}), 201
 
 
 @mapa_bp.put("/<int:id_registro>")
 @require_mapa_access
 def update_map(id_registro: int):
+    neg = _authz_mapa(id_registro, "escrita")
+    if neg:
+        return neg
     body = request.get_json(silent=True) or {}
     resultado = atualizar_mapa(_dal(), id_registro, body)
     if isinstance(resultado, MapaError):
         status = 404 if resultado.codigo == "nao_encontrado" else 400
         return json_error(resultado.mensagem, status, resultado.codigo)
+    usuario: UsuarioAuth = g.auth_usuario
+    registrar_auditoria(
+        _dal(),
+        entidade="mapa",
+        acao="editar",
+        id_entidade=id_registro,
+        id_executor=usuario.id_usuario,
+        perfil_executor=usuario.codigo_perfil,
+        valores_depois=body,
+    )
     return jsonify({"ok": True, "mapa": resultado}), 200
+
+
+@mapa_bp.post("/<int:id_registro>/transferir")
+@require_admin
+def transfer_map(id_registro: int):
+    body = request.get_json(silent=True) or {}
+    try:
+        id_novo = int(body.get("id_responsavel"))
+    except (TypeError, ValueError):
+        return json_error("id_responsavel inválido.", 400, "validacao")
+    motivo = str(body.get("motivo") or "").strip()
+    usuario: UsuarioAuth = g.auth_usuario
+    erro = transferir_responsavel(
+        _dal(),
+        id_registro=id_registro,
+        id_novo_responsavel=id_novo,
+        executor=usuario,
+        motivo=motivo,
+    )
+    if erro:
+        return json_error(erro.mensagem, erro.status, erro.codigo)
+    return jsonify({"ok": True}), 200
 
 
 @mapa_bp.delete("/<int:id_registro>")
 @require_mapa_access
 def delete_map(id_registro: int):
+    neg = _authz_mapa(id_registro, "escrita")
+    if neg:
+        return neg
     erro = excluir_mapa(_dal(), id_registro)
     if erro:
         return json_error(erro.mensagem, 404, erro.codigo)
+    usuario: UsuarioAuth = g.auth_usuario
+    registrar_auditoria(
+        _dal(),
+        entidade="mapa",
+        acao="excluir",
+        id_entidade=id_registro,
+        id_executor=usuario.id_usuario,
+        perfil_executor=usuario.codigo_perfil,
+    )
     return jsonify({"ok": True}), 200
 
 
@@ -248,18 +330,38 @@ def _status_mapa_error(erro: MapaError) -> int:
 @mapa_bp.post("/<int:id_registro>/itens")
 @require_mapa_access
 def create_item(id_registro: int):
+    neg = _authz_mapa(id_registro, "escrita")
+    if neg:
+        return neg
     body = request.get_json(silent=True) or {}
     resultado = criar_item_map(_dal(), id_registro, body)
     if isinstance(resultado, MapaError):
         return json_error(
             resultado.mensagem, _status_mapa_error(resultado), resultado.codigo
         )
+    usuario: UsuarioAuth = g.auth_usuario
+    registrar_auditoria(
+        _dal(),
+        entidade="escala",
+        acao="criar",
+        id_entidade=resultado.get("id_item"),
+        id_executor=usuario.id_usuario,
+        perfil_executor=usuario.codigo_perfil,
+        valores_depois={
+            "id_mapa": id_registro,
+            "numero_frota": resultado.get("numero_frota"),
+            "matricula_motorista": resultado.get("matricula_motorista"),
+        },
+    )
     return jsonify({"ok": True, "item": resultado}), 201
 
 
 @mapa_bp.put("/itens/<int:id_item>")
 @require_mapa_access
 def update_item(id_item: int):
+    neg = _authz_item(id_item, "escrita")
+    if neg:
+        return neg
     body = request.get_json(silent=True) or {}
     resultado = atualizar_item_map(_dal(), id_item, body)
     if isinstance(resultado, MapaError):
@@ -270,10 +372,44 @@ def update_item(id_item: int):
 
 
 @mapa_bp.post("/itens/<int:id_item>/baixa")
+@limiter.limit("30 per minute")
 @require_mapa_access
 def baixa_item(id_item: int):
+    neg = _authz_item(id_item, "escrita")
+    if neg:
+        return neg
     body = request.get_json(silent=True) or {}
     resultado = dar_baixa_item_map(_dal(), id_item, body)
+    if isinstance(resultado, MapaError):
+        return json_error(
+            resultado.mensagem, _status_mapa_error(resultado), resultado.codigo
+        )
+    usuario: UsuarioAuth = g.auth_usuario
+    registrar_auditoria(
+        _dal(),
+        entidade="escala",
+        acao="baixa",
+        id_entidade=id_item,
+        id_executor=usuario.id_usuario,
+        perfil_executor=usuario.codigo_perfil,
+        valores_depois={
+            "status_escala": resultado.get("status_escala"),
+            "fim_real": resultado.get("fim_real"),
+            "duracao_trabalhada_minutos": resultado.get("duracao_trabalhada_minutos"),
+        },
+        motivo=str(body.get("motivo_baixa") or "") or None,
+    )
+    return jsonify({"ok": True, "item": resultado}), 200
+
+
+@mapa_bp.post("/itens/<int:id_item>/correcao-excepcional")
+@limiter.limit("20 per minute")
+@require_admin
+def correcao_excepcional_item(id_item: int):
+    """Admin only — altera veículo/motorista após histórico, com auditoria."""
+    body = request.get_json(silent=True) or {}
+    usuario: UsuarioAuth = g.auth_usuario
+    resultado = corrigir_escala_excepcional(_dal(), id_item, body, usuario)
     if isinstance(resultado, MapaError):
         return json_error(
             resultado.mensagem, _status_mapa_error(resultado), resultado.codigo
@@ -284,6 +420,9 @@ def baixa_item(id_item: int):
 @mapa_bp.delete("/itens/<int:id_item>")
 @require_mapa_access
 def delete_item(id_item: int):
+    neg = _authz_item(id_item, "escrita")
+    if neg:
+        return neg
     erro = excluir_item_map(_dal(), id_item)
     if erro:
         return json_error(erro.mensagem, 404, erro.codigo)
@@ -293,12 +432,25 @@ def delete_item(id_item: int):
 @mapa_bp.post("/itens/<int:id_item>/viagens")
 @require_mapa_access
 def create_trip(id_item: int):
+    neg = _authz_item(id_item, "escrita")
+    if neg:
+        return neg
     body = request.get_json(silent=True) or {}
     resultado = criar_viagem(_dal(), id_item, body)
     if isinstance(resultado, MapaError):
         return json_error(
             resultado.mensagem, _status_mapa_error(resultado), resultado.codigo
         )
+    usuario: UsuarioAuth = g.auth_usuario
+    registrar_auditoria(
+        _dal(),
+        entidade="viagem",
+        acao="criar",
+        id_entidade=resultado.get("id_viagem"),
+        id_executor=usuario.id_usuario,
+        perfil_executor=usuario.codigo_perfil,
+        valores_depois={"id_mapa_item": id_item},
+    )
     return jsonify({"ok": True, "viagem": resultado}), 201
 
 
@@ -306,6 +458,15 @@ def create_trip(id_item: int):
 @require_mapa_access
 def update_trip(id_viagem: int):
     body = request.get_json(silent=True) or {}
+    # Resolve item da viagem para authz
+    df = _dal().read(
+        "SELECT id_item_registro FROM tb_viagem WHERE id_viagem = ?", (id_viagem,)
+    )
+    if df is None or df.empty:
+        return json_error("Viagem não encontrada.", 404, "nao_encontrada")
+    neg = _authz_item(int(df.iloc[0]["id_item_registro"]), "escrita")
+    if neg:
+        return neg
     resultado = atualizar_viagem(_dal(), id_viagem, body)
     if isinstance(resultado, MapaError):
         return json_error(
@@ -317,6 +478,14 @@ def update_trip(id_viagem: int):
 @mapa_bp.delete("/viagens/<int:id_viagem>")
 @require_mapa_access
 def delete_trip(id_viagem: int):
+    df = _dal().read(
+        "SELECT id_item_registro FROM tb_viagem WHERE id_viagem = ?", (id_viagem,)
+    )
+    if df is None or df.empty:
+        return json_error("Viagem não encontrada.", 404, "nao_encontrada")
+    neg = _authz_item(int(df.iloc[0]["id_item_registro"]), "escrita")
+    if neg:
+        return neg
     erro = excluir_viagem(_dal(), id_viagem)
     if erro:
         return json_error(erro.mensagem, 404, erro.codigo)

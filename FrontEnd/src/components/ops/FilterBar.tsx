@@ -41,7 +41,7 @@ export function FilterChipsBar({
             'inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold',
             filterActive
               ? 'border-primary/40 bg-primary/10 text-primary'
-              : 'border-slate-300 bg-white text-slate-700',
+              : 'border-slate-300 bg-white text-text',
           )}
         >
           <Filter className="h-3.5 w-3.5" aria-hidden />
@@ -51,7 +51,7 @@ export function FilterChipsBar({
       {chips.map((c) => (
         <span
           key={c.id}
-          className="inline-flex max-w-full items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-800"
+          className="inline-flex max-w-full items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-medium text-text"
         >
           <span className="truncate">{c.label}</span>
           {c.onClear ? (
@@ -59,7 +59,7 @@ export function FilterChipsBar({
               type="button"
               aria-label={`Remover filtro ${c.label}`}
               onClick={c.onClear}
-              className="rounded-full p-0.5 text-slate-500 hover:bg-slate-200 hover:text-slate-800"
+              className="rounded-full p-0.5 text-slate-500 hover:bg-slate-200 hover:text-text"
             >
               <X className="h-3 w-3" aria-hidden />
             </button>

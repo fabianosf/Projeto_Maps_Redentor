@@ -27,10 +27,10 @@ export function RegistrosScreen() {
 
         <div className="page-body flex-1 gap-4 pb-tabbar">
           <section className="surface-card rounded-2xl px-4 py-3.5">
-            <h2 className="text-base font-bold text-slate-900">
+            <h2 className="text-base font-bold text-text">
               Histórico e auditoria
             </h2>
-            <p className="mt-1 text-sm leading-snug text-slate-600">
+            <p className="mt-1 text-sm leading-snug text-text-muted">
               Consulte chegadas/saídas, jornadas e indicadores. Ajustes e
               conferências ficam nestes módulos.
             </p>

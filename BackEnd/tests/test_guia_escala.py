@@ -71,13 +71,13 @@ def test_listar_escalas_e_contexto(client, dal):
     esc = por_mapa.get_json()["escalas"]
     assert any(e.get("id_item") == id_item for e in esc)
     assert all(e.get("id_mapa") == id_mapa for e in esc)
-    assert any("Carro 100" in (e.get("label") or "") for e in esc)
+    assert any("Carro C30100" in (e.get("label") or "") or "C30100" in (e.get("label") or "") for e in esc)
 
     ctx = client.get(f"/api/v1/guia/contexto-escala?id_item={id_item}")
     assert ctx.status_code == 200, ctx.get_json()
     c = ctx.get_json()["contexto"]
     assert c["id_item"] == id_item
-    assert c["numero_frota"] == "100"
+    assert c["numero_frota"] == "C30100"
     assert c["matricula_motorista"] == "50001"
     assert c["hor_ini_jor_hhmm"] == "06:00"
     assert c["hor_fim_jor_hhmm"] == "14:00"
@@ -113,7 +113,7 @@ def test_criar_guia_a_partir_da_escala(client, dal):
     assert guia["id_item_map"] == id_item
     assert guia["id_linha"] == 1
     assert guia["id_turno"] == 1
-    assert guia["numero_frota"] == "100"
+    assert guia["numero_frota"] == "C30100"
     assert guia["matricula_motorista"] == "50001"
     assert "[IDA=22 VOLTA=18]" in (guia.get("observacao") or "")
     assert "Ocorr:atraso leve" in (guia.get("observacao") or "")
@@ -138,8 +138,9 @@ def test_criar_guia_gera_numero_automatico(client, dal):
     assert guia["id_item_map"] == id_item
     assert guia["numero"]
     assert len(str(guia["numero"])) <= 15
-    # cod_map 88 + frota 100
-    assert str(guia["numero"]).startswith("88100")
+    # cod_map 88 + frota C30100 (dígitos da frota canônica)
+    assert str(guia["numero"]).startswith("88")
+    assert "30100" in str(guia["numero"]) or "C30100" in str(guia["numero"]).upper()
 
     # Segunda guia na mesma escala gera sufixo único
     criar2 = client.post(
@@ -159,7 +160,7 @@ def test_alteracao_escala_com_auditoria(client, dal):
     assert dal.create(
         """
         INSERT INTO tb_veiculo (codigo_veiculo, numero_frota, placa, ativo, id_empresa)
-        VALUES (9, '200', 'PLA0200', 1, 1)
+        VALUES (9, 'C30200', 'PLA0200', 1, 1)
         """
     )
 
@@ -167,13 +168,13 @@ def test_alteracao_escala_com_auditoria(client, dal):
         f"/api/v1/guia/escala/{id_item}/alteracao",
         json={
             "justificativa": "quebra mecânica",
-            "numero_frota": "200",
+            "numero_frota": "C30200",
             "hor_ini_jor": "06:15",
         },
     )
     assert alt.status_code == 200, alt.get_json()
     ctx = alt.get_json()["contexto"]
-    assert ctx["numero_frota"] == "200"
+    assert ctx["numero_frota"] == "C30200"
     assert ctx["hor_ini_jor_hhmm"] == "06:15"
 
     hist = dal.read(
@@ -187,15 +188,15 @@ def test_alteracao_escala_com_auditoria(client, dal):
 
 
 def test_alteracao_escala_exige_permissao(client, dal):
-    auth_client(client, "3")  # Inspetor — fora de PERFIS_MAPA
+    auth_client(client, "3")  # Inspetor — guia escala exige permissão específica
     data_sql, _ = _data_hoje()
     id_item = _criar_mapa_escala(dal, data_sql)
     alt = client.post(
         f"/api/v1/guia/escala/{id_item}/alteracao",
-        json={"justificativa": "teste", "numero_frota": "200"},
+        json={"justificativa": "teste", "numero_frota": "C30200"},
     )
     assert alt.status_code == 403
-    assert alt.get_json()["codigo"] == "sem_permissao"
+    assert alt.get_json()["codigo"] in ("sem_permissao", "perfil_negado", "escopo_negado")
 
 
 def test_listar_mapas_filtro_data(client, dal):

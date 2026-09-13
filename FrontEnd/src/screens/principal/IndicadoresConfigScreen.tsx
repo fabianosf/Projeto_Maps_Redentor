@@ -39,14 +39,14 @@ import { SCREEN_BG } from '@/theme/tokens';
 const BG = SCREEN_BG;
 
 const labelClass =
-  'flex h-5 items-center font-sans text-[12px] font-normal uppercase leading-none tracking-wide text-slate-600';
+  'flex h-5 items-center font-sans text-[12px] font-normal uppercase leading-none tracking-wide text-text-muted';
 
 const selectTriggerClass =
-  'h-10 w-full rounded-lg border-slate-400 bg-white font-sans text-[15px] font-normal text-slate-900';
+  'h-10 w-full rounded-lg border-slate-400 bg-white font-sans text-[15px] font-normal text-text';
 
-const tableHeadClass = 'font-sans font-normal uppercase tracking-wide text-slate-700';
-const tableSiglaClass = 'font-sans text-[13px] font-bold text-slate-900';
-const tableDetalheClass = 'font-sans text-[13px] font-normal text-slate-700';
+const tableHeadClass = 'font-sans font-normal uppercase tracking-wide text-text';
+const tableSiglaClass = 'font-sans text-[13px] font-bold text-text';
+const tableDetalheClass = 'font-sans text-[13px] font-normal text-text';
 
 type PerfilOpcao = {
   id_perfil: number;
@@ -216,7 +216,7 @@ export function IndicadoresConfigScreen() {
 
         <div className="mt-3 w-1/2 border-t-2 border-slate-500/50" />
 
-        <div className="mt-3 min-h-0 flex-1 overflow-y-auto rounded-lg border border-slate-400/50 bg-white/70">
+        <div className="mt-3 min-h-0 flex-1 overflow-y-auto rounded-lg border border-field bg-surface-card">
           {busy && indicadores.length === 0 ? (
             <LoadingState label="Carregando indicadores…" />
           ) : indicadores.length === 0 ? (

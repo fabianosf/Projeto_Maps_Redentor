@@ -19,7 +19,7 @@ def _payload_guia(numero: str = "G100") -> dict:
         "id_empresa": 1,
         "id_linha": 1,
         "id_turno": 1,
-        "numero_frota": "100",
+        "numero_frota": "C30100",
         "matricula_motorista": "50001",
         "hor_ini": "06:00",
         "observacao": "teste",
@@ -157,7 +157,7 @@ def test_consulta_com_viagem_mapa(client, dal):
 
     # Guia com roleta do mesmo veículo/dia
     payload = _payload_guia("G500")
-    payload["numero_frota"] = "100"
+    payload["numero_frota"] = "C30100"
     assert client.post("/api/v1/guia", json=payload).status_code == 201
 
     resp = client.get(f"/api/v1/guia?data={data_br}")

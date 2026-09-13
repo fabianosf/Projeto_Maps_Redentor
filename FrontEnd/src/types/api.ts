@@ -6,6 +6,8 @@ export interface ApiError {
   ok: false;
   mensagem: string;
   codigo?: string;
+  /** ID de correlação da API (suporte / logs). */
+  correlation_id?: string;
 }
 
 export type ApiResult<T extends object> = ApiSuccess<T> | ApiError;

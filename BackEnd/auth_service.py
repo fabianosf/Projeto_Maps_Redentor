@@ -67,6 +67,11 @@ class UsuarioAuth:
     codigo_perfil: int
     trocar_senha: bool
     ativo: bool
+    id_empresa: Optional[int] = None
+    id_turno: Optional[int] = None
+    id_local: Optional[int] = None
+    permite_leitura_mapas_outros: bool = False
+    pendente_validacao_erp: bool = False
 
 
 @dataclass(frozen=True)
@@ -90,42 +95,61 @@ def _row_value(row, key: str, default=None):
     return value
 
 
+def _opt_int(row, key: str) -> Optional[int]:
+    raw = _row_value(row, key, None)
+    if raw is None or str(raw).strip() in ("", "None", "nan"):
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 def _usuario_from_row(row) -> UsuarioAuth:
     return UsuarioAuth(
         id_usuario=int(_row_value(row, "id_usuario")),
         matricula=str(_row_value(row, "matricula", "")),
         nome=str(_row_value(row, "nome", "")),
         codigo_perfil=int(_row_value(row, "codigo_perfil")),
-        trocar_senha=bool(int(_row_value(row, "trocar_senha", 0))),
+        trocar_senha=bool(int(_row_value(row, "trocar_senha", 0) or 0)),
+        # Não usar `or 1` em ativo: int(0) or 1 → 1 (falso positivo de usuário ativo).
         ativo=bool(int(_row_value(row, "ativo", 1))),
+        id_empresa=_opt_int(row, "id_empresa"),
+        id_turno=_opt_int(row, "id_turno"),
+        id_local=_opt_int(row, "id_local"),
+        permite_leitura_mapas_outros=bool(
+            int(_row_value(row, "permite_leitura_mapas_outros", 0) or 0)
+        ),
+        pendente_validacao_erp=bool(
+            int(_row_value(row, "pendente_validacao_erp", 0) or 0)
+        ),
     )
 
 
 def buscar_usuario_por_matricula(dal, matricula: str) -> Optional[UsuarioAuth]:
-    df = dal.read(
-        """
+    sql_full = """
         SELECT u.id_usuario, u.matricula, u.nome, u.senha, u.ativo, u.trocar_senha,
+               u.id_empresa, u.id_turno, u.id_local,
+               u.permite_leitura_mapas_outros, u.pendente_validacao_erp,
                p.codigo_perfil
         FROM tb_usuario u
         INNER JOIN tb_perfil p ON p.id_perfil = u.id_perfil
         WHERE u.matricula = ?
-        """,
-        (matricula.strip(),),
-    )
+        """
+    sql_base = """
+        SELECT u.id_usuario, u.matricula, u.nome, u.senha, u.ativo, u.trocar_senha,
+               u.id_empresa, u.id_turno, u.id_local, p.codigo_perfil
+        FROM tb_usuario u
+        INNER JOIN tb_perfil p ON p.id_perfil = u.id_perfil
+        WHERE u.matricula = ?
+        """
+    try:
+        df = dal.read(sql_full, (matricula.strip(),))
+    except Exception:
+        df = dal.read(sql_base, (matricula.strip(),))
     if df.empty:
         return None
-
-    row = df.iloc[0]
-    usuario = _usuario_from_row(row)
-    usuario = UsuarioAuth(
-        id_usuario=usuario.id_usuario,
-        matricula=usuario.matricula,
-        nome=usuario.nome,
-        codigo_perfil=usuario.codigo_perfil,
-        trocar_senha=usuario.trocar_senha,
-        ativo=usuario.ativo,
-    )
-    return usuario
+    return _usuario_from_row(df.iloc[0])
 
 
 def buscar_hash_senha(dal, matricula: str) -> Optional[str]:
@@ -139,16 +163,26 @@ def buscar_hash_senha(dal, matricula: str) -> Optional[str]:
 
 
 def buscar_usuario_por_id(dal, id_usuario: int) -> Optional[UsuarioAuth]:
-    df = dal.read(
-        """
+    sql_full = """
         SELECT u.id_usuario, u.matricula, u.nome, u.ativo, u.trocar_senha,
+               u.id_empresa, u.id_turno, u.id_local,
+               u.permite_leitura_mapas_outros, u.pendente_validacao_erp,
                p.codigo_perfil
         FROM tb_usuario u
         INNER JOIN tb_perfil p ON p.id_perfil = u.id_perfil
         WHERE u.id_usuario = ?
-        """,
-        (id_usuario,),
-    )
+        """
+    sql_base = """
+        SELECT u.id_usuario, u.matricula, u.nome, u.ativo, u.trocar_senha,
+               u.id_empresa, u.id_turno, u.id_local, p.codigo_perfil
+        FROM tb_usuario u
+        INNER JOIN tb_perfil p ON p.id_perfil = u.id_perfil
+        WHERE u.id_usuario = ?
+        """
+    try:
+        df = dal.read(sql_full, (id_usuario,))
+    except Exception:
+        df = dal.read(sql_base, (id_usuario,))
     if df.empty:
         return None
     return _usuario_from_row(df.iloc[0])

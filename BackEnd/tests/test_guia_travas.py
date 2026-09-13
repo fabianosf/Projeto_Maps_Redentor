@@ -17,7 +17,7 @@ def _payload(**overrides):
         "id_turno": 1,
         "id_veiculo": 3,
         "id_motorista": 1,
-        "numero_frota": "100",
+        "numero_frota": "C30100",
         "matricula_motorista": "50001",
         "hor_ini": "05:30:00",
         "chegada_ponto": "05:20:00",
@@ -31,7 +31,7 @@ def test_carro_em_transito_bloqueia_outro_trecho(client, dal):
     auth_client(client, "1")
     dal.create(
         "INSERT INTO tb_veiculo (id_veiculo, codigo_veiculo, numero_frota, placa, ativo, id_empresa) "
-        "VALUES (90, 90, '190', 'PLA0190', 1, 1)"
+        "VALUES (90, 90, 'C30190', 'PLA0190', 1, 1)"
     )
     # Guia A: inicia trecho com carro 3
     a = client.post("/api/v1/guia", json=_payload(numero="TRV01"))
@@ -61,7 +61,7 @@ def test_carro_em_transito_bloqueia_outro_trecho(client, dal):
             id_motorista=9,
             matricula_motorista="50009",
             id_veiculo=90,
-            numero_frota="190",
+            numero_frota="C30190",
         ),
     )
     assert b.status_code == 201, b.get_json()

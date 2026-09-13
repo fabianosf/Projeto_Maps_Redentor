@@ -43,5 +43,8 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     css: true,
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    pool: 'forks',
+    maxWorkers: 2,
+    fileParallelism: false,
   },
 });

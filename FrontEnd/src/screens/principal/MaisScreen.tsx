@@ -40,10 +40,10 @@ export function MaisScreen() {
                 <UserRound className="h-6 w-6" aria-hidden />
               </span>
               <div className="min-w-0">
-                <h2 className="truncate text-base font-bold text-slate-900">
+                <h2 className="truncate text-base font-bold text-text">
                   {user?.nome ?? 'Usuário'}
                 </h2>
-                <p className="text-sm text-slate-600">
+                <p className="text-sm text-text-muted">
                   Matrícula {user?.matricula ?? '—'}
                 </p>
               </div>
